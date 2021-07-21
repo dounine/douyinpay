@@ -17,7 +17,7 @@ import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
-class Chrome(system: ActorSystem[_], id: String) extends JsonParse {
+class Chrome(system: ActorSystem[_], hubUrl: String) extends JsonParse {
 
   private final val config: Config = system.settings.config.getConfig("app")
 
@@ -28,7 +28,6 @@ class Chrome(system: ActorSystem[_], id: String) extends JsonParse {
   ).materializer
   val chromeOptions: ChromeOptions = new ChromeOptions()
   chromeOptions.setHeadless(config.getBoolean("selenium.headless"))
-  val hubUrl: String = config.getString("selenium.remoteUrl")
   val webDriver = new RemoteWebDriver(new URL(hubUrl), chromeOptions)
   this.webDriver
     .manage()
@@ -43,7 +42,6 @@ class Chrome(system: ActorSystem[_], id: String) extends JsonParse {
         config.getInt("selenium.size.height")
       )
     )
-  val threadId = id
   private var chromeLive = true
   this.webDriver.get(
     "https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0"

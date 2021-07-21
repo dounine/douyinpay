@@ -10,13 +10,13 @@ import org.apache.commons.pool2.{
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.jdk.CollectionConverters._
-class ChromeFactory(system: ActorSystem[_])
+class ChromeFactory(system: ActorSystem[_], hubUrl: String)
     extends BasePooledObjectFactory[Chrome] {
 
   private val logger: Logger = LoggerFactory.getLogger(classOf[ChromeFactory])
 
   override def create(): Chrome = {
-    new Chrome(system, Thread.currentThread().getId.toString)
+    new Chrome(system, hubUrl)
   }
 
   //borrowObject	从池中借出一个对象。要么调用PooledObjectFactory.makeObject方法创建，要么对一个空闲对象使用PooledObjectFactory.activeObject进行激活，然后使用PooledObjectFactory.validateObject方法进行验证后再返回

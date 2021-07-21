@@ -36,7 +36,10 @@ class ChromePools(system: ActorSystem[_]) extends Extension {
     .map(i =>
       (
         i._2,
-        new GenericObjectPool[Chrome](new ChromeFactory(system), poolConfig)
+        new GenericObjectPool[Chrome](
+          new ChromeFactory(system, i._1),
+          poolConfig
+        )
       )
     )
     .toMap

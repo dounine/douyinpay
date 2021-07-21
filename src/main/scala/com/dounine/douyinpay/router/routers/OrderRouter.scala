@@ -179,7 +179,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
               {
                 logger.info(data.logJson)
                 val order = OrderModel.DbInfo(
-                  orderId = UUID.randomUUID().toString,
+                  orderId = UUID.randomUUID().toString.replaceAll("-", ""),
                   nickName = data.nickName,
                   pay = false,
                   expire = false,
