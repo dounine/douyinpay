@@ -1,58 +1,31 @@
 package com.dounine.douyinpay.router.routers
 
 import akka.{NotUsed, actor}
-import akka.actor.typed.ActorSystem
+import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
+import akka.http.scaladsl.model.{ContentType, HttpEntity, HttpMethods, HttpRequest, HttpResponse, MediaTypes}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.{Directive1, Route, ValidationRejection}
 import akka.stream._
-import akka.stream.scaladsl.{
-  Concat,
-  Flow,
-  GraphDSL,
-  Keep,
-  Merge,
-  Partition,
-  Sink,
-  Source
-}
-import akka.util.ByteString
+import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
+import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
-import com.dounine.douyinpay.behaviors.engine.{
-  CoreEngine,
-  OrderSources,
-  QrcodeSources
-}
+import com.dounine.douyinpay.behaviors.engine.{CoreEngine, LoginScanBehavior, OrderSources, QrcodeSources}
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{
-  BaseSerializer,
-  OrderModel,
-  PayUserInfoModel,
-  RouterModel,
-  UserModel
-}
-import com.dounine.douyinpay.model.types.service.{
-  MechinePayStatus,
-  PayPlatform,
-  PayStatus
-}
-import com.dounine.douyinpay.service.{
-  OrderService,
-  OrderStream,
-  UserService,
-  UserStream
-}
+import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel, PayUserInfoModel, RouterModel, UserModel}
+import com.dounine.douyinpay.model.types.service.{MechinePayStatus, PayPlatform, PayStatus}
+import com.dounine.douyinpay.service.{OrderService, OrderStream, UserService, UserStream}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.util.{MD5Util, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
 
+import java.nio.file.{Files, Paths}
 import java.time.LocalDateTime
 import java.util.UUID
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
 
@@ -111,7 +84,28 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
   val route: Route =
     concat(
       get {
-        path("pay" / "user" / "info" / "douyin" / Segment) {
+        path("user" / "login") {
+          val actor = system.systemActorOf(
+            LoginScanBehavior(),
+            s"${UUID.randomUUID().toString}"
+          )
+          import akka.actor.typed.scaladsl.AskPattern._
+          val future: Future[BaseSerializer] = actor.ask(
+            LoginScanBehavior.GetScan()
+          )(new Timeout(10.seconds), system.scheduler)
+          onComplete(future) {
+            case Failure(exception) => fail(exception.getMessage)
+            case Success(value)     => {
+              value match {
+                case LoginScanBehavior.ScanSuccess(url) => {
+                  complete(HttpResponse(entity = HttpEntity(ContentType(MediaTypes.`image/png`), Files.readAllBytes(Paths.get(url)))))
+                }
+                case LoginScanBehavior.ScanFail(msg) =>
+                  fail(msg)
+              }
+            }
+          }
+        } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
           id =>
             {
               val future = http
