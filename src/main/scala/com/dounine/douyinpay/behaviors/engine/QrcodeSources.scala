@@ -122,7 +122,7 @@ object QrcodeSources extends ActorSerializerSuport {
           chromeQueue: BoundedSourceQueue[Int],
           chromeSource: Source[Int, NotUsed]
         ) = Source
-          .queue[Int](1)
+          .queue[Int](chromeSize)
           .watchTermination()((f, p) => {
             p.foreach(_ => logger.error("chromesource shutdown"))
             f
@@ -171,7 +171,7 @@ object QrcodeSources extends ActorSerializerSuport {
             }
           }
         val notifyAfterFlow = Flow[Event]
-          .flatMapConcat {
+          .flatMapMerge(chromeSize, {
             case r @ CreateOrderOk(request, qrcode) =>
               logger.info("create order ok -> {}", r)
               val order = r.request.order
@@ -211,10 +211,10 @@ object QrcodeSources extends ActorSerializerSuport {
               )
               logger.info("pay success -> {}", r)
               Source.single(newRequest)
-          }
+          })
 
         val queryOrderFlow = Flow[Event]
-          .mapAsync(4) {
+          .mapAsync(chromeSize) {
             case r @ CreateOrder(order) => {
               orderService
                 .queryIdInfo(order.id)
@@ -230,7 +230,7 @@ object QrcodeSources extends ActorSerializerSuport {
           }
 
         val updateOrderFlow = Flow[Event]
-          .mapAsync(3) {
+          .mapAsync(chromeSize) {
             case PaySuccess(request) =>
               orderService.updateAll(
                 request.order.copy(
@@ -255,7 +255,7 @@ object QrcodeSources extends ActorSerializerSuport {
           }
 
         val orderQueue = Source
-          .queue[Event](1)
+          .queue[Event](chromeSize)
           .zipWith(chromeSource)((left: Event, _) => left)
           .filter {
             case r @ CreateOrder(order) => {

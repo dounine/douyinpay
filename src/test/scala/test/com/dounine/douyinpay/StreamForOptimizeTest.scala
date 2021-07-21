@@ -286,7 +286,7 @@ class StreamForOptimizeTest
 
     "queue3" in {
 
-      val (chromeQueue, chromeSource) = Source.queue[Int](1).preMaterialize()
+      val (chromeQueue, chromeSource) = Source.queue[Int](10).preMaterialize()
       val flow = Flow.fromGraph(GraphDSL.create() { implicit builder =>
         {
           import GraphDSL.Implicits._
@@ -304,7 +304,7 @@ class StreamForOptimizeTest
         .map(i => i)
 
       val queue = Source
-        .queue[String](1)
+        .queue[String](1,OverflowStrategy.dropNew)
         .zipWith(chromeSource)((left, right) => left)
         .via(flow2)
 //        .via(Flow[String].mapAsync(1) { i =>
@@ -326,15 +326,15 @@ class StreamForOptimizeTest
 //        })
         .to(Sink.ignore)
         .run()
-      chromeQueue.offer(1)
-      TimeUnit.SECONDS.sleep(1)
-      println(queue.offer("a"))
-      TimeUnit.SECONDS.sleep(3)
-      println(queue.offer("a"))
-//      (0 to 10).foreach(i => {
-//        println(queue.offer(i.toString))
-//        TimeUnit.MILLISECONDS.sleep(500)
-//      })
+//      chromeQueue.offer(1)
+//      TimeUnit.SECONDS.sleep(1)
+//      println(queue.offer("a"))
+//      TimeUnit.SECONDS.sleep(3)
+//      println(queue.offer("a"))
+      (0 to 10).foreach(i => {
+        println(queue.offer(i.toString).futureValue)
+        TimeUnit.MILLISECONDS.sleep(100)
+      })
     }
 
     "source queue test" ignore {
