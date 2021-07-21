@@ -173,7 +173,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
         }
       },
       post {
-        path("order" / "recharge") {
+        path("pay" / "qrcode") {
           entity(as[OrderModel.Recharge]) {
             data =>
               {
