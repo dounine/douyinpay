@@ -255,7 +255,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                               QrcodeSources.CreateOrder(
                                 order
                               )
-                            )(10.seconds)
+                            )(15.seconds)
                             .map {
                               case QrcodeSources
                                     .CreateOrderOk(request, qrcode) =>
