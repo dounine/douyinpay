@@ -3,18 +3,49 @@ package com.dounine.douyinpay.router.routers
 import akka.{NotUsed, actor}
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.{Directive1, Route, ValidationRejection}
 import akka.stream._
-import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
+import akka.stream.scaladsl.{
+  Concat,
+  Flow,
+  GraphDSL,
+  Keep,
+  Merge,
+  Partition,
+  Sink,
+  Source
+}
 import akka.util.ByteString
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
-import com.dounine.douyinpay.behaviors.engine.{CoreEngine, OrderSources, QrcodeSources}
+import com.dounine.douyinpay.behaviors.engine.{
+  CoreEngine,
+  OrderSources,
+  QrcodeSources
+}
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel, RouterModel, UserModel}
-import com.dounine.douyinpay.model.types.service.{MechinePayStatus, PayPlatform, PayStatus}
-import com.dounine.douyinpay.service.{OrderService, OrderStream, UserService, UserStream}
+import com.dounine.douyinpay.model.models.{
+  BaseSerializer,
+  OrderModel,
+  PayUserInfoModel,
+  RouterModel,
+  UserModel
+}
+import com.dounine.douyinpay.model.types.service.{
+  MechinePayStatus,
+  PayPlatform,
+  PayStatus
+}
+import com.dounine.douyinpay.service.{
+  OrderService,
+  OrderStream,
+  UserService,
+  UserStream
+}
+import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.util.{MD5Util, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -64,111 +95,75 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
     }
   }
 
+  val moneys = Array(
+    ("6.00", "60"),
+    ("30.00", "300"),
+    ("98.00", "980"),
+    ("298.00", "2,980"),
+    ("518.00", "5,180"),
+    ("1,598.00", "15,980"),
+    ("3,000.00", "30,000"),
+    ("5,000.00", "50,000")
+  )
+
+  val http = Http(system)
+
   val route: Route =
     concat(
       get {
-        path("user" / "info") {
-          userInfo()(system) {
-            userInfo =>
-              {
-                parameters(
-                  "platform".as[String],
-                  "userId".as[String],
-                  "sign".as[String]
-                ) {
-                  (platform, userId, sign) =>
-                    {
-
-                      val pf = PayPlatform.withName(platform)
-                      import akka.actor.typed.scaladsl.AskPattern._
-
-                      require(
-                        noSign || MD5Util.md5(
-                          userInfo.apiSecret + userId + platform
-                        ) == sign,
-                        signInvalidMsg
-                      )
-                      val key = s"userInfo-${pf}-${userId}"
-
-                      val result =
-                        cacheBehavior
-                          .ask(
-                            ReplicatedCacheBehavior.GetCache(key)
-                          )(3.seconds, system.scheduler)
-                          .flatMap {
-                            cacheValue =>
-                              {
-                                cacheValue.value match {
-                                  case Some(value) =>
-                                    Future.successful(
-                                      value
-                                        .asInstanceOf[Option[
-                                          OrderModel.UserInfo
-                                        ]]
-                                    )
-                                  case None =>
-                                    orderService
-                                      .userInfo(pf, userId)
-                                      .map(result => {
-                                        if (result.isDefined) {
-                                          cacheBehavior.tell(
-                                            ReplicatedCacheBehavior.PutCache(
-                                              key = key,
-                                              value = result,
-                                              timeout = 1.days
-                                            )
-                                          )
-                                        }
-                                        result
-                                      })
-                                }
-                              }
-                          }
-                          .map {
-                            case Some(value) => okData(value)
-                            case None        => failMsg("user not found")
-                          }
-                          .recover {
-                            case ee => failMsg(ee.getMessage)
-                          }
-                      complete(result)
-                    }
-                }
-              }
-          }
-        } ~
-          path("balance") {
-            parameterMap {
-              querys =>
-                {
-                  logger.info(querys.logJson)
-                  val queryInfo = querys.toJson.jsonTo[OrderModel.Balance]
-                  val result = userService
-                    .info(queryInfo.apiKey)
-                    .map {
-                      case Some(value) => {
-                        require(
-                          noSign || MD5Util.md5(
-                            value.apiSecret
-                          ) == queryInfo.sign,
-                          signInvalidMsg
-                        )
-                        ok(
-                          Map(
-                            "balance" -> value.balance,
-                            "margin" -> value.margin
+        path("pay" / "user" / "info" / "douyin" / Segment) {
+          id =>
+            {
+              val future = http
+                .singleRequest(
+                  request = HttpRequest(
+                    uri =
+                      s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                        .currentTimeMillis()}",
+                    method = HttpMethods.GET
+                  ),
+                  settings = ConnectSettings.httpSettings(system)
+                )
+                .flatMap {
+                  case HttpResponse(_, _, entity, _) =>
+                    entity.dataBytes
+                      .runFold(ByteString(""))(_ ++ _)
+                      .map(_.utf8String)
+                      .map(_.jsonTo[PayUserInfoModel.DouYinSearchResponse])
+                      .map(item => {
+                        if (item.data.open_info.nonEmpty) {
+                          val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                            item.data.open_info.head
+                          Option(
+                            PayUserInfoModel.Info(
+                              nickName = data.nick_name,
+                              id = data.search_id,
+                              avatar = data.avatar_thumb.url_list.head
+                            )
                           )
-                        )
-                      }
-                      case None => throw new Exception(apiKeyNotFound)
-                    }
-                  onComplete(result) {
-                    case Failure(exception) => fail(exception.getMessage)
-                    case Success(value)     => value
-                  }
+                        } else {
+                          Option.empty
+                        }
+                      })
+                  case msg @ _ =>
+                    logger.error(s"请求失败 $msg")
+                    Future.failed(new Exception(s"请求失败 $msg"))
                 }
+              onComplete(future) {
+                case Success(value)     => ok(value)
+                case Failure(exception) => fail(exception.getLocalizedMessage)
+              }
             }
-          } ~ path("order" / "info" / Segment) { orderId =>
+        } ~ path("pay" / "money" / "info" / "douyin") {
+          ok(
+            moneys.map(i => {
+              Map(
+                "money" -> s"¥${i._1}",
+                "volumn" -> i._2
+              )
+            })
+          )
+        } ~ path("order" / "info" / Segment) { orderId =>
           {
             onComplete(orderService.queryOrderStatus(orderId)) {
               case Success(value)     => ok(value)
@@ -217,10 +212,13 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                               )
                             )(10.seconds)
                             .map {
-                              case QrcodeSources.CreateOrderOk(request, qrcode) =>
+                              case QrcodeSources
+                                    .CreateOrderOk(request, qrcode) =>
                                 ok(
                                   Map(
-                                    "dbQuery" -> (config.getString("file.domain") + s"/order/info/" + order.orderId),
+                                    "dbQuery" -> (config.getString(
+                                      "file.domain"
+                                    ) + s"/order/info/" + order.orderId),
                                     "orderId" -> order.orderId,
                                     "qrcode" -> qrcode
                                   )

@@ -60,7 +60,7 @@ trait SuportRouter extends JsonParse {
     RouterModel.Data(
       data = Some(data),
       msg = Some(msg),
-      code = ResponseCode.fail
+      status = ResponseCode.fail
     )
   }
 
