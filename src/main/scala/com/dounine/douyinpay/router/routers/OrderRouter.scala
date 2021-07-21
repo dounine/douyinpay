@@ -222,8 +222,16 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                   expire = false,
                   openid = data.openid,
                   id = data.id,
-                  money = data.money.toInt,
-                  volumn = data.money.toInt * 10,
+                  money = data.money
+                    .replaceAll("¥", "")
+                    .replaceAll(",", "")
+                    .toDouble
+                    .toInt,
+                  volumn = data.money
+                    .replaceAll("¥", "")
+                    .replaceAll(",", "")
+                    .toDouble
+                    .toInt * 10,
                   platform = data.platform,
                   createTime = LocalDateTime.now(),
                   payCount = 0,
