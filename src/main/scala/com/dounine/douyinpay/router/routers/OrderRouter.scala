@@ -4,19 +4,55 @@ import akka.{NotUsed, actor}
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{ContentType, HttpEntity, HttpMethods, HttpRequest, HttpResponse, MediaTypes}
+import akka.http.scaladsl.model.{
+  ContentType,
+  HttpEntity,
+  HttpMethods,
+  HttpRequest,
+  HttpResponse,
+  MediaTypes
+}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.{Directive1, Route, ValidationRejection}
 import akka.stream._
-import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
+import akka.stream.scaladsl.{
+  Concat,
+  Flow,
+  GraphDSL,
+  Keep,
+  Merge,
+  Partition,
+  Sink,
+  Source
+}
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
-import com.dounine.douyinpay.behaviors.engine.{CoreEngine, LoginScanBehavior, OrderSources, QrcodeSources}
+import com.dounine.douyinpay.behaviors.engine.{
+  CoreEngine,
+  LoginScanBehavior,
+  OrderSources,
+  QrcodeSources
+}
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel, PayUserInfoModel, RouterModel, UserModel}
-import com.dounine.douyinpay.model.types.service.{MechinePayStatus, PayPlatform, PayStatus}
-import com.dounine.douyinpay.service.{OrderService, OrderStream, UserService, UserStream}
+import com.dounine.douyinpay.model.models.{
+  BaseSerializer,
+  OrderModel,
+  PayUserInfoModel,
+  RouterModel,
+  UserModel
+}
+import com.dounine.douyinpay.model.types.service.{
+  MechinePayStatus,
+  PayPlatform,
+  PayStatus
+}
+import com.dounine.douyinpay.service.{
+  OrderService,
+  OrderStream,
+  UserService,
+  UserStream
+}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.util.{MD5Util, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
@@ -95,10 +131,17 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
           )(new Timeout(10.seconds), system.scheduler)
           onComplete(future) {
             case Failure(exception) => fail(exception.getMessage)
-            case Success(value)     => {
+            case Success(value) => {
               value match {
                 case LoginScanBehavior.ScanSuccess(url) => {
-                  complete(HttpResponse(entity = HttpEntity(ContentType(MediaTypes.`image/png`), Files.readAllBytes(Paths.get(url)))))
+                  complete(
+                    HttpResponse(entity =
+                      HttpEntity(
+                        ContentType(MediaTypes.`image/png`),
+                        Files.readAllBytes(Paths.get(url))
+                      )
+                    )
+                  )
                 }
                 case LoginScanBehavior.ScanFail(msg) =>
                   fail(msg)
@@ -213,8 +256,9 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                                     "dbQuery" -> (config.getString(
                                       "file.domain"
                                     ) + s"/order/info/" + order.orderId),
-                                    "orderId" -> order.orderId,
-                                    "qrcode" -> qrcode
+                                    "qrcode" -> (config.getString(
+                                      "file.domain"
+                                    ) + "/file/image?path=" + qrcode)
                                   )
                                 )
                               case QrcodeSources
