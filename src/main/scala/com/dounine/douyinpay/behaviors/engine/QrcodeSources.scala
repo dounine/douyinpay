@@ -115,7 +115,8 @@ object QrcodeSources extends ActorSerializerSuport {
         implicit val materializer =
           SystemMaterializer(context.system).materializer
         implicit val ec = context.executionContext
-        val chromeSize = context.system.settings.config.getInt("app.selenium.pool.minIdle")
+        val chromeSize =
+          context.system.settings.config.getInt("app.selenium.pool.minIdle")
         val orderService = ServiceSingleton.get(classOf[OrderService])
         val (
           chromeQueue: BoundedSourceQueue[Int],
@@ -130,10 +131,14 @@ object QrcodeSources extends ActorSerializerSuport {
 
         (0 to chromeSize).foreach(chromeQueue.offer)
 
-        val sendNotifyMessage = (title: String, order: OrderModel.DbInfo) => {
+        val sendNotifyMessage = (
+            typ: DingDing.MessageType.MessageType,
+            title: String,
+            order: OrderModel.DbInfo
+        ) => {
           val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
           DingDing.sendMessage(
-            DingDing.MessageType.order,
+            typ,
             data = DingDing.MessageData(
               markdown = DingDing.Markdown(
                 title = "定单通知",
@@ -161,7 +166,7 @@ object QrcodeSources extends ActorSerializerSuport {
         val notifyBeforeFlow = Flow[Event]
           .map {
             case r @ CreateOrder(order) => {
-              sendNotifyMessage("定单创建", order)
+              sendNotifyMessage(DingDing.MessageType.order, "定单创建", order)
               r
             }
           }
@@ -170,21 +175,21 @@ object QrcodeSources extends ActorSerializerSuport {
             case r @ CreateOrderOk(request, qrcode) =>
               logger.info("create order ok -> {}", r)
               val order = r.request.order
-              sendNotifyMessage("创建成功", order)
+              sendNotifyMessage(DingDing.MessageType.order, "创建成功", order)
               request.replyTo.tell(r)
               Source.empty
             case r @ CreateOrderFail(_, _) =>
               r.request.replyTo.tell(r)
               chromeQueue.offer(1)
               val order = r.request.order
-              sendNotifyMessage("创建失败", order)
+              sendNotifyMessage(DingDing.MessageType.order, "创建失败", order)
               logger.error("create order fail -> {}", r)
               Source.single(r)
             case r @ PayFail(_, _) =>
               r.request.replyTo.tell(r)
               chromeQueue.offer(1)
               val order = r.request.order
-              sendNotifyMessage("充值失败", order)
+              sendNotifyMessage(DingDing.MessageType.payerr, "充值失败", order)
               logger.error("pay fail -> {}", r)
               Source.single(r)
             case r @ PaySuccess(request) =>
@@ -199,7 +204,11 @@ object QrcodeSources extends ActorSerializerSuport {
               )
               r.request.replyTo.tell(r)
               chromeQueue.offer(1)
-              sendNotifyMessage("充值成功", newRequest.request.order)
+              sendNotifyMessage(
+                DingDing.MessageType.payed,
+                "充值成功",
+                newRequest.request.order
+              )
               logger.info("pay success -> {}", r)
               Source.single(newRequest)
           }
