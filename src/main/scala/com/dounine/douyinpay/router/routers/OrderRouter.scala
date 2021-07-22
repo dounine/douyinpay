@@ -3,6 +3,8 @@ package com.dounine.douyinpay.router.routers
 import akka.{NotUsed, actor}
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import akka.http.caching.LfuCache
+import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{
   ContentType,
@@ -10,10 +12,18 @@ import akka.http.scaladsl.model.{
   HttpMethods,
   HttpRequest,
   HttpResponse,
-  MediaTypes
+  MediaTypes,
+  Uri
 }
 import akka.http.scaladsl.server.Directives.{concat, _}
-import akka.http.scaladsl.server.{Directive1, Route, ValidationRejection}
+import akka.http.scaladsl.server.directives.CachingDirectives.cache
+import akka.http.scaladsl.server.{
+  Directive1,
+  RequestContext,
+  Route,
+  RouteResult,
+  ValidationRejection
+}
 import akka.stream._
 import akka.stream.scaladsl.{
   Concat,
@@ -89,6 +99,21 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
   val cacheBehavior = system.systemActorOf(ReplicatedCacheBehavior(), "cache")
   val noSign = system.settings.config.getBoolean("app.noSign")
 
+  val keyFunction: PartialFunction[RequestContext, Uri] = {
+    case r: RequestContext => r.request.uri
+  }
+
+  val defaultCachingSettings = CachingSettings(system)
+  val lfuCacheSettings = defaultCachingSettings.lfuCacheSettings
+    .withInitialCapacity(100)
+    .withMaxCapacity(1000)
+    .withTimeToLive(3.days)
+    .withTimeToIdle(1.days)
+
+  val cachingSettings =
+    defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
+  val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
+
   def userInfo()(implicit
       system: ActorSystem[_]
   ): Directive1[UserModel.DbInfo] = {
@@ -151,44 +176,46 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
         } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
           id =>
             {
-              val future = http
-                .singleRequest(
-                  request = HttpRequest(
-                    uri =
-                      s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-                        .currentTimeMillis()}",
-                    method = HttpMethods.GET
-                  ),
-                  settings = ConnectSettings.httpSettings(system)
-                )
-                .flatMap {
-                  case HttpResponse(_, _, entity, _) =>
-                    entity.dataBytes
-                      .runFold(ByteString(""))(_ ++ _)
-                      .map(_.utf8String)
-                      .map(_.jsonTo[PayUserInfoModel.DouYinSearchResponse])
-                      .map(item => {
-                        if (item.data.open_info.nonEmpty) {
-                          val data: PayUserInfoModel.DouYinSearchOpenInfo =
-                            item.data.open_info.head
-                          Option(
-                            PayUserInfoModel.Info(
-                              nickName = data.nick_name,
-                              id = data.search_id,
-                              avatar = data.avatar_thumb.url_list.head
+              cache(lfuCache, keyFunction) {
+                val future = http
+                  .singleRequest(
+                    request = HttpRequest(
+                      uri =
+                        s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                          .currentTimeMillis()}",
+                      method = HttpMethods.GET
+                    ),
+                    settings = ConnectSettings.httpSettings(system)
+                  )
+                  .flatMap {
+                    case HttpResponse(_, _, entity, _) =>
+                      entity.dataBytes
+                        .runFold(ByteString(""))(_ ++ _)
+                        .map(_.utf8String)
+                        .map(_.jsonTo[PayUserInfoModel.DouYinSearchResponse])
+                        .map(item => {
+                          if (item.data.open_info.nonEmpty) {
+                            val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                              item.data.open_info.head
+                            Option(
+                              PayUserInfoModel.Info(
+                                nickName = data.nick_name,
+                                id = data.search_id,
+                                avatar = data.avatar_thumb.url_list.head
+                              )
                             )
-                          )
-                        } else {
-                          Option.empty
-                        }
-                      })
-                  case msg @ _ =>
-                    logger.error(s"请求失败 $msg")
-                    Future.failed(new Exception(s"请求失败 $msg"))
+                          } else {
+                            Option.empty
+                          }
+                        })
+                    case msg @ _ =>
+                      logger.error(s"请求失败 $msg")
+                      Future.failed(new Exception(s"请求失败 $msg"))
+                  }
+                onComplete(future) {
+                  case Success(value)     => ok(value)
+                  case Failure(exception) => fail(exception.getLocalizedMessage)
                 }
-              onComplete(future) {
-                case Success(value)     => ok(value)
-                case Failure(exception) => fail(exception.getLocalizedMessage)
               }
             }
         } ~ path("pay" / "money" / "info" / "douyin") {
