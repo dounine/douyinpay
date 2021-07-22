@@ -14,6 +14,7 @@ import akka.stream.scaladsl.{
   Keep,
   Merge,
   Partition,
+  RestartSource,
   RunnableGraph,
   Sink,
   Source,
@@ -29,6 +30,7 @@ import akka.stream.{
   KillSwitches,
   QueueCompletionResult,
   QueueOfferResult,
+  RestartSettings,
   SourceShape,
   SystemMaterializer,
   UniqueKillSwitch
@@ -322,19 +324,28 @@ object QrcodeSources extends ActorSerializerSuport {
         30,
         {
           case r @ CreateOrder(order) => {
-            Source(iterable = 0 until ChromePools(system).poolSize())
-              .flatMapMerge(
-                10,
-                id =>
-                  createQrcodeSource(
-                    system,
-                    order,
-                    id
+            RestartSource
+              .onFailuresWithBackoff(
+                RestartSettings(
+                  minBackoff = 1.seconds,
+                  maxBackoff = 1.seconds,
+                  randomFactor = 0.2
+                ).withMaxRestarts(1, 1.seconds)
+              )(() => {
+                Source(iterable = 0 until ChromePools(system).poolSize())
+                  .flatMapMerge(
+                    10,
+                    id =>
+                      createQrcodeSource(
+                        system,
+                        order,
+                        id
+                      )
                   )
-              )
-              .filter(_.isRight)
-              .take(1)
-              .orElse(Source.single(Left(new Exception("all fail"))))
+                  .filter(_.isRight)
+                  .take(1)
+                  .orElse(Source.single(Left(new Exception("all fail"))))
+              })
               .flatMapConcat {
                 case Left(error) =>
                   Source(
