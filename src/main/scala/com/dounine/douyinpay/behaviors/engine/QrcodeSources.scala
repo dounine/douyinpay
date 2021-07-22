@@ -88,6 +88,8 @@ object QrcodeSources extends ActorSerializerSuport {
 
   case class Shutdown()(val replyTo: ActorRef[Done]) extends Event
 
+  case class IncrmentChrome() extends Event
+
   implicit class FlowLog(data: Flow[Event, Event, NotUsed]) extends JsonParse {
     def log(): Flow[Event, Event, NotUsed] = {
       data
@@ -118,18 +120,6 @@ object QrcodeSources extends ActorSerializerSuport {
         val chromeSize =
           context.system.settings.config.getInt("app.selenium.pool.minIdle")
         val orderService = ServiceSingleton.get(classOf[OrderService])
-        val (
-          chromeQueue: BoundedSourceQueue[Int],
-          chromeSource: Source[Int, NotUsed]
-        ) = Source
-          .queue[Int](chromeSize)
-          .watchTermination()((f, p) => {
-            p.foreach(_ => logger.error("chromesource shutdown"))
-            f
-          })
-          .preMaterialize()
-
-        (0 to chromeSize).foreach(chromeQueue.offer)
 
         val sendNotifyMessage = (
             typ: DingDing.MessageType.MessageType,
@@ -162,6 +152,10 @@ object QrcodeSources extends ActorSerializerSuport {
           )
         }
 
+        val (orderQueue, orderSource) = Source
+          .queue[Event](chromeSize)
+          .preMaterialize()
+
         val coreFlow = createCoreFlow2(context.system)
         val notifyBeforeFlow = Flow[Event]
           .map {
@@ -171,47 +165,50 @@ object QrcodeSources extends ActorSerializerSuport {
             }
           }
         val notifyAfterFlow = Flow[Event]
-          .flatMapMerge(chromeSize, {
-            case r @ CreateOrderOk(request, qrcode) =>
-              logger.info("create order ok -> {}", r)
-              val order = r.request.order
-              sendNotifyMessage(DingDing.MessageType.order, "创建成功", order)
-              request.replyTo.tell(r)
-              Source.empty
-            case r @ CreateOrderFail(_, _) =>
-              r.request.replyTo.tell(r)
-              chromeQueue.offer(1)
-              val order = r.request.order
-              sendNotifyMessage(DingDing.MessageType.order, "创建失败", order)
-              logger.error("create order fail -> {}", r)
-              Source.single(r)
-            case r @ PayFail(_, _) =>
-              r.request.replyTo.tell(r)
-              chromeQueue.offer(1)
-              val order = r.request.order
-              sendNotifyMessage(DingDing.MessageType.payerr, "充值失败", order)
-              logger.error("pay fail -> {}", r)
-              Source.single(r)
-            case r @ PaySuccess(request) =>
-              val order = request.order
-              val newRequest = PaySuccess(
-                CreateOrder(
-                  order.copy(
-                    payCount = order.payCount + 1,
-                    payMoney = order.payMoney + order.money
-                  )
-                )(request.replyTo)
-              )
-              r.request.replyTo.tell(r)
-              chromeQueue.offer(1)
-              sendNotifyMessage(
-                DingDing.MessageType.payed,
-                "充值成功",
-                newRequest.request.order
-              )
-              logger.info("pay success -> {}", r)
-              Source.single(newRequest)
-          })
+          .flatMapMerge(
+            chromeSize,
+            {
+              case r @ CreateOrderOk(request, qrcode) =>
+                logger.info("create order ok -> {}", r)
+                val order = r.request.order
+                sendNotifyMessage(DingDing.MessageType.order, "创建成功", order)
+                request.replyTo.tell(r)
+                Source.empty
+              case r @ CreateOrderFail(_, _) =>
+                orderQueue.offer(IncrmentChrome())
+                r.request.replyTo.tell(r)
+                val order = r.request.order
+                sendNotifyMessage(DingDing.MessageType.order, "创建失败", order)
+                logger.error("create order fail -> {}", r)
+                Source.single(r)
+              case r @ PayFail(_, _) =>
+                orderQueue.offer(IncrmentChrome())
+                r.request.replyTo.tell(r)
+                val order = r.request.order
+                sendNotifyMessage(DingDing.MessageType.payerr, "充值失败", order)
+                logger.error("pay fail -> {}", r)
+                Source.single(r)
+              case r @ PaySuccess(request) =>
+                orderQueue.offer(IncrmentChrome())
+                val order = request.order
+                val newRequest = PaySuccess(
+                  CreateOrder(
+                    order.copy(
+                      payCount = order.payCount + 1,
+                      payMoney = order.payMoney + order.money
+                    )
+                  )(request.replyTo)
+                )
+                r.request.replyTo.tell(r)
+                sendNotifyMessage(
+                  DingDing.MessageType.payed,
+                  "充值成功",
+                  newRequest.request.order
+                )
+                logger.info("pay success -> {}", r)
+                Source.single(newRequest)
+            }
+          )
 
         val queryOrderFlow = Flow[Event]
           .mapAsync(chromeSize) {
@@ -254,22 +251,28 @@ object QrcodeSources extends ActorSerializerSuport {
               )
           }
 
-        val orderQueue = Source
-          .queue[Event](chromeSize)
-          .zipWith(chromeSource)((left: Event, _) => left)
-          .filter {
-            case r @ CreateOrder(order) => {
-              if (
-                java.time.Duration
-                  .between(order.createTime, LocalDateTime.now())
-                  .getSeconds < 3
-              ) {
-                true
-              } else {
-                logger.info("等待时间过长、回收")
-                r.replyTo.tell(CreateOrderFail(r, "timeout"))
-                chromeQueue.offer(1)
-                false
+        orderSource
+          .statefulMapConcat { () =>
+            {
+              var chromes = chromeSize
+
+              {
+                case r @ CreateOrder(order) => {
+                  if (chromes > 0) {
+                    chromes = chromes - 1
+                    r :: Nil
+                  } else {
+                    r.replyTo.tell(
+                      CreateOrderFail(r, "操作频繁、请稍后再试")
+                    )
+                    sendNotifyMessage(DingDing.MessageType.order, "操作频繁", order)
+                    Nil
+                  }
+                }
+                case IncrmentChrome() => {
+                  chromes = chromes + 1
+                  Nil
+                }
               }
             }
           }
@@ -564,61 +567,46 @@ object QrcodeSources extends ActorSerializerSuport {
                   delayStrategySupplier = () =>
                     DelayStrategy.linearIncreasingDelay(
                       increaseStep = 200.milliseconds,
-                      needsIncrease = _ => true
-                    ),
-                  overFlowStrategy = DelayOverflowStrategy.backpressure
-                )
-                .mapAsync(1) { _ =>
-                  Future {
-                    logger.info("查询二次确认框跟跳转")
-                    if (driver.getCurrentUrl.contains("tp-pay.snssdk.com")) {
-                      logger.info("已跳转")
-                      Right(Right("已跳转"))
-                    } else {
-                      Right(
-                        Left(
+                      needsIncrease = _ => {
+                        logger.info("查询二次确认框跟跳转")
+                        try {
                           driver
                             .findElementByClassName("check-content")
                             .findElement(By.className("right"))
                             .click()
-                        )
-                      )
-                    }
-                  }.recover {
-                    case _ => {
-                      Left(new Exception("没有二次确认框也没跳转"))
-                    }
-                  }
-                }
-                .filter(_.isRight)
+                        } catch {
+                          case e =>
+                        }
+                        !driver.getCurrentUrl.contains("tp-pay.snssdk.com")
+                      }
+                    ),
+                  overFlowStrategy = DelayOverflowStrategy.backpressure
+                )
+                .map(_ => Right("已跳转"))
                 .take(1)
                 .orElse(Source.single(Left(new Exception("没有二次确认框也没跳转"))))
                 .flatMapConcat {
                   case Left(error) => throw error
-                  case Right(value) =>
-                    value match {
-                      case Left(clickSuccess) => {
-                        logger.info("检查页面是否跳转")
-                        Source(1 to 4)
-                          .delayWith(
-                            delayStrategySupplier = () =>
-                              DelayStrategy.linearIncreasingDelay(
-                                increaseStep = 200.milliseconds,
-                                needsIncrease = _ => true
-                              ),
-                            overFlowStrategy =
-                              DelayOverflowStrategy.backpressure
-                          )
-                          .map(_ => driver.getCurrentUrl)
-                          .filter(_.contains("tp-pay.snssdk.com"))
-                          .map(_ => Right(true))
-                          .take(1)
-                          .orElse(
-                            Source.single(Left(new Exception("支付支付页面无法跳转")))
-                          )
-                      }
-                      case Right(jumpPayPage) => Source.single(Right(true))
-                    }
+                  case Right(_) =>
+                    Source(1 to 4)
+                      .delayWith(
+                        delayStrategySupplier = () =>
+                          DelayStrategy.linearIncreasingDelay(
+                            increaseStep = 200.milliseconds,
+                            needsIncrease = _ =>
+                              {
+                                logger.info("检查页面是否跳转")
+                                !driver.getCurrentUrl
+                                  .contains("tp-pay.snssdk.com")
+                              }
+                          ),
+                        overFlowStrategy = DelayOverflowStrategy.backpressure
+                      )
+                      .map(_ => Right(true))
+                      .take(1)
+                      .orElse(
+                        Source.single(Left(new Exception("支付支付页面无法跳转")))
+                      )
                 }
                 .mapAsync(1) {
                   case Left(error) => throw error
@@ -639,26 +627,25 @@ object QrcodeSources extends ActorSerializerSuport {
                       delayStrategySupplier = () =>
                         DelayStrategy.linearIncreasingDelay(
                           increaseStep = 200.milliseconds,
-                          needsIncrease = _ => true
+                          needsIncrease = _ => {
+                            logger.info("支付二维码查找")
+                            val findQrcode = try {
+                              driver
+                                .findElementByClassName(
+                                  "pay-method-scanpay-qrcode-image"
+                                )
+                              true
+                            } catch {
+                              case e => false
+                            }
+                            !findQrcode
+                          }
                         ),
                       overFlowStrategy = DelayOverflowStrategy.backpressure
                     )
-                    .mapAsync(1) { _ =>
-                      Future {
-                        logger.info("查找二维码图片")
-                        Right(
-                          driver
-                            .findElementByClassName(
-                              "pay-method-scanpay-qrcode-image"
-                            )
-                        )
-                      }.recover {
-                        case _ => Left(new Exception("支付二维找不到"))
-                      }
-                    }
-                    .filter(_.isRight)
+                    .map(_ => Right("已找到"))
                     .take(1)
-                    .orElse(Source.single(Left(new Exception("支付二维找不到"))))
+                    .orElse(Source.single(Left(new Exception("支付二维码找不到"))))
                     .mapAsync(1) {
                       case Left(error) => throw error
                       case Right(_) =>
