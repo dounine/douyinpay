@@ -515,7 +515,7 @@ object QrcodeSources extends ActorSerializerSuport {
             }
             .mapAsync(1) { driver =>
               Future {
-                logger.info("输入帐号")
+                logger.info("输入帐号 -> {}", order.id)
                 driver.tap(
                   _.findElementByTagName("input").sendKeys(order.id)
                 )
@@ -525,7 +525,7 @@ object QrcodeSources extends ActorSerializerSuport {
             }
             .mapAsync(1)(driver => {
               Future {
-                logger.info("确认帐号")
+                logger.info("确认帐号 -> {}", order.id)
                 driver.tap(_.findElementByClassName("confirm-btn").click())
               }.recover {
                 case _ => throw new Exception("无法点击确认帐号")
@@ -533,12 +533,12 @@ object QrcodeSources extends ActorSerializerSuport {
             })
             .mapAsync(1) { driver =>
               Future {
-                logger.info("点击自定义充值金额按钮")
+                logger.info("点击自定义充值金额按钮 -> {} {}", order.id, order.money)
                 driver.tap(
                   _.findElementByClassName("customer-recharge").click()
                 )
               }.recover {
-                case _ => throw new Exception("无法点击自定义充值按钮")
+                case _ => throw new Exception(s"无法点击自定义充值按钮 -> ${order.id}")
               }
             }
             .mapAsync(1) { driver =>
@@ -593,19 +593,20 @@ object QrcodeSources extends ActorSerializerSuport {
                         delayStrategySupplier = () =>
                           DelayStrategy.linearIncreasingDelay(
                             increaseStep = 200.milliseconds,
-                            needsIncrease = _ =>
-                              {
-                                logger.info("检查页面是否跳转")
-                                !driver.getCurrentUrl
-                                  .contains("tp-pay.snssdk.com")
-                              }
+                            needsIncrease = _ => {
+                              logger.info("检查页面是否跳转")
+                              !driver.getCurrentUrl
+                                .contains("tp-pay.snssdk.com")
+                            }
                           ),
                         overFlowStrategy = DelayOverflowStrategy.backpressure
                       )
                       .map(_ => Right(true))
                       .take(1)
                       .orElse(
-                        Source.single(Left(new Exception("支付支付页面无法跳转")))
+                        Source.single(
+                          Left(new Exception(s"支付支付页面无法跳转 -> ${order.id}"))
+                        )
                       )
                 }
                 .mapAsync(1) {
@@ -618,7 +619,7 @@ object QrcodeSources extends ActorSerializerSuport {
                           .click()
                       )
                     }.recover {
-                      case _ => throw new Exception("切换微信支付失败")
+                      case _ => throw new Exception(s"切换微信支付失败 -> ${order.id}")
                     }
                 }
                 .flatMapConcat { driver =>
@@ -629,15 +630,16 @@ object QrcodeSources extends ActorSerializerSuport {
                           increaseStep = 200.milliseconds,
                           needsIncrease = _ => {
                             logger.info("支付二维码查找")
-                            val findQrcode = try {
-                              driver
-                                .findElementByClassName(
-                                  "pay-method-scanpay-qrcode-image"
-                                )
-                              true
-                            } catch {
-                              case e => false
-                            }
+                            val findQrcode =
+                              try {
+                                driver
+                                  .findElementByClassName(
+                                    "pay-method-scanpay-qrcode-image"
+                                  )
+                                true
+                              } catch {
+                                case e => false
+                              }
                             !findQrcode
                           }
                         ),
@@ -645,7 +647,10 @@ object QrcodeSources extends ActorSerializerSuport {
                     )
                     .map(_ => Right("已找到"))
                     .take(1)
-                    .orElse(Source.single(Left(new Exception("支付二维码找不到"))))
+                    .orElse(
+                      Source
+                        .single(Left(new Exception(s"支付二维码找不到 -> ${order.id}")))
+                    )
                     .mapAsync(1) {
                       case Left(error) => throw error
                       case Right(_) =>
