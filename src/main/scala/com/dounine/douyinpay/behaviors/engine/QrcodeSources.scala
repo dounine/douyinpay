@@ -158,7 +158,7 @@ object QrcodeSources extends ActorSerializerSuport {
           .queue[Event](chromeSize)
           .preMaterialize()
 
-        val coreFlow = createCoreFlow2(context.system)
+        val coreFlow = createCoreFlow(context.system)
         val notifyBeforeFlow = Flow[Event]
           .map {
             case r @ CreateOrder(order) => {
@@ -314,7 +314,7 @@ object QrcodeSources extends ActorSerializerSuport {
       }
     }
 
-  def createCoreFlow2(
+  def createCoreFlow(
       system: ActorSystem[_]
   ): Flow[Event, Event, NotUsed] = {
     implicit val ec = system.executionContext
@@ -376,90 +376,6 @@ object QrcodeSources extends ActorSerializerSuport {
         }
       )
   }
-
-//  def createCoreFlow(
-//      system: ActorSystem[_]
-//  ): Flow[BaseSerializer, BaseSerializer, NotUsed] = {
-//    implicit val ec = system.executionContext
-//    Flow[BaseSerializer]
-//      .collectType[Event]
-//      .log()
-//      .flatMapMerge(
-//        30,
-//        {
-//          case r @ CreateOrderPush(request, order) => {
-//            Source(0 until ChromePools(system).poolSize())
-//              .flatMapMerge(
-//                10,
-//                id =>
-//                  createQrcodeSource(
-//                    system,
-//                    order,
-//                    id
-//                  )
-//              )
-//              .filter(_.isRight)
-//              .take(1)
-//              .orElse(Source.single(Left(new Exception("all fail"))))
-//              .flatMapMerge(
-//                20,
-//                {
-//                  case Left(error) => {
-//                    Source(
-//                      OrderSources.PayError(
-//                        r,
-//                        error.getMessage
-//                      ) :: ChromeSources
-//                        .Finish(request.id) :: Nil
-//                    )
-//                  }
-//                  case Right((chrome, order, qrcode, id)) =>
-//                    (0 until ChromePools(system).poolSize())
-//                      .filterNot(_ == id)
-//                      .foreach(releaseId => {
-//                        ChromePools(system).pool(releaseId).returnObject(chrome)
-//                      })
-//                    Source
-//                      .single(
-//                        OrderSources.PayPush(
-//                          r,
-//                          qrcode
-//                        )
-//                      )
-//                      .merge(
-//                        createListenPay(
-//                          system,
-//                          chrome,
-//                          order,
-//                          id
-//                        ).flatMapMerge(
-//                          10,
-//                          {
-//                            case Left(error) =>
-//                              Source(
-//                                OrderSources.PayError(
-//                                  request = r,
-//                                  error = error.getMessage
-//                                ) :: ChromeSources.Finish(request.id)
-//                                  :: Nil
-//                              )
-//                            case Right(value) =>
-//                              Source(
-//                                ChromeSources.Finish(request.id) :: OrderSources
-//                                  .PaySuccess(
-//                                    request = r
-//                                  ) :: Nil
-//                              )
-//                          }
-//                        )
-//                      )
-//                }
-//              )
-//          }
-//          case ee => Source.single(ee)
-//        }
-//      )
-//  }
 
   /**
     * 申请chrome浏览器
