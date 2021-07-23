@@ -491,25 +491,18 @@ object QrcodeSources extends ActorSerializerSuport {
             }
             .flatMapConcat { driver =>
               Source(1 to 4)
-                .delayWith(
-                  delayStrategySupplier = () =>
-                    DelayStrategy.linearIncreasingDelay(
-                      increaseStep = 200.milliseconds,
-                      needsIncrease = _ => {
-                        logger.info("查询二次确认框跟跳转")
-                        try {
-                          driver
-                            .findElementByClassName("check-content")
-                            .findElement(By.className("right"))
-                            .click()
-                        } catch {
-                          case e =>
-                        }
-                        !driver.getCurrentUrl.contains("tp-pay.snssdk.com")
-                      }
-                    ),
-                  overFlowStrategy = DelayOverflowStrategy.backpressure
-                )
+                .throttle(1,600.milliseconds)
+                .filter(_ => {
+                  try {
+                    driver
+                      .findElementByClassName("check-content")
+                      .findElement(By.className("right"))
+                      .click()
+                  } catch {
+                    case e =>
+                  }
+                  driver.getCurrentUrl.contains("tp-pay.snssdk.com")
+                })
                 .map(_ => Right("已跳转"))
                 .take(1)
                 .orElse(Source.single(Left(new Exception("没有二次确认框也没跳转"))))
