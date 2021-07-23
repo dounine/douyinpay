@@ -15,7 +15,8 @@ import org.slf4j.LoggerFactory
 import java.net.URL
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 
 class Chrome(system: ActorSystem[_], hubUrl: String) extends JsonParse {
 
@@ -47,42 +48,72 @@ class Chrome(system: ActorSystem[_], hubUrl: String) extends JsonParse {
     "https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0"
   )
 
-  def driver(cookieName: String): Future[RemoteWebDriver] = {
+  val userCookieInfo = Await.result(
     ServiceSingleton
       .get(classOf[DictionaryService])
-      .info(cookieName)
-      .map {
-        case Some(cookie) => {
-          logger.info(s"chrome driver set cookie ${cookieName}")
-          val maps: Map[String, String] =
-            cookie.text.jsonTo[Map[String, String]]
-          val executeMethod = new RemoteExecuteMethod(this.webDriver)
-          val webStorage = new RemoteWebStorage(executeMethod)
-          maps
-            .filter(_._1.startsWith("localStorage|"))
-            .foreach(item => {
-              webStorage.getLocalStorage
-                .setItem(item._1.substring("localStorage|".length), item._2)
-            })
-          maps
-            .filter(_._1.startsWith("cookie|"))
-            .foreach(item => {
-              this.webDriver
-                .manage()
-                .addCookie(
-                  new Cookie(item._1.substring("cookie|".length), item._2)
-                )
-            })
-          this.webDriver.get(
-            "https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0"
-          )
+      .info("douyin_cookie"),
+    Duration.Inf
+  )
+  userCookieInfo match {
+    case Some(value) =>
+      val maps: Map[String, String] = value.text.jsonTo[Map[String, String]]
+      val executeMethod = new RemoteExecuteMethod(this.webDriver)
+      val webStorage = new RemoteWebStorage(executeMethod)
+      maps
+        .filter(_._1.startsWith("localStorage|"))
+        .foreach(item => {
+          webStorage.getLocalStorage
+            .setItem(item._1.substring("localStorage|".length), item._2)
+        })
+      maps
+        .filter(_._1.startsWith("cookie|"))
+        .foreach(item => {
           this.webDriver
-        }
-        case None => {
-          logger.error(s"${cookieName} not found")
-          this.webDriver
-        }
-      }(system.executionContext)
+            .manage()
+            .addCookie(new Cookie(item._1.substring("cookie|".length), item._2))
+        })
+
+    case None =>
+  }
+  this.webDriver.navigate().refresh()
+
+  def driver(cookieName: String): RemoteWebDriver = {
+    this.webDriver
+//    ServiceSingleton
+//      .get(classOf[DictionaryService])
+//      .info(cookieName)
+//      .map {
+//        case Some(cookie) => {
+//          logger.info(s"chrome driver set cookie ${cookieName}")
+//          val maps: Map[String, String] =
+//            cookie.text.jsonTo[Map[String, String]]
+//          val executeMethod = new RemoteExecuteMethod(this.webDriver)
+//          val webStorage = new RemoteWebStorage(executeMethod)
+//          maps
+//            .filter(_._1.startsWith("localStorage|"))
+//            .foreach(item => {
+//              webStorage.getLocalStorage
+//                .setItem(item._1.substring("localStorage|".length), item._2)
+//            })
+//          maps
+//            .filter(_._1.startsWith("cookie|"))
+//            .foreach(item => {
+//              this.webDriver
+//                .manage()
+//                .addCookie(
+//                  new Cookie(item._1.substring("cookie|".length), item._2)
+//                )
+//            })
+//          this.webDriver.get(
+//            "https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0"
+//          )
+//          this.webDriver
+//        }
+//        case None => {
+//          logger.error(s"${cookieName} not found")
+//          this.webDriver
+//        }
+//      }(system.executionContext)
   }
   def refresh(): Unit = {
     logger.info("chrome refresh")

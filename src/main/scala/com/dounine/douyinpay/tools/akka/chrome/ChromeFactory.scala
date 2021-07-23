@@ -35,7 +35,7 @@ class ChromeFactory(system: ActorSystem[_], hubUrl: String)
 
   //每一个钝化（passivated）的ObjectPool实例从池中借出（borrowed）前调用
   override def activateObject(p: PooledObject[Chrome]): Unit = {
-    p.getObject.refresh()
+//    p.getObject.refresh()
   }
 
   override def wrap(t: Chrome): PooledObject[Chrome] =
@@ -75,7 +75,14 @@ class ChromeFactory(system: ActorSystem[_], hubUrl: String)
   }
 
   //可能用于从池中借出对象时，对处于激活（activated）状态的ObjectPool实例进行测试确保它是有效的。也有可能在ObjectPool实例返还池中进行钝化前调用进行测试是否有效。它只对处于激活状态的实例调用
-  override def validateObject(p: PooledObject[Chrome]): Boolean =
-    p.getObject.isLive()
+  override def validateObject(p: PooledObject[Chrome]): Boolean = {
+    try {
+      p.getObject.driver().get("https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0")
+      p.getObject.driver().findElementByClassName("customer-recharge")
+      true
+    } catch {
+      case e => false
+    }
+  }
 
 }

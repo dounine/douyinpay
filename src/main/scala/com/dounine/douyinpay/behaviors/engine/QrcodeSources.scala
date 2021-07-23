@@ -516,17 +516,10 @@ object QrcodeSources extends ActorSerializerSuport {
                   case Left(error) => throw error
                   case Right(_) =>
                     Source(1 to 4)
-                      .delayWith(
-                        delayStrategySupplier = () =>
-                          DelayStrategy.linearIncreasingDelay(
-                            increaseStep = 200.milliseconds,
-                            needsIncrease = _ => {
-                              logger.info("检查页面是否跳转")
-                              !driver.getCurrentUrl
-                                .contains("tp-pay.snssdk.com")
-                            }
-                          ),
-                        overFlowStrategy = DelayOverflowStrategy.backpressure
+                      .throttle(1, 500.milliseconds)
+                      .filter(_ =>
+                        driver.getCurrentUrl
+                          .contains("tp-pay.snssdk.com")
                       )
                       .map(_ => Right(true))
                       .take(1)
@@ -551,27 +544,20 @@ object QrcodeSources extends ActorSerializerSuport {
                 }
                 .flatMapConcat { driver =>
                   Source(1 to 3)
-                    .delayWith(
-                      delayStrategySupplier = () =>
-                        DelayStrategy.linearIncreasingDelay(
-                          increaseStep = 200.milliseconds,
-                          needsIncrease = _ => {
-                            logger.info("支付二维码查找")
-                            val findQrcode =
-                              try {
-                                driver
-                                  .findElementByClassName(
-                                    "pay-method-scanpay-qrcode-image"
-                                  )
-                                true
-                              } catch {
-                                case e => false
-                              }
-                            !findQrcode
-                          }
-                        ),
-                      overFlowStrategy = DelayOverflowStrategy.backpressure
-                    )
+                    .throttle(1, 500.milliseconds)
+                    .filter(_ => {
+                      val findQrcode =
+                        try {
+                          driver
+                            .findElementByClassName(
+                              "pay-method-scanpay-qrcode-image"
+                            )
+                          true
+                        } catch {
+                          case e => false
+                        }
+                      findQrcode
+                    })
                     .map(_ => Right("已找到"))
                     .take(1)
                     .orElse(
