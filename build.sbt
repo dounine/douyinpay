@@ -1,3 +1,5 @@
+import com.typesafe.sbt.packager.docker.{Cmd, DockerPermissionStrategy}
+
 val akkaVersion = "2.6.15"
 val akkaHttpVersion = "10.2.4"
 val json4sVersion = "3.7.0-M6"
@@ -8,15 +10,22 @@ lazy val app = (project in file("."))
   .enablePlugins(DockerPlugin, JavaServerAppPackaging)
   .settings(
     name := "douyinpay",
-    organization := "com.dounine",
     maintainer := "amwoqmgo@gmail.com",
     scalaVersion := "2.13.4",
     dockerRepository := Some("dounine"),
     version := "1.0.0",
+    dockerUsername  := sys.props.get("docker.username"),
+    dockerRepository := Some("dounine"),
     dockerBaseImage := "openjdk:11.0.8-slim",
     dockerExposedPorts := Seq(30000),
     dockerEnvVars := Map("apiVersion" -> "1.0.0"),
     dockerEntrypoint := Seq("/opt/docker/bin/douyinpay"),
+    dockerPermissionStrategy := DockerPermissionStrategy.Run,
+    dockerCommands ++= Seq(
+      Cmd("USER", "root"),
+      Cmd("RUN", "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime"),
+      Cmd("RUN", "echo 'Asia/Shanghai' > /etc/timezone"),
+    ),
     parallelExecution in Test := false,
     libraryDependencies ++= Seq(
       "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % elastic4sVersion,
@@ -32,6 +41,7 @@ lazy val app = (project in file("."))
       "com.typesafe.akka" %% "akka-http-caching" % akkaHttpVersion,
       "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
       "org.apache.commons" % "commons-pool2" % "2.9.0",
+      "ch.megard" %% "akka-http-cors" % "1.1.1",
       "com.typesafe.akka" %% "akka-stream" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion,
