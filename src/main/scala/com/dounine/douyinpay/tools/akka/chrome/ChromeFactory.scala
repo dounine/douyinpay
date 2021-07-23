@@ -78,10 +78,10 @@ class ChromeFactory(system: ActorSystem[_], hubUrl: String)
   override def validateObject(p: PooledObject[Chrome]): Boolean = {
     try {
       p.getObject.driver().get("https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0")
-      p.getObject.driver().findElementByClassName("customer-recharge")
-      true
+      p.getObject.driver().findElementByClassName("btn")
+      false
     } catch {
-      case e => false
+      case e => true
     }
   }
 
