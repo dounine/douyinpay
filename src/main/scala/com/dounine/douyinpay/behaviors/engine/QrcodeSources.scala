@@ -126,9 +126,14 @@ object QrcodeSources extends ActorSerializerSuport {
         val sendNotifyMessage = (
             typ: DingDing.MessageType.MessageType,
             title: String,
-            order: OrderModel.DbInfo
+            order: OrderModel.DbInfo,
+            msg: Option[String]
         ) => {
           val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
+          val errorMsg = msg match {
+            case Some(value) => s"\n - error: ${value}"
+            case None => ""
+          }
           DingDing.sendMessage(
             typ,
             data = DingDing.MessageData(
@@ -140,7 +145,7 @@ object QrcodeSources extends ActorSerializerSuport {
                           | - id: ${order.id}
                           | - money: ${order.money}
                           | - payCount: ${order.payCount}
-                          | - payMoney: ${order.payMoney}
+                          | - payMoney: ${order.payMoney}${errorMsg}
                           | - createTime: ${order.createTime.format(
                   timeFormatter
                 )}
@@ -162,7 +167,7 @@ object QrcodeSources extends ActorSerializerSuport {
         val notifyBeforeFlow = Flow[Event]
           .map {
             case r @ CreateOrder(order) => {
-              sendNotifyMessage(DingDing.MessageType.order, "定单创建", order)
+              sendNotifyMessage(DingDing.MessageType.order, "定单创建", order, None)
               r
             }
           }
@@ -173,21 +178,36 @@ object QrcodeSources extends ActorSerializerSuport {
               case r @ CreateOrderOk(request, qrcode) =>
                 logger.info("create order ok -> {}", r)
                 val order = r.request.order
-                sendNotifyMessage(DingDing.MessageType.order, "创建成功", order)
+                sendNotifyMessage(
+                  DingDing.MessageType.order,
+                  "创建成功",
+                  order,
+                  None
+                )
                 request.replyTo.tell(r)
                 Source.empty
-              case r @ CreateOrderFail(_, _) =>
+              case r @ CreateOrderFail(_, msg) =>
                 orderQueue.offer(IncrmentChrome())
                 r.request.replyTo.tell(r)
                 val order = r.request.order
-                sendNotifyMessage(DingDing.MessageType.order, "创建失败", order)
+                sendNotifyMessage(
+                  DingDing.MessageType.order,
+                  "创建失败",
+                  order,
+                  Some(msg)
+                )
                 logger.error("create order fail -> {}", r)
                 Source.single(r)
-              case r @ PayFail(_, _) =>
+              case r @ PayFail(_, msg) =>
                 orderQueue.offer(IncrmentChrome())
                 r.request.replyTo.tell(r)
                 val order = r.request.order
-                sendNotifyMessage(DingDing.MessageType.payerr, "充值失败", order)
+                sendNotifyMessage(
+                  DingDing.MessageType.payerr,
+                  "充值失败",
+                  order,
+                  Some(msg)
+                )
                 logger.error("pay fail -> {}", r)
                 Source.single(r)
               case r @ PaySuccess(request) =>
@@ -205,7 +225,8 @@ object QrcodeSources extends ActorSerializerSuport {
                 sendNotifyMessage(
                   DingDing.MessageType.payed,
                   "充值成功",
-                  newRequest.request.order
+                  newRequest.request.order,
+                  None
                 )
                 logger.info("pay success -> {}", r)
                 Source.single(newRequest)
@@ -267,7 +288,12 @@ object QrcodeSources extends ActorSerializerSuport {
                     r.replyTo.tell(
                       CreateOrderFail(r, "操作频繁、请稍后再试")
                     )
-                    sendNotifyMessage(DingDing.MessageType.order, "操作频繁", order)
+                    sendNotifyMessage(
+                      DingDing.MessageType.order,
+                      "操作频繁",
+                      order,
+                      None
+                    )
                     Nil
                   }
                 }
@@ -431,8 +457,7 @@ object QrcodeSources extends ActorSerializerSuport {
       .flatMapConcat { source =>
         {
           Source
-            .single(
-              source.driver("douyin_cookie"))
+            .single(source.driver("douyin_cookie"))
             .mapAsync(1) { driver =>
               Future {
                 logger.info("切换用户")
@@ -491,7 +516,7 @@ object QrcodeSources extends ActorSerializerSuport {
             }
             .flatMapConcat { driver =>
               Source(1 to 4)
-                .throttle(1,600.milliseconds)
+                .throttle(1, 600.milliseconds)
                 .filter(_ => {
                   try {
                     driver
