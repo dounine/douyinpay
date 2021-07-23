@@ -431,7 +431,8 @@ object QrcodeSources extends ActorSerializerSuport {
       .flatMapConcat { source =>
         {
           Source
-            .future(source.driver("douyin_cookie"))
+            .single(
+              source.driver("douyin_cookie"))
             .mapAsync(1) { driver =>
               Future {
                 logger.info("切换用户")
