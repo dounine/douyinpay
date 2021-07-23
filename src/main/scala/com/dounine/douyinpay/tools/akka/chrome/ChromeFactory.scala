@@ -79,9 +79,9 @@ class ChromeFactory(system: ActorSystem[_], hubUrl: String)
     try {
       p.getObject.driver().get("https://www.douyin.com/falcon/webcast_openpc/pages/douyin_recharge/index.html?is_new_connect=0&is_new_user=0")
       p.getObject.driver().findElementByClassName("btn")
-      false
+      true
     } catch {
-      case e => true
+      case e => false
     }
   }
 
