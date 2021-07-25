@@ -194,7 +194,7 @@ object QrcodeSources extends ActorSerializerSuport {
                 r.request.replyTo.tell(r)
                 val order = r.request.order
                 sendNotifyMessage(
-                  DingDing.MessageType.order,
+                  DingDing.MessageType.payerr,
                   "创建失败",
                   order,
                   Some(msg)
