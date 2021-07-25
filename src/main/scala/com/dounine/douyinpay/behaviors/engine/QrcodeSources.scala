@@ -176,7 +176,10 @@ object QrcodeSources extends ActorSerializerSuport {
             chromeSize,
             {
               case r @ CreateOrderOk(request, qrcode) =>
-                logger.info("create order ok -> {}", r)
+                logger.info(
+                  "create order ok -> {}",
+                  request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                )
                 val order = r.request.order
                 sendNotifyMessage(
                   DingDing.MessageType.order,
@@ -196,7 +199,11 @@ object QrcodeSources extends ActorSerializerSuport {
                   order,
                   Some(msg)
                 )
-                logger.error("create order fail -> {}", r)
+                logger.error(
+                  "create order fail -> {} {}",
+                  msg,
+                  r.request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                )
                 Source.single(r)
               case r @ PayFail(_, msg) =>
 //                orderQueue.offer(IncrmentChrome())
@@ -207,7 +214,11 @@ object QrcodeSources extends ActorSerializerSuport {
                   order,
                   Some(msg)
                 )
-                logger.error("pay fail -> {}", r)
+                logger.error(
+                  "pay fail -> {} {}",
+                  msg,
+                  r.request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                )
                 Source.single(r)
               case r @ PaySuccess(request) =>
 //                orderQueue.offer(IncrmentChrome())
@@ -226,7 +237,12 @@ object QrcodeSources extends ActorSerializerSuport {
                   newRequest.request.order,
                   None
                 )
-                logger.info("pay success -> {}", r)
+                logger.info(
+                  "pay success -> {}",
+                  newRequest.request.order.toJson
+                    .jsonTo[Map[String, Any]]
+                    .mkString("\n")
+                )
                 Source.single(newRequest)
             }
           )
@@ -457,7 +473,7 @@ object QrcodeSources extends ActorSerializerSuport {
             .single(source.driver("douyin_cookie"))
             .mapAsync(1) { driver =>
               Future {
-                logger.info("切换用户")
+                logger.info(s"切换用户 -> ${order.id}")
                 driver.tap(_.findElementByClassName("btn").click())
               }.recover {
                 case _ => throw new Exception("无法点击切换用户按钮")
@@ -470,7 +486,7 @@ object QrcodeSources extends ActorSerializerSuport {
                   _.findElementByTagName("input").sendKeys(order.id)
                 )
               }.recover {
-                case _ => throw new Exception("无法输入帐号")
+                case _ => throw new Exception(s"无法输入帐号 -> ${order.id}")
               }
             }
             .mapAsync(1)(driver => {
@@ -478,29 +494,29 @@ object QrcodeSources extends ActorSerializerSuport {
                 logger.info("确认帐号 -> {}", order.id)
                 driver.tap(_.findElementByClassName("confirm-btn").click())
               }.recover {
-                case _ => throw new Exception("无法点击确认帐号")
+                case _ => throw new Exception(s"无法点击确认帐号 -> ${order.id}")
               }
             })
             .mapAsync(1) { driver =>
               Future {
-                logger.info("点击自定义充值金额按钮 -> {} {}", order.id, order.money)
+                logger.info("点击自定义充值金额按钮")
                 driver.tap(
                   _.findElementByClassName("customer-recharge").click()
                 )
               }.recover {
-                case _ => throw new Exception(s"无法点击自定义充值按钮 -> ${order.id}")
+                case _ => throw new Exception(s"无法点击自定义充值按钮")
               }
             }
             .mapAsync(1) { driver =>
               Future {
-                logger.info("输入充值金额")
+                logger.info(s"输入充值金额 -> ${order.money}")
                 driver.tap(
                   _.findElementByClassName("customer-recharge")
                     .findElement(By.tagName("input"))
                     .sendKeys(order.money.toString)
                 )
               }.recover {
-                case _ => throw new Exception("无法输入充值金额")
+                case _ => throw new Exception(s"无法输入充值金额 -> ${order.money}")
               }
             }
             .mapAsync(1) { driver =>
@@ -529,24 +545,24 @@ object QrcodeSources extends ActorSerializerSuport {
                 .map(_ => Right("已跳转"))
                 .take(1)
                 .orElse(Source.single(Left(new Exception("没有二次确认框也没跳转"))))
-//                .flatMapConcat {
-//                  case Left(error) => throw error
-//                  case Right(_) =>
-//                    Source(1 to 4)
-//                      .throttle(1, 500.milliseconds)
-//                      .filter(_ => {
-//                        logger.info("判断是否已经跳转")
-//                        driver.getCurrentUrl
-//                          .contains("tp-pay.snssdk.com")
-//                      })
-//                      .map(_ => Right(true))
-//                      .take(1)
-//                      .orElse(
-//                        Source.single(
-//                          Left(new Exception(s"支付支付页面无法跳转 -> ${order.id}"))
-//                        )
-//                      )
-//                }
+                //                .flatMapConcat {
+                //                  case Left(error) => throw error
+                //                  case Right(_) =>
+                //                    Source(1 to 4)
+                //                      .throttle(1, 500.milliseconds)
+                //                      .filter(_ => {
+                //                        logger.info("判断是否已经跳转")
+                //                        driver.getCurrentUrl
+                //                          .contains("tp-pay.snssdk.com")
+                //                      })
+                //                      .map(_ => Right(true))
+                //                      .take(1)
+                //                      .orElse(
+                //                        Source.single(
+                //                          Left(new Exception(s"支付支付页面无法跳转 -> ${order.id}"))
+                //                        )
+                //                      )
+                //                }
                 .mapAsync(1) {
                   case Left(error) => throw error
                   case Right(value) =>
