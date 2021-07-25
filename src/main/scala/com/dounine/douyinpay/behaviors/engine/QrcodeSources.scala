@@ -200,7 +200,6 @@ object QrcodeSources extends ActorSerializerSuport {
                 Source.single(r)
               case r @ PayFail(_, msg) =>
 //                orderQueue.offer(IncrmentChrome())
-                r.request.replyTo.tell(r)
                 val order = r.request.order
                 sendNotifyMessage(
                   DingDing.MessageType.payerr,
@@ -221,7 +220,6 @@ object QrcodeSources extends ActorSerializerSuport {
                     )
                   )(request.replyTo)
                 )
-                r.request.replyTo.tell(r)
                 sendNotifyMessage(
                   DingDing.MessageType.payed,
                   "充值成功",
