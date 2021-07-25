@@ -132,7 +132,7 @@ object QrcodeSources extends ActorSerializerSuport {
           val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
           val errorMsg = msg match {
             case Some(value) => s"\n - error: ${value}"
-            case None => ""
+            case None        => ""
           }
           DingDing.sendMessage(
             typ,
@@ -187,7 +187,7 @@ object QrcodeSources extends ActorSerializerSuport {
                 request.replyTo.tell(r)
                 Source.empty
               case r @ CreateOrderFail(_, msg) =>
-                orderQueue.offer(IncrmentChrome())
+//                orderQueue.offer(IncrmentChrome())
                 r.request.replyTo.tell(r)
                 val order = r.request.order
                 sendNotifyMessage(
@@ -199,7 +199,7 @@ object QrcodeSources extends ActorSerializerSuport {
                 logger.error("create order fail -> {}", r)
                 Source.single(r)
               case r @ PayFail(_, msg) =>
-                orderQueue.offer(IncrmentChrome())
+//                orderQueue.offer(IncrmentChrome())
                 r.request.replyTo.tell(r)
                 val order = r.request.order
                 sendNotifyMessage(
@@ -211,7 +211,7 @@ object QrcodeSources extends ActorSerializerSuport {
                 logger.error("pay fail -> {}", r)
                 Source.single(r)
               case r @ PaySuccess(request) =>
-                orderQueue.offer(IncrmentChrome())
+//                orderQueue.offer(IncrmentChrome())
                 val order = request.order
                 val newRequest = PaySuccess(
                   CreateOrder(
@@ -275,35 +275,35 @@ object QrcodeSources extends ActorSerializerSuport {
           }
 
         orderSource
-          .statefulMapConcat { () =>
-            {
-              var chromes = chromeSize
-
-              {
-                case r @ CreateOrder(order) => {
-                  if (chromes > 0) {
-                    chromes = chromes - 1
-                    r :: Nil
-                  } else {
-                    r.replyTo.tell(
-                      CreateOrderFail(r, "操作频繁、请稍后再试")
-                    )
-                    sendNotifyMessage(
-                      DingDing.MessageType.order,
-                      "操作频繁",
-                      order,
-                      None
-                    )
-                    Nil
-                  }
-                }
-                case IncrmentChrome() => {
-                  chromes = chromes + 1
-                  Nil
-                }
-              }
-            }
-          }
+        //          .statefulMapConcat { () =>
+        //            {
+        //              var chromes = chromeSize
+        //
+        //              {
+        //                case r @ CreateOrder(order) => {
+        //                  if (chromes > 0) {
+        //                    chromes = chromes - 1
+        //                    r :: Nil
+        //                  } else {
+        //                    r.replyTo.tell(
+        //                      CreateOrderFail(r, "操作频繁、请稍后再试")
+        //                    )
+        //                    sendNotifyMessage(
+        //                      DingDing.MessageType.order,
+        //                      "操作频繁",
+        //                      order,
+        //                      None
+        //                    )
+        //                    Nil
+        //                  }
+        //                }
+        //                case IncrmentChrome() => {
+        //                  chromes = chromes + 1
+        //                  Nil
+        //                }
+        //              }
+        //            }
+        //          }
           .via(queryOrderFlow)
           .via(notifyBeforeFlow)
           .via(coreFlow)
@@ -358,17 +358,16 @@ object QrcodeSources extends ActorSerializerSuport {
                   randomFactor = 0.2
                 ).withMaxRestarts(1, 1.seconds)
               )(() => {
-                Source(iterable = 0 until ChromePools(system).poolSize())
-                  .flatMapMerge(
-                    10,
-                    id =>
-                      createQrcodeSource(
-                        system,
-                        order,
-                        id
-                      )
-                  )
-                  .filter(_.isRight)
+//                Source(iterable = 0 until ChromePools(system).poolSize())
+//                  .flatMapMerge(
+//                    10,
+//                    id =>
+                createQrcodeSource(
+                  system,
+                  order,
+                  0
+//                      )
+                ).filter(_.isRight)
                   .take(1)
                   .orElse(Source.single(Left(new Exception("all fail"))))
               })
@@ -515,9 +514,10 @@ object QrcodeSources extends ActorSerializerSuport {
               }
             }
             .flatMapConcat { driver =>
-              Source(1 to 4)
-                .throttle(1, 600.milliseconds)
+              Source(1 to 6)
+                .throttle(1, 500.milliseconds)
                 .filter(_ => {
+                  logger.info("判断是否已经跳转")
                   try {
                     driver
                       .findElementByClassName("check-content")
@@ -531,23 +531,24 @@ object QrcodeSources extends ActorSerializerSuport {
                 .map(_ => Right("已跳转"))
                 .take(1)
                 .orElse(Source.single(Left(new Exception("没有二次确认框也没跳转"))))
-                .flatMapConcat {
-                  case Left(error) => throw error
-                  case Right(_) =>
-                    Source(1 to 4)
-                      .throttle(1, 500.milliseconds)
-                      .filter(_ =>
-                        driver.getCurrentUrl
-                          .contains("tp-pay.snssdk.com")
-                      )
-                      .map(_ => Right(true))
-                      .take(1)
-                      .orElse(
-                        Source.single(
-                          Left(new Exception(s"支付支付页面无法跳转 -> ${order.id}"))
-                        )
-                      )
-                }
+//                .flatMapConcat {
+//                  case Left(error) => throw error
+//                  case Right(_) =>
+//                    Source(1 to 4)
+//                      .throttle(1, 500.milliseconds)
+//                      .filter(_ => {
+//                        logger.info("判断是否已经跳转")
+//                        driver.getCurrentUrl
+//                          .contains("tp-pay.snssdk.com")
+//                      })
+//                      .map(_ => Right(true))
+//                      .take(1)
+//                      .orElse(
+//                        Source.single(
+//                          Left(new Exception(s"支付支付页面无法跳转 -> ${order.id}"))
+//                        )
+//                      )
+//                }
                 .mapAsync(1) {
                   case Left(error) => throw error
                   case Right(value) =>
@@ -565,6 +566,7 @@ object QrcodeSources extends ActorSerializerSuport {
                   Source(1 to 3)
                     .throttle(1, 500.milliseconds)
                     .filter(_ => {
+                      logger.info("获取二维码支付图片")
                       val findQrcode =
                         try {
                           driver
