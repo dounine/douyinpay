@@ -82,11 +82,16 @@ object QrcodeSources extends ActorSerializerSuport {
 
   case class CreateOrderOk(request: CreateOrder, qrcode: String) extends Event
 
-  case class CreateOrderFail(request: CreateOrder, msg: String) extends Event
+  case class CreateOrderFail(
+      request: CreateOrder,
+      msg: String,
+      screen: Option[String]
+  ) extends Event
 
   case class PaySuccess(request: CreateOrder) extends Event
 
-  case class PayFail(request: CreateOrder, msg: String) extends Event
+  case class PayFail(request: CreateOrder, msg: String, screen: Option[String])
+      extends Event
 
   case class Shutdown()(val replyTo: ActorRef[Done]) extends Event
 
@@ -119,6 +124,7 @@ object QrcodeSources extends ActorSerializerSuport {
         implicit val materializer =
           SystemMaterializer(context.system).materializer
         implicit val ec = context.executionContext
+        val config = context.system.settings.config.getConfig("app")
         val chromeSize =
           context.system.settings.config.getInt("app.selenium.pool.minIdle")
         val orderService = ServiceSingleton.get(classOf[OrderService])
@@ -127,12 +133,18 @@ object QrcodeSources extends ActorSerializerSuport {
             typ: DingDing.MessageType.MessageType,
             title: String,
             order: OrderModel.DbInfo,
-            msg: Option[String]
+            msg: Option[String],
+            screen: Option[String]
         ) => {
           val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
           val errorMsg = msg match {
             case Some(value) => s"\n - error: ${value}"
             case None        => ""
+          }
+          val errorScreen = screen match {
+            case Some(screen) =>
+              s"\n- 页面：![error](${config.getString("file.domain") + "/file/image?path=" + screen})"
+            case None => ""
           }
           DingDing.sendMessage(
             typ,
@@ -145,7 +157,7 @@ object QrcodeSources extends ActorSerializerSuport {
                           | - id: ${order.id}
                           | - money: ${order.money}
                           | - payCount: ${order.payCount}
-                          | - payMoney: ${order.payMoney}${errorMsg}
+                          | - payMoney: ${order.payMoney}${errorMsg}${errorScreen}
                           | - createTime: ${order.createTime.format(
                   timeFormatter
                 )}
@@ -167,7 +179,13 @@ object QrcodeSources extends ActorSerializerSuport {
         val notifyBeforeFlow = Flow[Event]
           .map {
             case r @ CreateOrder(order) => {
-              sendNotifyMessage(DingDing.MessageType.order, "定单创建", order, None)
+              sendNotifyMessage(
+                DingDing.MessageType.order,
+                "定单创建",
+                order,
+                None,
+                None
+              )
               r
             }
           }
@@ -185,19 +203,21 @@ object QrcodeSources extends ActorSerializerSuport {
                   DingDing.MessageType.order,
                   "创建成功",
                   order,
+                  None,
                   None
                 )
                 request.replyTo.tell(r)
                 Source.empty
-              case r @ CreateOrderFail(_, msg) =>
+              case r @ CreateOrderFail(_, msg, screen) =>
 //                orderQueue.offer(IncrmentChrome())
                 r.request.replyTo.tell(r)
                 val order = r.request.order
                 sendNotifyMessage(
-                  DingDing.MessageType.payerr,
+                  DingDing.MessageType.order,
                   "创建失败",
                   order,
-                  Some(msg)
+                  Some(msg),
+                  screen
                 )
                 logger.error(
                   "create order fail -> {} {}",
@@ -205,14 +225,15 @@ object QrcodeSources extends ActorSerializerSuport {
                   r.request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
                 )
                 Source.single(r)
-              case r @ PayFail(_, msg) =>
+              case r @ PayFail(_, msg, screen) =>
 //                orderQueue.offer(IncrmentChrome())
                 val order = r.request.order
                 sendNotifyMessage(
                   DingDing.MessageType.payerr,
                   "充值失败",
                   order,
-                  Some(msg)
+                  Some(msg),
+                  screen
                 )
                 logger.error(
                   "pay fail -> {} {}",
@@ -235,6 +256,7 @@ object QrcodeSources extends ActorSerializerSuport {
                   DingDing.MessageType.payed,
                   "充值成功",
                   newRequest.request.order,
+                  None,
                   None
                 )
                 logger.info(
@@ -272,14 +294,14 @@ object QrcodeSources extends ActorSerializerSuport {
                   expire = true
                 )
               )
-            case PayFail(request, msg) =>
+            case PayFail(request, msg, screen) =>
               orderService.updateAll(
                 request.order.copy(
                   pay = false,
                   expire = true
                 )
               )
-            case CreateOrderFail(request, msg) =>
+            case CreateOrderFail(request, msg, screen) =>
               orderService.updateAll(
                 request.order.copy(
                   pay = false,
@@ -336,12 +358,12 @@ object QrcodeSources extends ActorSerializerSuport {
             orderQueue.offer(e) match {
               case result: QueueCompletionResult =>
                 logger.info("QueueCompletionResult")
-                e.replyTo.tell(CreateOrderFail(e, "queue completion"))
+                e.replyTo.tell(CreateOrderFail(e, "queue completion", None))
               case QueueOfferResult.Enqueued =>
                 logger.info("Enqueued")
               case QueueOfferResult.Dropped =>
                 logger.info("Dropped")
-                e.replyTo.tell(CreateOrderFail(e, "操作频繁、请稍后重试"))
+                e.replyTo.tell(CreateOrderFail(e, "操作频繁、请稍后重试", None))
             }
             Behaviors.same
           }
@@ -383,14 +405,17 @@ object QrcodeSources extends ActorSerializerSuport {
 //                      )
                 ).filter(_.isRight)
                   .take(1)
-                  .orElse(Source.single(Left(new Exception("all fail"))))
+                  .orElse(
+                    Source.single(Left((new Exception("all fail"), None)))
+                  )
               })
               .flatMapConcat {
-                case Left(error) =>
+                case Left((error, screen)) =>
                   Source(
                     CreateOrderFail(
                       r,
-                      error.getMessage
+                      error.getMessage,
+                      screen
                     ) :: Nil
                   )
                 case Right((chrome, order, qrcode, id)) =>
@@ -405,8 +430,9 @@ object QrcodeSources extends ActorSerializerSuport {
                         order,
                         id
                       ).map {
-                        case Left(error) => PayFail(r, error.getMessage)
-                        case Right(_)    => PaySuccess(r)
+                        case Left((error, screen)) =>
+                          PayFail(r, error.getMessage, screen)
+                        case Right(_) => PaySuccess(r)
                       }
                     )
               }
@@ -453,7 +479,10 @@ object QrcodeSources extends ActorSerializerSuport {
       order: OrderModel.DbInfo,
       id: Int
   ): Source[
-    Either[Throwable, (Chrome, OrderModel.DbInfo, String, Int)],
+    Either[
+      (Throwable, Option[String]),
+      (Chrome, OrderModel.DbInfo, String, Int)
+    ],
     NotUsed
   ] = {
     implicit val ec = system.executionContext
@@ -622,14 +651,25 @@ object QrcodeSources extends ActorSerializerSuport {
             .recover {
               case e: Throwable => {
                 e.printStackTrace()
+                val left = Left(
+                  (
+                    e,
+                    Some(
+                      source
+                        .driver()
+                        .getScreenshotAs(OutputType.FILE)
+                        .getAbsolutePath
+                    )
+                  )
+                )
                 ChromePools(system).pool(id).returnObject(source)
-                Left(e)
+                left
               }
             }
         }
       }
       .recover {
-        case e: Throwable => Left(e)
+        case e: Throwable => Left((e, None))
       }
   }
 
@@ -645,7 +685,7 @@ object QrcodeSources extends ActorSerializerSuport {
       chrome: Chrome,
       order: OrderModel.DbInfo,
       id: Int
-  ): Source[Either[Throwable, OrderModel.DbInfo], NotUsed] = {
+  ): Source[Either[(Throwable, Option[String]), OrderModel.DbInfo], NotUsed] = {
     implicit val ec = system.executionContext
     import scala.concurrent.duration._
     Source(1 to 60)
@@ -656,11 +696,29 @@ object QrcodeSources extends ActorSerializerSuport {
       .filter(_.contains("result?app_id"))
       .map(_ => Right(order))
       .take(1)
-      .orElse(Source.single(Left(new Exception("未支付"))))
+      .orElse(
+        Source.single(
+          Left(
+            (
+              new Exception("未支付"),
+              Some(
+                chrome.driver().getScreenshotAs(OutputType.FILE).getAbsolutePath
+              )
+            )
+          )
+        )
+      )
       .recover {
         case e => {
           e.printStackTrace()
-          Left(new Exception("未支付"))
+          Left(
+            (
+              new Exception("未支付"),
+              Some(
+                chrome.driver().getScreenshotAs(OutputType.FILE).getAbsolutePath
+              )
+            )
+          )
         }
       }
       .watchTermination()((pv, future) => {
