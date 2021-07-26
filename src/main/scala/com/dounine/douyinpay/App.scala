@@ -40,6 +40,7 @@ object App {
       new HealthRouter(system).route,
       new FileRouter(system).route,
       new OrderRouter(system).route,
+      new WechatRouter(system).route,
       new GraphqlRouter(system).route
     )
 

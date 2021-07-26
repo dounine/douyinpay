@@ -66,7 +66,7 @@ import com.dounine.douyinpay.service.{
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.util.{MD5Util, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
-
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import java.nio.file.{Files, Paths}
 import java.time.LocalDateTime
 import java.util.UUID
@@ -143,175 +143,186 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
   val http = Http(system)
 
   val route: Route =
-    concat(
-      get {
-        path("user" / "login") {
-          val actor = system.systemActorOf(
-            LoginScanBehavior(),
-            s"${UUID.randomUUID().toString}"
-          )
-          import akka.actor.typed.scaladsl.AskPattern._
-          val future: Future[BaseSerializer] = actor.ask(
-            LoginScanBehavior.GetScan()
-          )(new Timeout(10.seconds), system.scheduler)
-          onComplete(future) {
-            case Failure(exception) => fail(exception.getMessage)
-            case Success(value) => {
-              value match {
-                case LoginScanBehavior.ScanSuccess(url) => {
-                  complete(
-                    HttpResponse(entity =
-                      HttpEntity(
-                        ContentType(MediaTypes.`image/png`),
-                        Files.readAllBytes(Paths.get(url))
+    cors() {
+      concat(
+        get {
+          path("user" / "login") {
+            val actor = system.systemActorOf(
+              LoginScanBehavior(),
+              s"${UUID.randomUUID().toString}"
+            )
+            import akka.actor.typed.scaladsl.AskPattern._
+            val future: Future[BaseSerializer] = actor.ask(
+              LoginScanBehavior.GetScan()
+            )(new Timeout(10.seconds), system.scheduler)
+            onComplete(future) {
+              case Failure(exception) => fail(exception.getMessage)
+              case Success(value) => {
+                value match {
+                  case LoginScanBehavior.ScanSuccess(url) => {
+                    complete(
+                      HttpResponse(entity =
+                        HttpEntity(
+                          ContentType(MediaTypes.`image/png`),
+                          Files.readAllBytes(Paths.get(url))
+                        )
                       )
                     )
-                  )
-                }
-                case LoginScanBehavior.ScanFail(msg) =>
-                  fail(msg)
-              }
-            }
-          }
-        } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
-          id =>
-            {
-              cache(lfuCache, keyFunction) {
-                val future = http
-                  .singleRequest(
-                    request = HttpRequest(
-                      uri =
-                        s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-                          .currentTimeMillis()}",
-                      method = HttpMethods.GET
-                    ),
-                    settings = ConnectSettings.httpSettings(system)
-                  )
-                  .flatMap {
-                    case HttpResponse(_, _, entity, _) =>
-                      entity.dataBytes
-                        .runFold(ByteString(""))(_ ++ _)
-                        .map(_.utf8String)
-                        .map(_.jsonTo[PayUserInfoModel.DouYinSearchResponse])
-                        .map(item => {
-                          if (item.data.open_info.nonEmpty) {
-                            val data: PayUserInfoModel.DouYinSearchOpenInfo =
-                              item.data.open_info.head
-                            Option(
-                              PayUserInfoModel.Info(
-                                nickName = data.nick_name,
-                                id = data.search_id,
-                                avatar = data.avatar_thumb.url_list.head
-                              )
-                            )
-                          } else {
-                            Option.empty
-                          }
-                        })
-                    case msg @ _ =>
-                      logger.error(s"请求失败 $msg")
-                      Future.failed(new Exception(s"请求失败 $msg"))
                   }
-                onComplete(future) {
-                  case Success(value)     => ok(value)
-                  case Failure(exception) => fail(exception.getLocalizedMessage)
+                  case LoginScanBehavior.ScanFail(msg) =>
+                    fail(msg)
                 }
               }
             }
-        } ~ path("pay" / "money" / "info" / "douyin") {
-          ok(
-            moneys.map(i => {
-              Map(
-                "money" -> s"¥${i._1}",
-                "volumn" -> i._2
-              )
-            })
-          )
-        } ~ path("order" / "info" / Segment) { orderId =>
-          {
-            onComplete(orderService.queryOrderStatus(orderId)) {
-              case Success(value)     => ok(value)
-              case Failure(exception) => fail(exception.getMessage)
-            }
-          }
-        }
-      },
-      post {
-        path("pay" / "qrcode") {
-          entity(as[OrderModel.Recharge]) {
-            data =>
+          } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
+            id =>
               {
-                logger.info(data.logJson)
-                val order = OrderModel.DbInfo(
-                  orderId = UUID.randomUUID().toString.replaceAll("-", ""),
-                  nickName = data.nickName,
-                  pay = false,
-                  expire = false,
-                  openid = data.openid,
-                  id = data.id,
-                  money = data.money
-                    .replaceAll("¥", "")
-                    .replaceAll(",", "")
-                    .toDouble
-                    .toInt,
-                  volumn = data.money
-                    .replaceAll("¥", "")
-                    .replaceAll(",", "")
-                    .toDouble
-                    .toInt * 10,
-                  platform = data.platform,
-                  createTime = LocalDateTime.now(),
-                  payCount = 0,
-                  payMoney = 0
-                )
-
-                val result =
-                  orderService
-                    .add(
-                      order
+                cache(lfuCache, keyFunction) {
+                  val future = http
+                    .singleRequest(
+                      request = HttpRequest(
+                        uri =
+                          s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                            .currentTimeMillis()}",
+                        method = HttpMethods.GET
+                      ),
+                      settings = ConnectSettings.httpSettings(system)
                     )
                     .flatMap {
-                      _ =>
-                        {
-                          sharding
-                            .entityRefFor(
-                              QrcodeSources.typeKey,
-                              QrcodeSources.typeKey.name
-                            )
-                            .ask(
-                              QrcodeSources.CreateOrder(
-                                order
+                      case HttpResponse(_, _, entity, _) =>
+                        entity.dataBytes
+                          .runFold(ByteString(""))(_ ++ _)
+                          .map(_.utf8String)
+                          .map(_.jsonTo[PayUserInfoModel.DouYinSearchResponse])
+                          .map(item => {
+                            if (item.data.open_info.nonEmpty) {
+                              val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                                item.data.open_info.head
+                              Option(
+                                PayUserInfoModel.Info(
+                                  nickName = data.nick_name,
+                                  id = data.search_id,
+                                  avatar = data.avatar_thumb.url_list.head
+                                )
                               )
-                            )(15.seconds)
-                            .map {
-                              case QrcodeSources
-                                    .CreateOrderOk(request, qrcode) =>
-                                ok(
-                                  Map(
-                                    "dbQuery" -> (config.getString(
-                                      "file.domain"
-                                    ) + s"/order/info/" + order.orderId),
-                                    "qrcode" -> (config.getString(
-                                      "file.domain"
-                                    ) + "/file/image?path=" + qrcode)
-                                  )
-                                )
-                              case QrcodeSources
-                                    .CreateOrderFail(request, error) =>
-                                fail(
-                                  error
-                                )
+                            } else {
+                              Option.empty
                             }
-                        }
+                          })
+                      case msg @ _ =>
+                        logger.error(s"请求失败 $msg")
+                        Future.failed(new Exception(s"请求失败 $msg"))
                     }
-                onComplete(result) {
-                  case Failure(exception) => fail(exception.getMessage)
-                  case Success(value)     => value
+                  onComplete(future) {
+                    case Success(value: Option[PayUserInfoModel.Info]) =>
+                      value match {
+                        case Some(value) => ok(value)
+                        case None        => fail("用户不存在")
+                      }
+                    case Failure(exception) =>
+                      fail(exception.getLocalizedMessage)
+                  }
                 }
               }
+          } ~ path("pay" / "money" / "info" / "douyin") {
+            ok(
+              moneys.map(i => {
+                Map(
+                  "money" -> s"¥${i._1}",
+                  "volumn" -> i._2
+                )
+              })
+            )
+          } ~ path("order" / "info" / Segment) { orderId =>
+            {
+              onComplete(orderService.queryOrderStatus(orderId)) {
+                case Success(value)     => ok(value)
+                case Failure(exception) => fail(exception.getMessage)
+              }
+            }
+          }
+        },
+        post {
+          path("pay" / "qrcode") {
+            entity(as[OrderModel.Recharge]) {
+              data =>
+                {
+                  logger.info(data.logJson)
+                  val order = OrderModel.DbInfo(
+                    orderId = UUID.randomUUID().toString.replaceAll("-", ""),
+                    nickName = data.nickName,
+                    pay = false,
+                    expire = false,
+                    openid = data.openid,
+                    id = data.id,
+                    money = data.money
+                      .replaceAll("¥", "")
+                      .replaceAll(",", "")
+                      .toDouble
+                      .toInt,
+                    volumn = data.money
+                      .replaceAll("¥", "")
+                      .replaceAll(",", "")
+                      .toDouble
+                      .toInt * 10,
+                    platform = data.platform,
+                    createTime = LocalDateTime.now(),
+                    payCount = 0,
+                    payMoney = 0
+                  )
+
+                  val result =
+                    orderService
+                      .add(
+                        order
+                      )
+                      .flatMap {
+                        _ =>
+                          {
+                            sharding
+                              .entityRefFor(
+                                QrcodeSources.typeKey,
+                                QrcodeSources.typeKey.name
+                              )
+                              .ask(
+                                QrcodeSources.CreateOrder(
+                                  order
+                                )
+                              )(15.seconds)
+                              .map {
+                                case QrcodeSources
+                                      .CreateOrderOk(request, qrcode) =>
+                                  ok(
+                                    Map(
+                                      "dbQuery" -> (config.getString(
+                                        "file.domain"
+                                      ) + s"/order/info/" + order.orderId),
+                                      "qrcode" -> (config.getString(
+                                        "file.domain"
+                                      ) + "/file/image?path=" + qrcode)
+                                    )
+                                  )
+                                case QrcodeSources
+                                      .CreateOrderFail(
+                                        request,
+                                        error,
+                                        screen
+                                      ) =>
+                                  fail(
+                                    error
+                                  )
+                              }
+                          }
+                      }
+                  onComplete(result) {
+                    case Failure(exception) => fail(exception.getMessage)
+                    case Success(value)     => value
+                  }
+                }
+            }
           }
         }
-      }
-    )
+      )
+    }
 
 }
