@@ -140,7 +140,6 @@ class WechatRouter(system: ActorSystem[_])
                   echostr: String
               ) =>
                 {
-                  logger.info("hello")
                   val sortArray: String =
                     Array(
                       config.getString("wechat.auth"),

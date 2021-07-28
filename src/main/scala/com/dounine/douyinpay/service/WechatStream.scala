@@ -461,12 +461,14 @@ object WechatStream extends JsonParse with SuportRouter {
       })
   }
 
-  def jwtEncode(text: String)(implicit system: ActorSystem[_]): String = {
+  def jwtEncode(
+      text: String
+  )(implicit system: ActorSystem[_]): (String, Long) = {
     val config = system.settings.config.getConfig("app")
     val jwtSecret = config.getString("jwt.secret")
     val jwtExpire = config.getDuration("jwt.expire").getSeconds
-    println("encode", text)
-    Jwt.encode(
+    val begin = System.currentTimeMillis() / 1000
+    val jwt = Jwt.encode(
       JwtHeader(JwtAlgorithm.HS256),
       JwtClaim(
         WechatModel
@@ -474,15 +476,16 @@ object WechatStream extends JsonParse with SuportRouter {
             openid = text
           )
           .toJson
-      ).issuedAt(System.currentTimeMillis() / 1000)
+      ).issuedAt(begin)
         .expiresIn(jwtExpire)(Clock.systemUTC),
       jwtSecret
     )
+    (jwt, (begin + jwtExpire))
   }
 
   def jwtDecode(
       text: String
-  )(implicit system: ActorSystem[_]): Option[String] = {
+  )(implicit system: ActorSystem[_]): Option[WechatModel.Session] = {
     val config = system.settings.config.getConfig("app")
     val jwtSecret = config.getString("jwt.secret")
     if (Jwt.isValid(text, jwtSecret, Seq(JwtAlgorithm.HS256))) {
@@ -493,9 +496,9 @@ object WechatStream extends JsonParse with SuportRouter {
           Seq(JwtAlgorithm.HS256)
         )
       }
-      println("decode", result.get._2.jsonTo[WechatModel.Session].openid)
-      Option(result.get._2.jsonTo[WechatModel.Session].openid)
-    } else Option.empty
+      val session = result.get._2.jsonTo[WechatModel.Session]
+      Some(session)
+    } else None
   }
 
   type Code = String
@@ -538,11 +541,13 @@ object WechatStream extends JsonParse with SuportRouter {
                       )
                     )
                   } else {
+                    val (token, expire) = jwtEncode(i.openid.get)
                     RouterModel.Data(
                       Some(
                         Map(
                           "open_id" -> i.openid.get,
-                          "token" -> jwtEncode(i.openid.get)
+                          "token" -> token,
+                          "expire" -> expire
                         )
                       )
                     )

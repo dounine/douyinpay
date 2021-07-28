@@ -4,11 +4,9 @@ import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.Unmarshaller
-import com.dounine.douyinpay.model.models.{OrderModel, RouterModel}
+import com.dounine.douyinpay.model.models.{OrderModel, RouterModel, WechatModel}
 import com.dounine.douyinpay.service.WechatStream
 import com.dounine.douyinpay.tools.json.JsonParse
-import pdi.jwt.{Jwt, JwtAlgorithm}
-
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
@@ -16,7 +14,9 @@ object TokenAuth extends JsonParse {
 
   val tokenName: String = "token"
 
-  def apply(implicit system: ActorSystem[_]): Directive1[String] = {
+  def apply(implicit
+      system: ActorSystem[_]
+  ): Directive1[WechatModel.Session] = {
     for {
       parameters <- parameterMap
       headerToken <- optionalHeaderValueByName(headerName = tokenName)
@@ -27,11 +27,9 @@ object TokenAuth extends JsonParse {
     } yield userData
   }
 
-  private val algorithms: Seq[JwtAlgorithm.HS256.type] = Seq(JwtAlgorithm.HS256)
-
   def jwtAuthenticateToken(
       params: Map[String, String]
-  )(implicit system: ActorSystem[_]): Directive1[String] =
+  )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] =
     for {
       authorizedToken <- checkAuthorization(params)
       decodedToken <- decodeToken(authorizedToken)
@@ -39,8 +37,8 @@ object TokenAuth extends JsonParse {
     } yield userData
 
   private def convertToUserData(
-      session: String
-  ): Directive1[String] = {
+      session: WechatModel.Session
+  ): Directive1[WechatModel.Session] = {
     extractExecutionContext.flatMap { implicit ctx =>
       extractMaterializer.flatMap { implicit mat =>
         onComplete(Future.successful(session)).flatMap(handleError)
@@ -49,8 +47,8 @@ object TokenAuth extends JsonParse {
   }
 
   private def handleError(
-      unmarshalledSession: Try[String]
-  ): Directive1[String] =
+      unmarshalledSession: Try[WechatModel.Session]
+  ): Directive1[WechatModel.Session] =
     unmarshalledSession match {
       case Success(value)             => provide(value)
       case Failure(RejectionError(r)) => reject(r)
@@ -79,7 +77,7 @@ object TokenAuth extends JsonParse {
 
   private def decodeToken(
       jwt: String
-  )(implicit system: ActorSystem[_]): Directive1[String] = {
+  )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] = {
     WechatStream.jwtDecode(jwt) match {
       case Some(value) => provide(value)
       case None        => complete(RouterModel.Fail(Some("token失效")))

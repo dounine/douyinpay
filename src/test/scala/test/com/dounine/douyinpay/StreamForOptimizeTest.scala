@@ -1,7 +1,10 @@
 package test.com.dounine.douyinpay
 
 import akka.{Done, NotUsed}
-import akka.actor.testkit.typed.scaladsl.{LogCapturing, ScalaTestWithActorTestKit}
+import akka.actor.testkit.typed.scaladsl.{
+  LogCapturing,
+  ScalaTestWithActorTestKit
+}
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.event.LogMarker
@@ -9,13 +12,46 @@ import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.model.{HttpEntity, MediaTypes, Uri}
 import akka.http.scaladsl.server.{RequestContext, RouteResult}
-import akka.stream.{Attributes, ClosedShape, DelayOverflowStrategy, FlowShape, Materializer, OverflowStrategy, QueueCompletionResult, QueueOfferResult, RestartSettings, SinkShape, SourceShape, SystemMaterializer, ThrottleMode}
-import akka.stream.scaladsl.{Broadcast, Concat, DelayStrategy, Flow, GraphDSL, Keep, Merge, MergePreferred, OrElse, Partition, RestartSource, RunnableGraph, Sink, Source, SourceQueueWithComplete, Unzip, Zip, ZipWith}
+import akka.stream.{
+  Attributes,
+  ClosedShape,
+  DelayOverflowStrategy,
+  FlowShape,
+  Materializer,
+  OverflowStrategy,
+  QueueCompletionResult,
+  QueueOfferResult,
+  RestartSettings,
+  SinkShape,
+  SourceShape,
+  SystemMaterializer,
+  ThrottleMode
+}
+import akka.stream.scaladsl.{
+  Broadcast,
+  Concat,
+  DelayStrategy,
+  Flow,
+  GraphDSL,
+  Keep,
+  Merge,
+  MergePreferred,
+  OrElse,
+  Partition,
+  RestartSource,
+  RunnableGraph,
+  Sink,
+  Source,
+  SourceQueueWithComplete,
+  Unzip,
+  Zip,
+  ZipWith
+}
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.typed.scaladsl.ActorSource
 import akka.util.ByteString
 import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior.logger
-import com.dounine.douyinpay.model.models.BaseSerializer
+import com.dounine.douyinpay.model.models.{BaseSerializer, WechatModel}
 import com.dounine.douyinpay.router.routers.errors.DataException
 import com.dounine.douyinpay.store.EnumMappers
 import com.dounine.douyinpay.tools.json.JsonParse
@@ -24,12 +60,13 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.mockito.MockitoSugar
+import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 
-import java.time.LocalDateTime
+import java.time.{Clock, LocalDateTime}
 import java.util.concurrent.TimeUnit
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object QrcodeTest {
   def apply(): Behavior[String] = {
@@ -124,7 +161,36 @@ class StreamForOptimizeTest
 
   "stream optimize" should {
 
-    "cache test " in {
+    "jwt expire" in {
+
+      val start = System.currentTimeMillis() / 1000
+      val text = "hello"
+      val secret = Jwt.encode(
+        JwtHeader(JwtAlgorithm.HS256),
+        JwtClaim(
+          WechatModel
+            .Session(
+              openid = text
+            )
+            .toJson
+        ).issuedAt(start)
+          .expiresIn(3)(Clock.systemUTC),
+        "hello"
+      )
+
+      val result: Try[(String, String, String)] = {
+        Jwt.decodeRawAll(
+          secret,
+          "hello",
+          Seq(JwtAlgorithm.HS256)
+        )
+      }
+      val result1 = result.get._2.jsonTo[WechatModel.Session].toJson
+      println(start, result1)
+
+    }
+
+    "cache test " ignore {
       val keyFunction: PartialFunction[String, String] = {
         case r => r
       }
@@ -140,20 +206,44 @@ class StreamForOptimizeTest
         defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
       val lfuCache: Cache[String, String] = LfuCache(cachingSettings)
 
-      info(lfuCache.getOrLoad("hello",k => Future{
-        println("come in")
-        "nihao"
-      }).futureValue)
+      info(
+        lfuCache
+          .getOrLoad(
+            "hello",
+            k =>
+              Future {
+                println("come in")
+                "nihao"
+              }
+          )
+          .futureValue
+      )
 
-      info(lfuCache.getOrLoad("hello",k => Future{
-        println("come in")
-        "nihao"
-      }).futureValue)
+      info(
+        lfuCache
+          .getOrLoad(
+            "hello",
+            k =>
+              Future {
+                println("come in")
+                "nihao"
+              }
+          )
+          .futureValue
+      )
       TimeUnit.SECONDS.sleep(4)
-      info(lfuCache.getOrLoad("hello",k => Future{
-        println("come in")
-        "nihao"
-      }).futureValue)
+      info(
+        lfuCache
+          .getOrLoad(
+            "hello",
+            k =>
+              Future {
+                println("come in")
+                "nihao"
+              }
+          )
+          .futureValue
+      )
 
     }
 

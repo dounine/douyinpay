@@ -325,13 +325,13 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
             }
           } ~ path("pay" / "qrcode2" / "douyin") {
             auth {
-              openid: String =>
+              session =>
                 {
                   entity(as[OrderModel.Recharge2]) {
                     data =>
                       {
                         val result = Source
-                          .single(openid)
+                          .single(session.openid)
                           .via(WechatStream.userInfoQuery(system))
                           .map(userInfo => {
                             OrderModel.DbInfo(
@@ -340,7 +340,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                               nickName = userInfo.nickname,
                               pay = false,
                               expire = false,
-                              openid = openid,
+                              openid = session.openid,
                               id = data.id,
                               money = data.money
                                 .replaceAll("¥", "")
