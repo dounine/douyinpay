@@ -120,7 +120,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
           SystemMaterializer(context.system).materializer
         implicit val ec = context.executionContext
         val config = context.system.settings.config.getConfig("app")
-        val routerPrefix = config.getConfig("routerPrefix")
+        val routerPrefix = config.getString("routerPrefix")
         val chromeSize = config.getInt("selenium.pool.minIdle")
         val orderService = ServiceSingleton.get(classOf[OrderService])
 
