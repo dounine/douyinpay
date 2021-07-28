@@ -166,10 +166,6 @@ object QrcodeBehavior extends ActorSerializerSuport {
           )
         }
 
-        val (orderQueue, orderSource) = Source
-          .queue[Event](chromeSize)
-          .preMaterialize()
-
         val coreFlow = createCoreFlow(context.system)
         val notifyBeforeFlow = Flow[Event]
           .map {
@@ -204,7 +200,6 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 request.replyTo.tell(r)
                 Source.empty
               case r @ CreateOrderFail(_, msg, screen) =>
-//                orderQueue.offer(IncrmentChrome())
                 r.request.replyTo.tell(r)
                 val order = r.request.order
                 sendNotifyMessage(
@@ -221,7 +216,6 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 )
                 Source.single(r)
               case r @ PayFail(_, msg, screen) =>
-//                orderQueue.offer(IncrmentChrome())
                 val order = r.request.order
                 sendNotifyMessage(
                   DingDing.MessageType.payerr,
@@ -237,7 +231,6 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 )
                 Source.single(r)
               case r @ PaySuccess(request) =>
-//                orderQueue.offer(IncrmentChrome())
                 val order = request.order
                 val newRequest = PaySuccess(
                   CreateOrder(
@@ -305,61 +298,22 @@ object QrcodeBehavior extends ActorSerializerSuport {
               )
           }
 
-        orderSource
-        //          .statefulMapConcat { () =>
-        //            {
-        //              var chromes = chromeSize
-        //
-        //              {
-        //                case r @ CreateOrder(order) => {
-        //                  if (chromes > 0) {
-        //                    chromes = chromes - 1
-        //                    r :: Nil
-        //                  } else {
-        //                    r.replyTo.tell(
-        //                      CreateOrderFail(r, "操作频繁、请稍后再试")
-        //                    )
-        //                    sendNotifyMessage(
-        //                      DingDing.MessageType.order,
-        //                      "操作频繁",
-        //                      order,
-        //                      None
-        //                    )
-        //                    Nil
-        //                  }
-        //                }
-        //                case IncrmentChrome() => {
-        //                  chromes = chromes + 1
-        //                  Nil
-        //                }
-        //              }
-        //            }
-        //          }
-          .via(queryOrderFlow)
-          .via(notifyBeforeFlow)
-          .via(coreFlow)
-          .via(notifyAfterFlow)
-          .via(updateOrderFlow)
-          .recover {
-            case e => {
-              logger.error(e.getMessage)
-            }
-          }
-          .to(Sink.ignore)
-          .run()
-
         Behaviors.receiveMessage[BaseSerializer] {
           case e @ CreateOrder(order) => {
-            orderQueue.offer(e) match {
-              case result: QueueCompletionResult =>
-                logger.info("QueueCompletionResult")
-                e.replyTo.tell(CreateOrderFail(e, "queue completion", None))
-              case QueueOfferResult.Enqueued =>
-                logger.info("Enqueued")
-              case QueueOfferResult.Dropped =>
-                logger.info("Dropped")
-                e.replyTo.tell(CreateOrderFail(e, "操作频繁、请稍后重试", None))
-            }
+            Source
+              .single(e)
+              .via(queryOrderFlow)
+              .via(notifyBeforeFlow)
+              .via(coreFlow)
+              .via(notifyAfterFlow)
+              .via(updateOrderFlow)
+              .recover {
+                case e => {
+                  logger.error(e.getMessage)
+                }
+              }
+              .to(Sink.ignore)
+              .run()
             Behaviors.same
           }
           case e @ Shutdown() => {
