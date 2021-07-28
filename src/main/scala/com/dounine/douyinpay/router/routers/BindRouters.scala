@@ -23,37 +23,6 @@ import scala.concurrent.duration._
 
 object BindRouters extends SuportRouter {
 
-  implicit def rejectionHandler =
-    RejectionHandler.default
-      .mapRejectionResponse {
-        case res @ HttpResponse(code, a, ent: HttpEntity.Strict, url) =>
-          if (code.intValue() == 404) {
-            res.withEntity(
-              HttpEntity(
-                ContentTypes.`application/json`,
-                s"""{"code":"fail","msg": "resource not found"}"""
-              )
-            )
-          } else {
-            val message = ent.data.utf8String.replaceAll("\"", """\"""")
-            res.withEntity(
-              HttpEntity(
-                ContentTypes.`application/json`,
-                s"""{"code":"fail","msg": "$message"}"""
-              )
-            )
-          }
-        case x => x
-      }
-
-  implicit def exceptionHandler: ExceptionHandler =
-    ExceptionHandler {
-      case timeout: AskTimeoutException =>
-        fail(timeout.getMessage)
-      case e: Exception =>
-        fail(e.getMessage)
-    }
-
   val requestTimeout = ConfigFactory
     .load()
     .getDuration("akka.http.server.request-timeout")

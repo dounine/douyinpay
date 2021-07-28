@@ -1,50 +1,20 @@
 package test.com.dounine.douyinpay
 
 import akka.{Done, NotUsed}
-import akka.actor.testkit.typed.scaladsl.{
-  LogCapturing,
-  ScalaTestWithActorTestKit
-}
+import akka.actor.testkit.typed.scaladsl.{LogCapturing, ScalaTestWithActorTestKit}
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.event.LogMarker
-import akka.http.scaladsl.model.{HttpEntity, MediaTypes}
-import akka.stream.{
-  Attributes,
-  ClosedShape,
-  FlowShape,
-  Materializer,
-  OverflowStrategy,
-  QueueCompletionResult,
-  QueueOfferResult,
-  RestartSettings,
-  SinkShape,
-  SourceShape,
-  SystemMaterializer,
-  ThrottleMode
-}
-import akka.stream.scaladsl.{
-  Broadcast,
-  Concat,
-  Flow,
-  GraphDSL,
-  Keep,
-  Merge,
-  MergePreferred,
-  OrElse,
-  Partition,
-  RestartSource,
-  RunnableGraph,
-  Sink,
-  Source,
-  SourceQueueWithComplete,
-  Unzip,
-  Zip,
-  ZipWith
-}
+import akka.http.caching.LfuCache
+import akka.http.caching.scaladsl.{Cache, CachingSettings}
+import akka.http.scaladsl.model.{HttpEntity, MediaTypes, Uri}
+import akka.http.scaladsl.server.{RequestContext, RouteResult}
+import akka.stream.{Attributes, ClosedShape, DelayOverflowStrategy, FlowShape, Materializer, OverflowStrategy, QueueCompletionResult, QueueOfferResult, RestartSettings, SinkShape, SourceShape, SystemMaterializer, ThrottleMode}
+import akka.stream.scaladsl.{Broadcast, Concat, DelayStrategy, Flow, GraphDSL, Keep, Merge, MergePreferred, OrElse, Partition, RestartSource, RunnableGraph, Sink, Source, SourceQueueWithComplete, Unzip, Zip, ZipWith}
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.typed.scaladsl.ActorSource
 import akka.util.ByteString
+import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior.logger
 import com.dounine.douyinpay.model.models.BaseSerializer
 import com.dounine.douyinpay.router.routers.errors.DataException
 import com.dounine.douyinpay.store.EnumMappers
@@ -153,6 +123,66 @@ class StreamForOptimizeTest
   implicit val ec = system.executionContext
 
   "stream optimize" should {
+
+    "cache test " in {
+      val keyFunction: PartialFunction[String, String] = {
+        case r => r
+      }
+
+      val defaultCachingSettings = CachingSettings(system)
+      val lfuCacheSettings = defaultCachingSettings.lfuCacheSettings
+        .withInitialCapacity(100)
+        .withMaxCapacity(1000)
+        .withTimeToLive(3.seconds)
+        .withTimeToIdle(1.seconds)
+
+      val cachingSettings =
+        defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
+      val lfuCache: Cache[String, String] = LfuCache(cachingSettings)
+
+      info(lfuCache.getOrLoad("hello",k => Future{
+        println("come in")
+        "nihao"
+      }).futureValue)
+
+      info(lfuCache.getOrLoad("hello",k => Future{
+        println("come in")
+        "nihao"
+      }).futureValue)
+      TimeUnit.SECONDS.sleep(4)
+      info(lfuCache.getOrLoad("hello",k => Future{
+        println("come in")
+        "nihao"
+      }).futureValue)
+
+    }
+
+    "hello" ignore {
+      val a = Map(
+        "name" -> "lake",
+        "age" -> "18"
+      )
+
+      println(a.mkString("\n"))
+    }
+
+    "md5 random" ignore {
+      Source(1 to 4)
+        .delayWith(
+          delayStrategySupplier = () =>
+            DelayStrategy.linearIncreasingDelay(
+              initialDelay = 100.milliseconds,
+              increaseStep = 1.seconds,
+              needsIncrease = _ => {
+                println(LocalDateTime.now(), "检查页面是否跳转")
+                true
+              }
+            ),
+          overFlowStrategy = DelayOverflowStrategy.backpressure
+        )
+        .map(_ => true)
+        .runForeach(result => println(result))
+    }
 
     "test concat and child source merge" ignore {
       println()
@@ -284,7 +314,7 @@ class StreamForOptimizeTest
       println(result.futureValue)
     }
 
-    "queue3" in {
+    "queue3" ignore {
 
       val (chromeQueue, chromeSource) = Source.queue[Int](10).preMaterialize()
       val flow = Flow.fromGraph(GraphDSL.create() { implicit builder =>
@@ -304,26 +334,26 @@ class StreamForOptimizeTest
         .map(i => i)
 
       val queue = Source
-        .queue[String](1,OverflowStrategy.dropNew)
+        .queue[String](1, OverflowStrategy.dropNew)
         .zipWith(chromeSource)((left, right) => left)
         .via(flow2)
-//        .via(Flow[String].mapAsync(1) { i =>
-//          {
-//            var success = Promise[String]()
-//            if (i == "2") {
-//              chromeQueue.offer(1)
-//              system.scheduler.scheduleOnce(
-//                1.seconds,
-//                () => {
-//                  success.success(i)
-//                }
-//              )
-//            } else {
-//              success.success(i)
-//            }
-//            success.future
-//          }
-//        })
+        //        .via(Flow[String].mapAsync(1) { i =>
+        //          {
+        //            var success = Promise[String]()
+        //            if (i == "2") {
+        //              chromeQueue.offer(1)
+        //              system.scheduler.scheduleOnce(
+        //                1.seconds,
+        //                () => {
+        //                  success.success(i)
+        //                }
+        //              )
+        //            } else {
+        //              success.success(i)
+        //            }
+        //            success.future
+        //          }
+        //        })
         .to(Sink.ignore)
         .run()
 //      chromeQueue.offer(1)

@@ -6,10 +6,25 @@ import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.ShardingEnvelope
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
 import akka.persistence.typed.PersistenceId
-import com.dounine.douyinpay.behaviors.engine.{CoreEngine, OrderSources, QrcodeSources}
+import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.InitToken
+import com.dounine.douyinpay.behaviors.engine.{
+  AccessTokenBehavior,
+  JSApiTicketBehavior,
+  QrcodeBehavior
+}
 import com.dounine.douyinpay.model.models.UserModel
-import com.dounine.douyinpay.service.{DictionaryService, OrderService, UserService}
-import com.dounine.douyinpay.store.{AkkaPersistenerJournalTable, AkkaPersistenerSnapshotTable, DictionaryTable, OrderTable, UserTable}
+import com.dounine.douyinpay.service.{
+  DictionaryService,
+  OrderService,
+  UserService
+}
+import com.dounine.douyinpay.store.{
+  AkkaPersistenerJournalTable,
+  AkkaPersistenerSnapshotTable,
+  DictionaryTable,
+  OrderTable,
+  UserTable
+}
 import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.util.{DingDing, ServiceSingleton}
@@ -29,17 +44,46 @@ class Startups(system: ActorSystem[_]) {
   def start(): Unit = {
     sharding.init(
       Entity(
-        typeKey = QrcodeSources.typeKey
+        typeKey = QrcodeBehavior.typeKey
       )(
         createBehavior = entityContext =>
-          QrcodeSources(
+          QrcodeBehavior(
             PersistenceId.of(
-              QrcodeSources.typeKey.name,
+              QrcodeBehavior.typeKey.name,
               entityContext.entityId
             )
           )
       )
     )
+    sharding
+      .init(
+        Entity(
+          typeKey = AccessTokenBehavior.typeKey
+        )(
+          createBehavior = entityContext => AccessTokenBehavior()
+        )
+      )
+      .tell(
+        ShardingEnvelope(
+          AccessTokenBehavior.typeKey.name,
+          AccessTokenBehavior.InitToken()
+        )
+      )
+
+    sharding
+      .init(
+        Entity(
+          typeKey = JSApiTicketBehavior.typeKey
+        )(
+          createBehavior = entityContext => JSApiTicketBehavior()
+        )
+      )
+      .tell(
+        ShardingEnvelope(
+          JSApiTicketBehavior.typeKey.name,
+          JSApiTicketBehavior.InitTicket()
+        )
+      )
 
     ServiceSingleton.put(classOf[OrderService], new OrderService(system))
     ServiceSingleton.put(classOf[UserService], new UserService(system))
@@ -116,8 +160,8 @@ class Startups(system: ActorSystem[_]) {
       DingDing.MessageType.system,
       data = DingDing.MessageData(
         markdown = DingDing.Markdown(
-          title = "系统通知", text =
-            s"""
+          title = "系统通知",
+          text = s"""
               |# 程序启动
               | - time: ${LocalDateTime.now()}
               |""".stripMargin

@@ -75,6 +75,7 @@ lazy val app = (project in file("."))
       "io.altoo" %% "akka-kryo-serialization" % "2.0.1",
       "de.heikoseeberger" %% "akka-http-circe" % "1.36.0",
       "de.heikoseeberger" %% "akka-http-json4s" % "1.36.0",
+      "com.typesafe.akka" %% "akka-http-xml" % akkaHttpVersion,
       "org.typelevel" %% "cats-core" % "2.6.0",
       "io.circe" %% "circe-refined" % "0.13.0",
       "io.circe" %% "circe-generic" % "0.13.0",

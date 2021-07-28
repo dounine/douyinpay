@@ -50,6 +50,12 @@ object OrderModel {
       volumn: String
   ) extends BaseSerializer
 
+  final case class Recharge2(
+      id: String,
+      money: String,
+      volumn: String
+  ) extends BaseSerializer
+
   final case class Cancel(
       apiKey: String,
       orderId: Option[String],

@@ -47,12 +47,12 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import scala.concurrent.Future
 import scala.concurrent.duration._
-object QrcodeSources extends ActorSerializerSuport {
+object QrcodeBehavior extends ActorSerializerSuport {
 
   val typeKey: EntityTypeKey[BaseSerializer] =
     EntityTypeKey[BaseSerializer]("QrcodeBehavior")
 
-  private val logger = LoggerFactory.getLogger(QrcodeSources.getClass)
+  private val logger = LoggerFactory.getLogger(QrcodeBehavior.getClass)
   case class AppInfo(
       appId: String,
       client: ActorRef[BaseSerializer],
@@ -70,11 +70,6 @@ object QrcodeSources extends ActorSerializerSuport {
   }
 
   sealed trait Event extends BaseSerializer
-
-  case class CreateOrderPush(
-      request: OrderSources.AppWorkPush,
-      order: OrderModel.DbInfo
-  ) extends Event
 
   case class CreateOrder(order: OrderModel.DbInfo)(
       val replyTo: ActorRef[BaseSerializer]

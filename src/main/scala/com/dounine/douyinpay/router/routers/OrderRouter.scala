@@ -38,10 +38,8 @@ import akka.stream.scaladsl.{
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
 import com.dounine.douyinpay.behaviors.engine.{
-  CoreEngine,
   LoginScanBehavior,
-  OrderSources,
-  QrcodeSources
+  QrcodeBehavior
 }
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
@@ -61,12 +59,14 @@ import com.dounine.douyinpay.service.{
   OrderService,
   OrderStream,
   UserService,
-  UserStream
+  UserStream,
+  WechatStream
 }
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.util.{MD5Util, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
+
 import java.nio.file.{Files, Paths}
 import java.time.LocalDateTime
 import java.util.UUID
@@ -113,6 +113,8 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
   val cachingSettings =
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
+
+  val auth = TokenAuth(system)
 
   def userInfo()(implicit
       system: ActorSystem[_]
@@ -281,16 +283,16 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                           {
                             sharding
                               .entityRefFor(
-                                QrcodeSources.typeKey,
-                                QrcodeSources.typeKey.name
+                                QrcodeBehavior.typeKey,
+                                QrcodeBehavior.typeKey.name
                               )
                               .ask(
-                                QrcodeSources.CreateOrder(
+                                QrcodeBehavior.CreateOrder(
                                   order
                                 )
                               )(15.seconds)
                               .map {
-                                case QrcodeSources
+                                case QrcodeBehavior
                                       .CreateOrderOk(request, qrcode) =>
                                   ok(
                                     Map(
@@ -302,7 +304,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                                       ) + "/file/image?path=" + qrcode)
                                     )
                                   )
-                                case QrcodeSources
+                                case QrcodeBehavior
                                       .CreateOrderFail(
                                         request,
                                         error,
@@ -320,7 +322,96 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                   }
                 }
             }
+          } ~ path("pay" / "qrcode2" / "douyin") {
+            auth {
+              openid: String =>
+                {
+                  entity(as[OrderModel.Recharge2]) {
+                    data =>
+                      {
+                        val result = Source
+                          .single(openid)
+                          .via(WechatStream.userInfoQuery(system))
+                          .map(userInfo => {
+                            OrderModel.DbInfo(
+                              orderId =
+                                UUID.randomUUID().toString.replaceAll("-", ""),
+                              nickName = userInfo.nickname,
+                              pay = false,
+                              expire = false,
+                              openid = openid,
+                              id = data.id,
+                              money = data.money
+                                .replaceAll("¥", "")
+                                .replaceAll(",", "")
+                                .toDouble
+                                .toInt,
+                              volumn = data.money
+                                .replaceAll("¥", "")
+                                .replaceAll(",", "")
+                                .toDouble
+                                .toInt * 10,
+                              platform = PayPlatform.douyin,
+                              createTime = LocalDateTime.now(),
+                              payCount = 0,
+                              payMoney = 0
+                            )
+                          })
+                          .mapAsync(1)(order => {
+                            orderService.add(order).map(_ => order)
+                          })
+                          .mapAsync(1)(order => {
+                            sharding
+                              .entityRefFor(
+                                QrcodeBehavior.typeKey,
+                                QrcodeBehavior.typeKey.name
+                              )
+                              .ask(
+                                QrcodeBehavior.CreateOrder(
+                                  order
+                                )
+                              )(15.seconds)
+                              .map {
+                                case QrcodeBehavior
+                                      .CreateOrderOk(request, qrcode) =>
+                                  ok(
+                                    Map(
+                                      "dbQuery" -> (config.getString(
+                                        "file.domain"
+                                      ) + s"/order/info/" + order.orderId),
+                                      "qrcode" -> (config.getString(
+                                        "file.domain"
+                                      ) + "/file/image?path=" + qrcode)
+                                    )
+                                  )
+                                case QrcodeBehavior
+                                      .CreateOrderFail(
+                                        request,
+                                        error,
+                                        screen
+                                      ) =>
+                                  logger.error(
+                                    "request -> {} , error -> {}",
+                                    request,
+                                    error
+                                  )
+                                  fail(
+                                    "当前充值人数太多、请稍后再试"
+                                  )
+                              }
+                          })
+                          .runWith(Sink.head)
+
+                        onComplete(result) {
+                          case Failure(exception) => fail(exception.getMessage)
+                          case Success(value)     => value
+                        }
+                      }
+                  }
+                }
+            }
           }
+
         }
       )
     }

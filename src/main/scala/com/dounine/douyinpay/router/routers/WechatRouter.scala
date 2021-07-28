@@ -6,44 +6,30 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.marshallers.xml.ScalaXmlSupport
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives.{concat, _}
-import akka.http.scaladsl.server.directives.CachingDirectives.cache
 import akka.http.scaladsl.server._
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
-import akka.util.{ByteString, Timeout}
+import akka.util.ByteString
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
-import com.dounine.douyinpay.behaviors.engine.{LoginScanBehavior, QrcodeSources}
-import com.dounine.douyinpay.model.models.{
-  BaseSerializer,
-  OrderModel,
-  PayUserInfoModel,
-  RouterModel,
-  UserModel
-}
-import com.dounine.douyinpay.service.{
-  OrderService,
-  UserService,
-  UserStream,
-  WechatStream
-}
-import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.ServiceSingleton
+import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior
+import com.dounine.douyinpay.model.models.{BaseSerializer, WechatModel}
+import com.dounine.douyinpay.service.WechatStream
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.nio.file.{Files, Paths}
-import java.time.LocalDateTime
 import java.util.UUID
-import javax.xml.bind.DatatypeConverter
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContextExecutor, Future}
-import scala.util.{Failure, Success}
+import scala.xml.NodeSeq
 
-class WechatRouter(system: ActorSystem[_]) extends SuportRouter {
+class WechatRouter(system: ActorSystem[_])
+    extends SuportRouter
+    with ScalaXmlSupport {
 
+  case class Hello(name: String) extends BaseSerializer
   private final val logger: Logger =
     LoggerFactory.getLogger(classOf[WechatRouter])
   implicit val materializer: Materializer = SystemMaterializer(
@@ -72,6 +58,8 @@ class WechatRouter(system: ActorSystem[_]) extends SuportRouter {
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
 
+  val http = Http(system)
+
   val route: Route =
     cors() {
       concat(
@@ -85,13 +73,64 @@ class WechatRouter(system: ActorSystem[_]) extends SuportRouter {
             }
           }
         },
-        post{
-          path("wechat"/"auth"){
-            println("come in")
-            ok("hello")
+        get {
+          path("wechat" / "jsapi" / "signature") {
+            parameters("url".as[String]) {
+              url =>
+                {
+                  val info = Map(
+                    "noncestr" -> UUID
+                      .randomUUID()
+                      .toString
+                      .replaceAll("-", ""),
+                    "timestamp" -> System.currentTimeMillis() / 1000,
+                    "url" -> url
+                  )
+                  val result = WechatStream
+                    .jsapiQuery(system)
+                    .map(ticket => {
+                      info ++ Map(
+                        "jsapi_ticket" -> ticket
+                      )
+                    })
+                    .map(result => {
+                      result
+                        .map(i => s"${i._1}=${i._2}")
+                        .toSeq
+                        .sorted
+                        .mkString("&")
+                    })
+                    .map(DigestUtils.sha1Hex)
+                    .map(signature => {
+                      info.filterNot(_._1 == "url") ++ Map(
+                        "signature" -> signature
+                      )
+                    })
+                    .map(okData)
+
+                  complete(result)
+                }
+            }
           }
-        }
-        ,get {
+        },
+        post {
+          path("wechat" / "auth") {
+            entity(as[NodeSeq]) { data =>
+              try {
+                val message = WechatModel.WechatMessage.fromXml(data)
+                logger.info(
+                  message.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                )
+                val result = Source
+                  .single(message)
+                  .via(WechatStream.notifyMessage(system))
+                  .runWith(Sink.head)
+                complete(result)
+              }
+            }
+          }
+        },
+        get {
           path("wechat" / "auth") {
             parameters("signature", "timestamp", "nonce", "echostr") {
               (

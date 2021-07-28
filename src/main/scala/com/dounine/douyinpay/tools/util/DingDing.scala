@@ -27,6 +27,9 @@ object DingDing extends JsonParse {
     val order = Value("order_notify")
     val payed = Value("payed_notify")
     val payerr = Value("payerr_notify")
+    val event = Value("event_notify")
+    val fans = Value("fans_notify")
+    val message = Value("message_notify")
   }
   case class Markdown(
       title: String,
@@ -72,7 +75,7 @@ object DingDing extends JsonParse {
         }
         .foreach {
           case Left(value)  => logger.error(value)
-          case Right(value) => logger.info("消息发送成功 -> " + value)
+          case Right(value) => logger.debug("消息发送成功 -> " + value)
         }
     }
   }

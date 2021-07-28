@@ -4,7 +4,7 @@ import akka.Done
 import akka.actor.CoordinatedShutdown
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import com.dounine.douyinpay.behaviors.engine.{CoreEngine, QrcodeSources}
+import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior
 import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.util.DingDing
@@ -26,10 +26,10 @@ class Shutdowns(system: ActorSystem[_]) {
             logger.info("orderClose")
             sharding
               .entityRefFor(
-                QrcodeSources.typeKey,
-                QrcodeSources.typeKey.name
+                QrcodeBehavior.typeKey,
+                QrcodeBehavior.typeKey.name
               )
-              .ask(QrcodeSources.Shutdown())(3.seconds)
+              .ask(QrcodeBehavior.Shutdown())(3.seconds)
           }
       }
 
