@@ -53,124 +53,126 @@ object AccessTokenBehavior extends JsonParse {
         val secret = config.getString("wechat.secret")
 
         var token: Option[String] = None
-        Behaviors.receiveMessage {
-          case r @ GetToken() => {
-            r.replyTo.tell(token match {
-              case Some(value) => GetTokenOk(value)
-              case None        => GetTokenFail("not found")
-            })
-            Behaviors.same
-          }
-          case InitTokenOk(to, expire) => {
-            logger.info("token refresh -> {} {}", to, expire)
-            token = Some(to)
-            context.setReceiveTimeout((expire).seconds, InitToken())
-            Behaviors.same
-          }
-          case InitTokenFail(code, msg) => {
-            logger.error("token query fail -> {} {}", code, msg)
-            Behaviors.same
-          }
-          case InitToken() => {
-            import better.files._
-            val path = System.getProperty("user.home")
-            val tokenFile = s"${path}/.douyin_token_${appid}".toFile
-            val tokenOpt = if (tokenFile.exists()) {
-              Some(tokenFile.lines().mkString(""))
-            } else {
-              None
-            }
-
-            val token = tokenOpt match {
-              case Some(token) => {
-                val ts = token.split(" ")
-                val time = LocalDateTime.parse(ts(1))
-                val expire = ts(2).toInt
-                if (
-                  time.plusSeconds(expire).isAfter(LocalDateTime.now())
-                ) {
-                  Some((ts.head, time, expire))
-                } else None
+        Behaviors.withTimers[Event] { timers =>
+          {
+            Behaviors.receiveMessage {
+              case r @ GetToken() => {
+                r.replyTo.tell(token match {
+                  case Some(value) => GetTokenOk(value)
+                  case None        => GetTokenFail("not found")
+                })
+                Behaviors.same
               }
-              case None => None
-            }
-
-            token match {
-              case Some((token, time, expire)) =>
-                context.self.tell(
-                  InitTokenOk(
-                    token,
-                    expire - java.time.Duration
-                      .between(time, LocalDateTime.now())
-                      .getSeconds
-                      .toInt
-                  )
-                )
-              case None =>
-                context.pipeToSelf(
-                  RestartSource
-                    .onFailuresWithBackoff(
-                      RestartSettings(
-                        minBackoff = 1.seconds,
-                        maxBackoff = 3.seconds,
-                        randomFactor = 0.2
-                      ).withMaxRestarts(3, 10.seconds)
-                    )(() => {
-                      Source.future(
-                        http
-                          .singleRequest(
-                            HttpRequest(
-                              method = HttpMethods.GET,
-                              uri =
-                                s"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${secret}"
-                            ),
-                            settings = ConnectSettings.httpSettings(system)
-                          )
-                          .flatMap {
-                            case HttpResponse(_, _, entity, _) => {
-                              entity.dataBytes
-                                .runFold(ByteString.empty)(_ ++ _)
-                                .map(_.utf8String)
-                                .map(_.jsonTo[TokenResponse])
-                                .map(result => {
-                                  if (
-                                    result.errcode.isEmpty && result.access_token.isDefined
-                                  ) {
-                                    tokenFile.write(
-                                      s"${result.access_token.get} ${LocalDateTime
-                                        .now()} ${result.expires_in.get}"
-                                    )
-                                  }
-                                  result
-                                })
-                            }
-                            case msg => {
-                              Future.failed(new Exception("请求失败"))
-                            }
-                          }
-                      )
-                    })
-                    .runWith(Sink.head)
-                ) {
-                  case Failure(exception) =>
-                    InitTokenFail(-1, exception.getMessage)
-                  case Success(value) =>
-                    value.errcode match {
-                      case Some(err) =>
-                        InitTokenFail(err, value.errmsg.getOrElse(""))
-                      case None =>
-                        InitTokenOk(
-                          value.access_token.get,
-                          value.expires_in.get
-                        )
-                    }
-
+              case InitTokenOk(to, expire) => {
+                logger.info("token refresh -> {} {}", to, expire)
+                token = Some(to)
+                timers.startSingleTimer(InitToken(), expire.seconds)
+                Behaviors.same
+              }
+              case InitTokenFail(code, msg) => {
+                logger.error("token query fail -> {} {}", code, msg)
+                Behaviors.same
+              }
+              case InitToken() => {
+                import better.files._
+                val path = System.getProperty("user.home")
+                val tokenFile = s"${path}/.douyin_token_${appid}".toFile
+                val tokenOpt = if (tokenFile.exists()) {
+                  Some(tokenFile.lines().mkString(""))
+                } else {
+                  None
                 }
+
+                val token = tokenOpt match {
+                  case Some(token) => {
+                    val ts = token.split(" ")
+                    val time = LocalDateTime.parse(ts(1))
+                    val expire = ts(2).toInt
+                    if (time.plusSeconds(expire).isAfter(LocalDateTime.now())) {
+                      Some((ts.head, time, expire))
+                    } else None
+                  }
+                  case None => None
+                }
+
+                token match {
+                  case Some((token, time, expire)) =>
+                    context.self.tell(
+                      InitTokenOk(
+                        token,
+                        expire - java.time.Duration
+                          .between(time, LocalDateTime.now())
+                          .getSeconds
+                          .toInt
+                      )
+                    )
+                  case None =>
+                    context.pipeToSelf(
+                      RestartSource
+                        .onFailuresWithBackoff(
+                          RestartSettings(
+                            minBackoff = 1.seconds,
+                            maxBackoff = 3.seconds,
+                            randomFactor = 0.2
+                          ).withMaxRestarts(3, 10.seconds)
+                        )(() => {
+                          Source.future(
+                            http
+                              .singleRequest(
+                                HttpRequest(
+                                  method = HttpMethods.GET,
+                                  uri =
+                                    s"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${secret}"
+                                ),
+                                settings = ConnectSettings.httpSettings(system)
+                              )
+                              .flatMap {
+                                case HttpResponse(_, _, entity, _) => {
+                                  entity.dataBytes
+                                    .runFold(ByteString.empty)(_ ++ _)
+                                    .map(_.utf8String)
+                                    .map(_.jsonTo[TokenResponse])
+                                    .map(result => {
+                                      if (
+                                        result.errcode.isEmpty && result.access_token.isDefined
+                                      ) {
+                                        tokenFile.write(
+                                          s"${result.access_token.get} ${LocalDateTime
+                                            .now()} ${result.expires_in.get}"
+                                        )
+                                      }
+                                      result
+                                    })
+                                }
+                                case msg => {
+                                  Future.failed(new Exception("请求失败"))
+                                }
+                              }
+                          )
+                        })
+                        .runWith(Sink.head)
+                    ) {
+                      case Failure(exception) =>
+                        InitTokenFail(-1, exception.getMessage)
+                      case Success(value) =>
+                        value.errcode match {
+                          case Some(err) =>
+                            InitTokenFail(err, value.errmsg.getOrElse(""))
+                          case None =>
+                            InitTokenOk(
+                              value.access_token.get,
+                              value.expires_in.get
+                            )
+                        }
+
+                    }
+                }
+
+                Behaviors.same
+              }
+
             }
-
-            Behaviors.same
           }
-
         }
       }
     }
