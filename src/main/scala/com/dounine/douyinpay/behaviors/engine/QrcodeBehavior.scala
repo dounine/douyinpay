@@ -120,8 +120,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
           SystemMaterializer(context.system).materializer
         implicit val ec = context.executionContext
         val config = context.system.settings.config.getConfig("app")
-        val chromeSize =
-          context.system.settings.config.getInt("app.selenium.pool.minIdle")
+        val routerPrefix = config.getConfig("routerPrefix")
+        val chromeSize = config.getInt("selenium.pool.minIdle")
         val orderService = ServiceSingleton.get(classOf[OrderService])
 
         val sendNotifyMessage = (
@@ -138,7 +138,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
           }
           val errorScreen = screen match {
             case Some(screen) =>
-              s"\n- 页面：![error](${config.getString("file.domain") + "/file/image?path=" + screen})"
+              s"\n- 页面：![error](${config.getString("file.domain") + s"/${routerPrefix}/file/image?path=" + screen})"
             case None => ""
           }
           DingDing.sendMessage(

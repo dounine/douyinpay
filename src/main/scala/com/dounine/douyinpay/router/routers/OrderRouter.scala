@@ -97,7 +97,8 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
   val balanceNotEnough = "帐户可用余额不足"
   val orderAndOutOrderRequireOn = "[orderId/outOrder]不能全为空"
   val cacheBehavior = system.systemActorOf(ReplicatedCacheBehavior(), "cache")
-  val noSign = system.settings.config.getBoolean("app.noSign")
+  val noSign = config.getBoolean("noSign")
+  val routerPrefix = config.getString("routerPrefix")
 
   val keyFunction: PartialFunction[RequestContext, Uri] = {
     case r: RequestContext => r.request.uri
@@ -298,10 +299,10 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                                     Map(
                                       "dbQuery" -> (config.getString(
                                         "file.domain"
-                                      ) + s"/api/order/info/" + order.orderId),
+                                      ) + s"/${routerPrefix}/order/info/" + order.orderId),
                                       "qrcode" -> (config.getString(
                                         "file.domain"
-                                      ) + "/api/file/image?path=" + qrcode)
+                                      ) + s"/${routerPrefix}/file/image?path=" + qrcode)
                                     )
                                   )
                                 case QrcodeBehavior
@@ -378,10 +379,10 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                                     Map(
                                       "dbQuery" -> (config.getString(
                                         "file.domain"
-                                      ) + s"/api/order/info/" + order.orderId),
+                                      ) + s"/${routerPrefix}/order/info/" + order.orderId),
                                       "qrcode" -> (config.getString(
                                         "file.domain"
-                                      ) + "/api/file/image?path=" + qrcode)
+                                      ) + s"/${routerPrefix}/file/image?path=" + qrcode)
                                     )
                                   )
                                 case QrcodeBehavior

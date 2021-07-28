@@ -32,6 +32,7 @@ object BindRouters extends SuportRouter {
       system: ActorSystem[_],
       routers: Array[Route]
   ): RequestContext => Future[RouteResult] = {
+    val routerPrefix = system.settings.config.getString("app.routerPrefix")
     Route.seal(
       /**
         * all request default timeout
@@ -41,9 +42,17 @@ object BindRouters extends SuportRouter {
         requestTimeout.millis,
         (_: HttpRequest) => timeoutResponse
       )(
-        concat(
-          routers: _*
-        )
+        if (routerPrefix != "") {
+          pathPrefix(routerPrefix) {
+            concat(
+              routers: _*
+            )
+          }
+        } else {
+          concat(
+            routers: _*
+          )
+        }
       )
     )
   }

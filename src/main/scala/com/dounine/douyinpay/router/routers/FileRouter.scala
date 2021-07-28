@@ -33,8 +33,10 @@ class FileRouter(system: ActorSystem[_]) extends SuportRouter {
   implicit val executionContext: ExecutionContextExecutor =
     materializer.executionContext
 
-  val fileSaveDirectory = system.settings.config.getString("app.file.directory")
-  val domain = system.settings.config.getString("app.file.domain")
+  val config = system.settings.config.getConfig("app")
+  val fileSaveDirectory = config.getString("file.directory")
+  val domain = config.getString("file.domain")
+  val routerPrefix = config.getString("routerPrefix")
 
   def tempDestination(fileInfo: FileInfo): File = {
     val directory = new File(fileSaveDirectory + "/" + LocalDate.now())
@@ -54,7 +56,7 @@ class FileRouter(system: ActorSystem[_]) extends SuportRouter {
             case (metadata, file) => {
               ok(
                 Map(
-                  "domain" -> (domain + "/file/image?path="),
+                  "domain" -> (domain + s"/${routerPrefix}/file/image?path="),
                   "url" -> file.getAbsolutePath
                 )
               )
