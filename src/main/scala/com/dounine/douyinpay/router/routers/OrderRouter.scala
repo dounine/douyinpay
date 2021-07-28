@@ -378,7 +378,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                                     Map(
                                       "dbQuery" -> (config.getString(
                                         "file.domain"
-                                      ) + s"/order/info/" + order.orderId),
+                                      ) + s"api/order/info/" + order.orderId),
                                       "qrcode" -> (config.getString(
                                         "file.domain"
                                       ) + "/file/image?path=" + qrcode)
