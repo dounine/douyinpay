@@ -527,7 +527,6 @@ object WechatStream extends JsonParse with SuportRouter {
                 .map(_.utf8String)
                 .map(_.jsonTo[WechatModel.AccessTokenBase])
                 .map(i => {
-                  println(i)
                   if (i.errmsg.isDefined) { //code已使用过或code过期
                     RouterModel.Data(
                       status = ResponseCode.fail,
