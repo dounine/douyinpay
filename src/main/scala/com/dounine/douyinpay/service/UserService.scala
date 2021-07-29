@@ -9,7 +9,7 @@ import slick.lifted.TableQuery
 
 import scala.concurrent.Future
 
-class UserService(system: ActorSystem[_]) extends EnumMappers {
+class UserService(implicit system: ActorSystem[_]) extends EnumMappers {
   private val db = DataSource(system).source().db
   private val dict: TableQuery[UserTable] =
     TableQuery[UserTable]

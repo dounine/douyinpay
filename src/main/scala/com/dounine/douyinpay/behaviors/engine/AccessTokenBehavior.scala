@@ -11,6 +11,7 @@ import akka.util.ByteString
 import com.dounine.douyinpay.model.models.BaseSerializer
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
+import com.dounine.douyinpay.tools.util.Request
 import org.slf4j.LoggerFactory
 
 import java.io.{File, FileReader}
@@ -116,39 +117,23 @@ object AccessTokenBehavior extends JsonParse {
                             randomFactor = 0.2
                           ).withMaxRestarts(3, 10.seconds)
                         )(() => {
-                          Source.future(
-                            http
-                              .singleRequest(
-                                HttpRequest(
-                                  method = HttpMethods.GET,
-                                  uri =
-                                    s"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${secret}"
-                                ),
-                                settings = ConnectSettings.httpSettings(system)
+                          Source
+                            .future(
+                              Request.get[TokenResponse](
+                                s"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${secret}"
                               )
-                              .flatMap {
-                                case HttpResponse(_, _, entity, _) => {
-                                  entity.dataBytes
-                                    .runFold(ByteString.empty)(_ ++ _)
-                                    .map(_.utf8String)
-                                    .map(_.jsonTo[TokenResponse])
-                                    .map(result => {
-                                      if (
-                                        result.errcode.isEmpty && result.access_token.isDefined
-                                      ) {
-                                        tokenFile.write(
-                                          s"${result.access_token.get} ${LocalDateTime
-                                            .now()} ${result.expires_in.get}"
-                                        )
-                                      }
-                                      result
-                                    })
-                                }
-                                case msg => {
-                                  Future.failed(new Exception("请求失败"))
-                                }
+                            )
+                            .map(result => {
+                              if (
+                                result.errcode.isEmpty && result.access_token.isDefined
+                              ) {
+                                tokenFile.write(
+                                  s"${result.access_token.get} ${LocalDateTime
+                                    .now()} ${result.expires_in.get}"
+                                )
                               }
-                          )
+                              result
+                            })
                         })
                         .runWith(Sink.head)
                     ) {

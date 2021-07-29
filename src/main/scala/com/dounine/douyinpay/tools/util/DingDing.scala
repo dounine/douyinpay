@@ -46,29 +46,12 @@ object DingDing extends JsonParse {
   ): Unit = {
     if (system.settings.config.getBoolean("app.pro")) {
       implicit val ec = system.executionContext
-      implicit val materializer = Materializer(system)
-      val http = Http(system)
-      http
-        .singleRequest(
-          request = HttpRequest(
-            method = HttpMethods.POST,
-            uri = system.settings.config.getString(s"app.notify.${mType}"),
-            entity = HttpEntity(
-              contentType = MediaTypes.`application/json`,
-              string = data.toJson
-            )
-          )
+      implicit val s = system
+      Request
+        .post[String](
+          system.settings.config.getString(s"app.notify.${mType}"),
+          data
         )
-        .flatMap {
-          case HttpResponse(_, _, entity, _) => {
-            entity.dataBytes
-              .runFold(ByteString.empty)(_ ++ _)
-              .map(_.utf8String)
-          }
-          case ee: HttpResponse => {
-            throw new Exception(s"消息发送失败 -> ${ee.toString()}")
-          }
-        }
         .map(Right.apply)
         .recover {
           case e => Left(e.getMessage)

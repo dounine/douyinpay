@@ -7,7 +7,7 @@ import akka.http.scaladsl.server.Directives._
 
 import scala.concurrent.duration._
 
-class HealthRouter(system: ActorSystem[_]) extends SuportRouter {
+class HealthRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
   val cluster: Cluster = Cluster.get(system)
 
   val route = get {

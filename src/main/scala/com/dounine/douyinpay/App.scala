@@ -37,11 +37,11 @@ object App {
     startup.start()
     new Shutdowns(system).listener()
     val routers = Array(
-      new HealthRouter(system).route,
-      new FileRouter(system).route,
-      new OrderRouter(system).route,
-      new WechatRouter(system).route,
-      new GraphqlRouter(system).route
+      new HealthRouter().route,
+      new FileRouter().route,
+      new OrderRouter().route,
+      new WechatRouter().route,
+      new GraphqlRouter().route
     )
 
     Http(system)
@@ -49,7 +49,7 @@ object App {
         interface = config.getString("server.host"),
         port = config.getInt("server.port")
       )
-      .bind(concat(BindRouters(system, routers), managementRoutes))
+      .bind(concat(BindRouters(routers), managementRoutes))
       .onComplete({
         case Failure(exception) => throw exception
         case Success(value) =>

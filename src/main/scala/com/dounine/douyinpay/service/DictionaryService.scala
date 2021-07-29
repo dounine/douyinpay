@@ -16,7 +16,7 @@ import java.time.LocalDateTime
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
-class DictionaryService(system: ActorSystem[_]) extends EnumMappers {
+class DictionaryService(implicit system: ActorSystem[_]) extends EnumMappers {
 
   implicit val materializer: Materializer = SystemMaterializer(
     system

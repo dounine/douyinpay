@@ -12,6 +12,7 @@ import com.dounine.douyinpay.model.models.BaseSerializer
 import com.dounine.douyinpay.service.WechatStream
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
+import com.dounine.douyinpay.tools.util.Request
 import org.slf4j.LoggerFactory
 
 import java.io.{File, FileReader}
@@ -118,39 +119,22 @@ object JSApiTicketBehavior extends JsonParse {
                           ).withMaxRestarts(3, 10.seconds)
                         )(() => {
                           WechatStream
-                            .accessToken(system)
+                            .accessToken()
                             .mapAsync(1) { token =>
                               {
-                                http
-                                  .singleRequest(
-                                    HttpRequest(
-                                      method = HttpMethods.GET,
-                                      uri =
-                                        s"https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=${token}&type=jsapi"
-                                    ),
-                                    settings =
-                                      ConnectSettings.httpSettings(system)
+                                Request
+                                  .get[TicketResponse](
+                                    s"https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=${token}&type=jsapi"
                                   )
-                                  .flatMap {
-                                    case HttpResponse(_, _, entity, _) => {
-                                      entity.dataBytes
-                                        .runFold(ByteString.empty)(_ ++ _)
-                                        .map(_.utf8String)
-                                        .map(_.jsonTo[TicketResponse])
-                                        .map(result => {
-                                          if (result.ticket.isDefined) {
-                                            ticketFile.write(
-                                              s"${result.ticket.get} ${LocalDateTime
-                                                .now()} ${result.expires_in.get}"
-                                            )
-                                          }
-                                          result
-                                        })
+                                  .map(result => {
+                                    if (result.ticket.isDefined) {
+                                      ticketFile.write(
+                                        s"${result.ticket.get} ${LocalDateTime
+                                          .now()} ${result.expires_in.get}"
+                                      )
                                     }
-                                    case msg => {
-                                      Future.failed(new Exception("请求失败"))
-                                    }
-                                  }
+                                    result
+                                  })
                               }
                             }
                         })

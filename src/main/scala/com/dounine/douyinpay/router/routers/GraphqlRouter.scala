@@ -18,7 +18,8 @@ import scala.util.{Failure, Success}
 // This is the trait that makes `graphQLPlayground and prepareGraphQLRequest` available
 import sangria.http.akka.circe.CirceHttpSupport
 
-class GraphqlRouter(system: ActorSystem[_]) extends CirceHttpSupport {
+class GraphqlRouter()(implicit system: ActorSystem[_])
+    extends CirceHttpSupport {
   implicit val ec = system.executionContext
 
   val route: Route =

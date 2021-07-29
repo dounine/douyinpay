@@ -57,13 +57,12 @@ import com.dounine.douyinpay.model.types.service.{
 }
 import com.dounine.douyinpay.service.{
   OrderService,
-  OrderStream,
   UserService,
   UserStream,
   WechatStream
 }
 import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.{MD5Util, ServiceSingleton}
+import com.dounine.douyinpay.tools.util.{MD5Util, Request, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 
@@ -73,7 +72,7 @@ import java.util.UUID
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
-class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
+class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
 
   private final val logger: Logger =
     LoggerFactory.getLogger(classOf[OrderRouter])
@@ -115,14 +114,14 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
 
-  val auth = TokenAuth(system)
+  val auth = TokenAuth()
 
   def userInfo()(implicit
       system: ActorSystem[_]
   ): Directive1[UserModel.DbInfo] = {
     parameters("apiKey".as[String].optional).flatMap {
       case Some(apiKey) =>
-        onComplete(UserStream.source(apiKey, system).runWith(Sink.head))
+        onComplete(UserStream.source(apiKey).runWith(Sink.head))
           .flatMap {
             case Failure(exception) =>
               reject(ValidationRejection("apiKey 不正确", Option(exception)))
@@ -181,41 +180,26 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
             id =>
               {
                 cache(lfuCache, keyFunction) {
-                  val future = http
-                    .singleRequest(
-                      request = HttpRequest(
-                        uri =
-                          s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-                            .currentTimeMillis()}",
-                        method = HttpMethods.GET
-                      ),
-                      settings = ConnectSettings.httpSettings(system)
+                  val future = Request
+                    .get[PayUserInfoModel.DouYinSearchResponse](
+                      s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                        .currentTimeMillis()}"
                     )
-                    .flatMap {
-                      case HttpResponse(_, _, entity, _) =>
-                        entity.dataBytes
-                          .runFold(ByteString(""))(_ ++ _)
-                          .map(_.utf8String)
-                          .map(_.jsonTo[PayUserInfoModel.DouYinSearchResponse])
-                          .map(item => {
-                            if (item.data.open_info.nonEmpty) {
-                              val data: PayUserInfoModel.DouYinSearchOpenInfo =
-                                item.data.open_info.head
-                              Option(
-                                PayUserInfoModel.Info(
-                                  nickName = data.nick_name,
-                                  id = data.search_id,
-                                  avatar = data.avatar_thumb.url_list.head
-                                )
-                              )
-                            } else {
-                              Option.empty
-                            }
-                          })
-                      case msg @ _ =>
-                        logger.error(s"请求失败 $msg")
-                        Future.failed(new Exception(s"请求失败 $msg"))
-                    }
+                    .map(item => {
+                      if (item.data.open_info.nonEmpty) {
+                        val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                          item.data.open_info.head
+                        Option(
+                          PayUserInfoModel.Info(
+                            nickName = data.nick_name,
+                            id = data.search_id,
+                            avatar = data.avatar_thumb.url_list.head
+                          )
+                        )
+                      } else {
+                        Option.empty
+                      }
+                    })
                   onComplete(future) {
                     case Success(value: Option[PayUserInfoModel.Info]) =>
                       value match {
@@ -332,7 +316,7 @@ class OrderRouter(system: ActorSystem[_]) extends SuportRouter {
                       {
                         val result = Source
                           .single(session.openid)
-                          .via(WechatStream.userInfoQuery(system))
+                          .via(WechatStream.userInfoQuery())
                           .map(userInfo => {
                             OrderModel.DbInfo(
                               orderId =

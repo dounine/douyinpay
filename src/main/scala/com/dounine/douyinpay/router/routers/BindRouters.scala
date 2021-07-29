@@ -29,9 +29,8 @@ object BindRouters extends SuportRouter {
     .toMillis
 
   def apply(
-      system: ActorSystem[_],
       routers: Array[Route]
-  ): RequestContext => Future[RouteResult] = {
+  )(implicit system: ActorSystem[_]): RequestContext => Future[RouteResult] = {
     val routerPrefix = system.settings.config.getString("app.routerPrefix")
     Route.seal(
       /**

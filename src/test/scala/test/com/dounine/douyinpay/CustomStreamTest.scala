@@ -20,7 +20,6 @@ import akka.stream.{
 }
 import com.dounine.douyinpay.model.models.{OrderModel, UserModel}
 import com.dounine.douyinpay.model.types.service.{PayPlatform, PayStatus}
-import com.dounine.douyinpay.service.OrderStream
 import com.dounine.douyinpay.store.{EnumMappers, OrderTable, UserTable}
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.typesafe.config.ConfigFactory

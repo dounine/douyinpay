@@ -14,6 +14,7 @@ import akka.http.scaladsl.model.{
 import akka.stream.{RestartSettings, SystemMaterializer}
 import akka.stream.scaladsl.{Flow, RestartSource, Source}
 import akka.util.ByteString
+import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.Token
 import com.dounine.douyinpay.behaviors.engine.{
   AccessTokenBehavior,
   JSApiTicketBehavior
@@ -27,7 +28,7 @@ import com.dounine.douyinpay.model.types.router.ResponseCode
 import com.dounine.douyinpay.router.routers.SuportRouter
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.DingDing
+import com.dounine.douyinpay.tools.util.{DingDing, Request}
 import org.slf4j.LoggerFactory
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 
@@ -36,57 +37,28 @@ import java.time.format.DateTimeFormatter
 import scala.concurrent.Future
 import scala.util.Try
 import scala.concurrent.duration._
+
 object WechatStream extends JsonParse with SuportRouter {
 
   private val logger = LoggerFactory.getLogger(WechatStream.getClass)
 
-  def userInfoQuery(implicit
+  def userInfoQuery()(implicit
       system: ActorSystem[_]
-  ): Flow[String, WechatModel.WechatUserInfo, NotUsed] = {
-    implicit val materializer = SystemMaterializer(system).materializer
-    implicit val ec = system.executionContext
-    val http = Http(system)
-
+  ): Flow[String, WechatModel.WechatUserInfo, NotUsed] =
     Flow[String]
       .flatMapConcat { openid =>
-        accessToken(system).map((openid, _))
+        accessToken().map((openid, _))
       }
       .mapAsync(1) { tp2 =>
-        {
-          val openid = tp2._1
-          val token = tp2._2
-          http
-            .singleRequest(
-              request = HttpRequest(
-                method = HttpMethods.GET,
-                uri =
-                  s"https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN"
-              )
-            )
-            .flatMap {
-              case HttpResponse(
-                    code,
-                    value,
-                    entity,
-                    protocol
-                  ) => {
-                entity.dataBytes
-                  .runFold(ByteString.empty)(_ ++ _)
-                  .map(_.utf8String)
-                  .map(result => {
-                    logger.info(result)
-                    result
-                  })
-                  .map(_.jsonTo[WechatModel.WechatUserInfo])
-              }
-              case msg =>
-                Future.failed(new Exception("request fail"))
-            }
-        }
+        val openid: String = tp2._1
+        val token: Token = tp2._2
+        Request
+          .get[WechatModel.WechatUserInfo](
+            s"https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN"
+          )
       }
-  }
 
-  def accessToken(implicit
+  def accessToken()(implicit
       system: ActorSystem[_]
   ): Source[AccessTokenBehavior.Token, NotUsed] = {
     implicit val materializer = SystemMaterializer(system).materializer
@@ -109,9 +81,7 @@ object WechatStream extends JsonParse with SuportRouter {
             AccessTokenBehavior.GetToken()
           )(3.seconds)
           .map {
-            case AccessTokenBehavior.GetTokenOk(token) => {
-              token
-            }
+            case AccessTokenBehavior.GetTokenOk(token) => token
             case AccessTokenBehavior.GetTokenFail(msg) =>
               throw new Exception(msg)
           }
@@ -119,7 +89,7 @@ object WechatStream extends JsonParse with SuportRouter {
     })
   }
 
-  def jsapiQuery(implicit system: ActorSystem[_]): Source[String, NotUsed] = {
+  def jsapiQuery()(implicit system: ActorSystem[_]): Source[String, NotUsed] = {
     implicit val materializer = SystemMaterializer(system).materializer
     implicit val ec = system.executionContext
     val sharding = ClusterSharding(system)
@@ -140,9 +110,7 @@ object WechatStream extends JsonParse with SuportRouter {
             JSApiTicketBehavior.GetTicket()
           )(3.seconds)
           .map {
-            case JSApiTicketBehavior.GetTicketOk(token) => {
-              token
-            }
+            case JSApiTicketBehavior.GetTicketOk(token) => token
             case JSApiTicketBehavior.GetTicketFail(msg) =>
               throw new Exception(msg)
           }
@@ -150,73 +118,26 @@ object WechatStream extends JsonParse with SuportRouter {
     })
   }
 
-  def sendMessage(implicit
+  def menuCreate()(implicit
       system: ActorSystem[_]
-  ): Flow[WechatModel.WechatMessage, WechatModel.WechatMessage, NotUsed] = {
+  ): Flow[String, String, NotUsed] = {
     implicit val materializer = SystemMaterializer(system).materializer
     implicit val ec = system.executionContext
-    val http = Http(system)
-    val sharding = ClusterSharding(system)
-
-    Flow[WechatModel.WechatMessage]
-      .mapAsync(1) { message =>
+    Flow[String]
+      .zip(accessToken())
+      .mapAsync(1) { result =>
         {
-          if (message.event.contains("subscribe")) {
-            sharding
-              .entityRefFor(
-                AccessTokenBehavior.typeKey,
-                AccessTokenBehavior.typeKey.name
-              )
-              .ask(
-                AccessTokenBehavior.GetToken()
-              )(3.seconds)
-              .flatMap {
-                case AccessTokenBehavior.GetTokenOk(token) => {
-                  http
-                    .singleRequest(
-                      request = HttpRequest(
-                        method = HttpMethods.POST,
-                        uri =
-                          s"https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${token}",
-                        entity = HttpEntity(
-                          contentType = MediaTypes.`application/json`,
-                          string = Map(
-                            "touser" -> message.fromUserName,
-                            "msgtype" -> "text",
-                            "text" -> Map(
-                              "content" -> "\uD83C\uDF89欢迎使用音音冲冲、点击左下角菜单快速充值\uD83C\uDF89"
-                            )
-                          ).toJson
-                        )
-                      )
-                    )
-                    .flatMap {
-                      case HttpResponse(
-                            code,
-                            value,
-                            entity,
-                            protocol
-                          ) => {
-                        entity.dataBytes
-                          .runFold(ByteString.empty)(_ ++ _)
-                          .map(_.utf8String)
-                          .map(_ => message)
-                      }
-                      case msg =>
-                        Future.failed(new Exception("request fail"))
-                    }
-                }
-                case AccessTokenBehavior.GetTokenFail(msg) =>
-                  Future.failed(new Exception("request fail"))
-              }
-          } else {
-            Future.successful(message)
-          }
+          val menu = result._1
+          val accessToken = result._2
+          Request.post[String](
+            s"https://api.weixin.qq.com/cgi-bin/menu/create?access_token=${accessToken}",
+            menu
+          )
         }
       }
   }
 
-  def notifyMessage(implicit
+  def notifyMessage()(implicit
       system: ActorSystem[_]
   ): Flow[WechatModel.WechatMessage, HttpResponse, NotUsed] = {
     implicit val materializer = SystemMaterializer(system).materializer
@@ -501,9 +422,66 @@ object WechatStream extends JsonParse with SuportRouter {
     } else None
   }
 
+  def webUserInfo()(implicit
+      system: ActorSystem[_]
+  ): Flow[Code, RouterModel.Data, NotUsed] = {
+    implicit val ec = system.executionContext
+    implicit val materializer = SystemMaterializer(system).materializer
+    val config = system.settings.config.getConfig("app")
+    val appid = config.getString("wechat.appid")
+    val secret = config.getString("wechat.secret")
+    val domain = config.getString("file.domain")
+    Flow[Code]
+      .mapAsync(1) { code =>
+        Request
+          .get[WechatModel.AccessTokenBase](
+            s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
+          )
+          .flatMap { result =>
+            if (result.errmsg.isDefined) {
+              Future.successful(
+                RouterModel.Data(
+                  status = ResponseCode.fail,
+                  msg = Some("认证失效、重新登录"),
+                  data = Some(
+                    Map(
+                      "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_userinfo&state=${appid}#wechat_redirect"
+                    )
+                  )
+                )
+              )
+            } else {
+              logger.info(
+                "openid -> {} access_token -> {}",
+                result.openid.get,
+                result.access_token.get
+              )
+              Request
+                .get[
+                  WechatModel.SNSUserInfo
+                ](
+                  s"https://api.weixin.qq.com/sns/userinfo?access_token=${result.access_token.get}&openid=${result.openid.get}&lang=zh_CN"
+                )
+                .map(result => {
+                  val (token, expire) = jwtEncode(result.openid)
+                  RouterModel.Data(
+                    Some(
+                      Map(
+                        "open_id" -> result.openid,
+                        "token" -> token,
+                        "expire" -> expire
+                      )
+                    )
+                  )
+                })
+            }
+          }
+      }
+  }
+
   type Code = String
   type Openid = String
-  def webBaseUserInfo(implicit
+  def webBaseUserInfo()(implicit
       system: ActorSystem[_]
   ): Flow[Code, RouterModel.Data, NotUsed] = {
     implicit val ec = system.executionContext
@@ -515,49 +493,34 @@ object WechatStream extends JsonParse with SuportRouter {
     val domain = config.getString("file.domain")
     Flow[Code]
       .mapAsync(1) { code =>
-        http
-          .singleRequest(
-            request = HttpRequest(
-              method = HttpMethods.GET,
-              uri =
-                s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
-            ),
-            settings = ConnectSettings.httpSettings(system)
+        Request
+          .get[WechatModel.AccessTokenBase](
+            s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
           )
-          .flatMap {
-            case HttpResponse(_, _, entity, _) =>
-              entity.dataBytes
-                .runFold(ByteString(""))(_ ++ _)
-                .map(_.utf8String)
-                .map(_.jsonTo[WechatModel.AccessTokenBase])
-                .map(i => {
-                  if (i.errmsg.isDefined) { //code已使用过或code过期
-                    RouterModel.Data(
-                      status = ResponseCode.fail,
-                      msg = Some("认证失效、重新登录"),
-                      data = Some(
-                        Map(
-                          "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_userinfo&state=${appid}#wechat_redirect"
-                        )
-                      )
-                    )
-                  } else {
-                    val (token, expire) = jwtEncode(i.openid.get)
-                    RouterModel.Data(
-                      Some(
-                        Map(
-                          "open_id" -> i.openid.get,
-                          "token" -> token,
-                          "expire" -> expire
-                        )
-                      )
-                    )
-                  }
-                })
-            case msg @ _ =>
-              logger.error(s"请求失败 $msg")
-              Future.failed(new Exception(s"请求失败 $msg"))
-          }
+          .map(i => {
+            if (i.errmsg.isDefined) { //code已使用过或code过期
+              RouterModel.Data(
+                status = ResponseCode.fail,
+                msg = Some("认证失效、重新登录"),
+                data = Some(
+                  Map(
+                    "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_userinfo&state=${appid}#wechat_redirect"
+                  )
+                )
+              )
+            } else {
+              val (token, expire) = jwtEncode(i.openid.get)
+              RouterModel.Data(
+                Some(
+                  Map(
+                    "open_id" -> i.openid.get,
+                    "token" -> token,
+                    "expire" -> expire
+                  )
+                )
+              )
+            }
+          })
       }
   }
 }

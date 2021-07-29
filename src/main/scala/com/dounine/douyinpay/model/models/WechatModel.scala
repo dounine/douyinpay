@@ -20,6 +20,18 @@ object WechatModel {
       errmsg: Option[String]
   ) extends BaseSerializer
 
+  case class SNSUserInfo(
+      openid: String,
+      nickname: String,
+      sex: Int,
+      province: String,
+      city: String,
+      country: String,
+      headimgurl: String,
+      privilege: Array[String],
+      unionid: String
+  ) extends BaseSerializer
+
   case class WechatUserInfo(
       subscribe: Int,
       openid: Option[String],

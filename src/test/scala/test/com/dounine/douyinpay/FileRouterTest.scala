@@ -60,9 +60,9 @@ class FileRouterTest
     val cluster = Cluster.get(system)
     cluster.manager.tell(Join.create(cluster.selfMember.address))
     val routers = Array(
-      new HealthRouter(system).route,
-      new FileRouter(system).route,
-      new OrderRouter(system).route
+      new HealthRouter().route,
+      new FileRouter().route,
+      new OrderRouter().route
     )
 
     val config = system.settings.config.getConfig("app")
@@ -77,7 +77,7 @@ class FileRouterTest
         interface = config.getString("server.host"),
         port = config.getInt("server.port")
       )
-      .bind(concat(BindRouters(system,routers), managementRoutes))
+      .bind(concat(BindRouters(routers), managementRoutes))
       .onComplete({
         case Failure(exception) => throw exception
         case Success(value) =>

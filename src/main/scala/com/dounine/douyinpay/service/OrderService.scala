@@ -21,24 +21,20 @@ import com.dounine.douyinpay.model.types.service.PayStatus.PayStatus
 import com.dounine.douyinpay.store.{EnumMappers, OrderTable, UserTable}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.akka.db.DataSource
-import com.dounine.douyinpay.tools.util.MD5Util
+import com.dounine.douyinpay.tools.util.{MD5Util, Request}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.TableQuery
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-class OrderService(system: ActorSystem[_]) extends EnumMappers {
+class OrderService(implicit system: ActorSystem[_]) extends EnumMappers {
   private val db = DataSource(system).source().db
   private val dict: TableQuery[OrderTable] =
     TableQuery[OrderTable]
 
-  private val userDict = TableQuery[UserTable]
-
   implicit val ec = system.executionContext
   implicit val materializer = SystemMaterializer(system).materializer
-  private val logger = LoggerFactory.getLogger(classOf[OrderService])
-  private val http = Http(system)
   implicit val slickSession =
     SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
 
@@ -95,41 +91,26 @@ class OrderService(system: ActorSystem[_]) extends EnumMappers {
       platform: PayPlatform,
       userId: String
   ): Future[Option[OrderModel.UserInfo]] = {
-    http
-      .singleRequest(
-        request = HttpRequest(
-          uri =
-            s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${userId}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-              .currentTimeMillis()}",
-          method = HttpMethods.GET
-        ),
-        settings = ConnectSettings.httpSettings(system)
+    Request
+      .get[OrderModel.DouYinSearchResponse](
+        s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${userId}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+          .currentTimeMillis()}"
       )
-      .flatMap {
-        case HttpResponse(_, _, entity, _) =>
-          entity.dataBytes
-            .runFold(ByteString.empty)(_ ++ _)
-            .map(_.utf8String)
-            .map(_.jsonTo[OrderModel.DouYinSearchResponse])
-            .map(item => {
-              if (item.data.open_info.nonEmpty) {
-                val data: OrderModel.DouYinSearchOpenInfo =
-                  item.data.open_info.head
-                Option(
-                  OrderModel.UserInfo(
-                    nickName = data.nick_name,
-                    id = data.search_id,
-                    avatar = data.avatar_thumb.url_list.head
-                  )
-                )
-              } else {
-                Option.empty
-              }
-            })
-        case msg @ _ =>
-          logger.error(s"请求失败 $msg")
-          Future.failed(new Exception(s"请求失败 $msg"))
-      }
+      .map(item => {
+        if (item.data.open_info.nonEmpty) {
+          val data: OrderModel.DouYinSearchOpenInfo =
+            item.data.open_info.head
+          Option(
+            OrderModel.UserInfo(
+              nickName = data.nick_name,
+              id = data.search_id,
+              avatar = data.avatar_thumb.url_list.head
+            )
+          )
+        } else {
+          Option.empty
+        }
+      })
   }
 
 }

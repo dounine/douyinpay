@@ -22,7 +22,7 @@ import java.nio.file.{Files, Paths}
 import java.time.LocalDate
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
-class FileRouter(system: ActorSystem[_]) extends SuportRouter {
+class FileRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
 
   private final val logger: Logger =
     LoggerFactory.getLogger(classOf[FileRouter])

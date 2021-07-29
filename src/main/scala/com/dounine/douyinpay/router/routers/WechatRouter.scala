@@ -25,7 +25,7 @@ import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.xml.NodeSeq
 
-class WechatRouter(system: ActorSystem[_])
+class WechatRouter()(implicit system: ActorSystem[_])
     extends SuportRouter
     with ScalaXmlSupport {
 
@@ -68,7 +68,7 @@ class WechatRouter(system: ActorSystem[_])
             {
               val result = Source
                 .single(code)
-                .via(WechatStream.webBaseUserInfo(system))
+                .via(WechatStream.webBaseUserInfo())
               complete(result)
             }
           }
@@ -87,7 +87,7 @@ class WechatRouter(system: ActorSystem[_])
                     "url" -> url
                   )
                   val result = WechatStream
-                    .jsapiQuery(system)
+                    .jsapiQuery()
                     .map(ticket => {
                       info ++ Map(
                         "jsapi_ticket" -> ticket
@@ -123,7 +123,7 @@ class WechatRouter(system: ActorSystem[_])
                 )
                 val result = Source
                   .single(message)
-                  .via(WechatStream.notifyMessage(system))
+                  .via(WechatStream.notifyMessage())
                   .runWith(Sink.head)
                 complete(result)
               }

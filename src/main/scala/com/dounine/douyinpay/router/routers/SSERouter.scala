@@ -8,7 +8,7 @@ import akka.stream.scaladsl.Source
 import java.time.LocalDateTime
 import scala.concurrent.duration._
 
-class SSERouter(system: ActorSystem[_]) extends SuportRouter {
+class SSERouter(implicit system: ActorSystem[_]) extends SuportRouter {
 
   val route = get {
     path("sse") {

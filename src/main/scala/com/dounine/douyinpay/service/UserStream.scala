@@ -14,9 +14,8 @@ import scala.concurrent.ExecutionContextExecutor
 object UserStream {
 
   def source(
-      apiKey: String,
-      system: ActorSystem[_]
-  ): Source[UserModel.DbInfo, NotUsed] = {
+      apiKey: String
+  )(implicit system: ActorSystem[_]): Source[UserModel.DbInfo, NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
     implicit val slickSession: SlickSession =
@@ -29,11 +28,11 @@ object UserStream {
     )
   }
 
-  def queryFlow(
+  def queryFlow()(implicit
       system: ActorSystem[_]
   ): Flow[String, Either[Throwable, UserModel.DbInfo], NotUsed] = {
     Flow[String]
-      .flatMapConcat(source(_: String, system))
+      .flatMapConcat(source(_: String))
       .map(Right.apply)
       .recover {
         case ee => Left(ee)

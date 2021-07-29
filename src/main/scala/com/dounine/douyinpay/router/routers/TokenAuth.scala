@@ -14,7 +14,7 @@ object TokenAuth extends JsonParse {
 
   val tokenName: String = "token"
 
-  def apply(implicit
+  def apply()(implicit
       system: ActorSystem[_]
   ): Directive1[WechatModel.Session] = {
     for {
