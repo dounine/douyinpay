@@ -445,7 +445,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   msg = Some("认证失效、重新登录"),
                   data = Some(
                     Map(
-                      "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_userinfo&state=${appid}#wechat_redirect"
+                      "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
                     )
                   )
                 )
@@ -504,7 +504,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 msg = Some("认证失效、重新登录"),
                 data = Some(
                   Map(
-                    "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_userinfo&state=${appid}#wechat_redirect"
+                    "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
                   )
                 )
               )
