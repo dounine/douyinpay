@@ -33,7 +33,7 @@ object App {
     val cluster: Cluster = Cluster.get(system)
     val managementRoutes: Route = ClusterHttpManagementRoutes(cluster)
 
-    val startup = new Startups(system)
+    val startup = new Startups()
     startup.start()
     new Shutdowns(system).listener()
     val routers = Array(

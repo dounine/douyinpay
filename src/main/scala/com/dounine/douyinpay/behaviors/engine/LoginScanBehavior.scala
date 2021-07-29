@@ -43,7 +43,7 @@ object LoginScanBehavior extends JsonParse {
       val resource = pools.borrowObject()
       val driver: RemoteWebDriver = resource.driver()
       val configService: DictionaryService =
-        ServiceSingleton.instance(classOf[DictionaryService], context.system)
+        ServiceSingleton.get(classOf[DictionaryService])
 
       val destroy: () => Unit = () => {
         driver.get(

@@ -36,7 +36,7 @@ import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Startups(system: ActorSystem[_]) {
+class Startups(implicit system: ActorSystem[_]) {
   private val logger: Logger = LoggerFactory.getLogger(classOf[Startups])
   implicit val ec: ExecutionContextExecutor = system.executionContext
   val sharding: ClusterSharding = ClusterSharding(system)
@@ -85,11 +85,11 @@ class Startups(system: ActorSystem[_]) {
         )
       )
 
-    ServiceSingleton.put(classOf[OrderService], new OrderService(system))
-    ServiceSingleton.put(classOf[UserService], new UserService(system))
+    ServiceSingleton.put(classOf[OrderService], new OrderService())
+    ServiceSingleton.put(classOf[UserService], new UserService())
     ServiceSingleton.put(
       classOf[DictionaryService],
-      new DictionaryService(system)
+      new DictionaryService()
     )
 //    ChromePools(system).pools
 //      .returnObject(ChromePools(system).pools.borrowObject())

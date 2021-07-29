@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory
 import java.lang.reflect.Constructor
 import java.util.concurrent.ConcurrentHashMap
 
-
 object ServiceSingleton {
 
   private val map: ConcurrentHashMap[Any, Any] =
@@ -14,7 +13,7 @@ object ServiceSingleton {
   private val logger =
     LoggerFactory.getLogger(ServiceSingleton.getClass)
 
-  def instance[T](clazz: Class[T], system: ActorSystem[_]): T = {
+  def instance[T](clazz: Class[T])(implicit system: ActorSystem[_]): T = {
     if (!map.containsKey(clazz)) {
       logger.debug("{} instance", clazz)
       val cls: Constructor[_] = clazz.getConstructors.apply(0)
@@ -31,6 +30,5 @@ object ServiceSingleton {
   def put[T](clazz: Class[T], value: Any): Unit = {
     map.put(clazz, value)
   }
-
 
 }
