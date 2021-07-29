@@ -20,6 +20,7 @@ import com.dounine.douyinpay.service.WechatStream
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
 
+import java.net.URLEncoder
 import java.util.UUID
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
@@ -58,11 +59,29 @@ class WechatRouter()(implicit system: ActorSystem[_])
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
 
+  val appid = config.getString("wechat.appid")
+  val domain = config.getString("file.domain")
   val http = Http(system)
 
   val route: Route =
     cors() {
       concat(
+        get {
+          path("oauth") {
+            val params: String = Map(
+              "appid" -> appid,
+              "redirect_uri" -> URLEncoder.encode(domain, "utf-8"),
+              "response_type" -> "code",
+              "scope" -> "snsapi_base",
+              "state" -> appid
+            ).map(i => s"${i._1}=${i._2}")
+              .mkString("&")
+            redirect(
+              s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+              StatusCodes.PermanentRedirect
+            )
+          }
+        },
         get {
           path("wechat" / "web" / "user" / "login" / Segment) { code =>
             {
