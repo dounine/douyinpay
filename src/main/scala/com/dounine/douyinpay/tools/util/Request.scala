@@ -14,7 +14,7 @@ import akka.stream.{Materializer, SystemMaterializer}
 import akka.util.ByteString
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
-
+import scala.reflect._
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object Request extends JsonParse {
@@ -38,9 +38,9 @@ object Request extends JsonParse {
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
             .map(result => {
-              result.getClass.getName match {
+              classTag[T].toString() match {
                 case "java.lang.String" => result.asInstanceOf[T]
-                case _    => result.jsonTo[T]
+                case _                  => result.jsonTo[T]
               }
             })
         }
@@ -75,7 +75,7 @@ object Request extends JsonParse {
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
             .map(result => {
-              result.getClass.getName match {
+              classTag[T].toString() match {
                 case "java.lang.String" => result.asInstanceOf[T]
                 case _                  => result.jsonTo[T]
               }
