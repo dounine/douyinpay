@@ -38,9 +38,10 @@ object Request extends JsonParse {
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
             .map(result => {
-              if (result.isInstanceOf[T]) {
-                result.asInstanceOf[T]
-              } else result.jsonTo[T]
+              result.getClass match {
+                case t: T => result.asInstanceOf[T]
+                case _    => result.jsonTo[T]
+              }
             })
         }
         case msg => {
@@ -74,9 +75,10 @@ object Request extends JsonParse {
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
             .map(result => {
-              if (result.isInstanceOf[T]) {
-                result.asInstanceOf[T]
-              } else result.jsonTo[T]
+              result.getClass match {
+                case t: T => result.asInstanceOf[T]
+                case _    => result.jsonTo[T]
+              }
             })
         }
         case msg => {
