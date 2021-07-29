@@ -38,8 +38,8 @@ object Request extends JsonParse {
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
             .map(result => {
-              result.getClass match {
-                case t: T => result.asInstanceOf[T]
+              result.getClass.getName match {
+                case "java.lang.String" => result.asInstanceOf[T]
                 case _    => result.jsonTo[T]
               }
             })
@@ -75,9 +75,9 @@ object Request extends JsonParse {
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
             .map(result => {
-              result.getClass match {
-                case t: T => result.asInstanceOf[T]
-                case _    => result.jsonTo[T]
+              result.getClass.getName match {
+                case "java.lang.String" => result.asInstanceOf[T]
+                case _                  => result.jsonTo[T]
               }
             })
         }
