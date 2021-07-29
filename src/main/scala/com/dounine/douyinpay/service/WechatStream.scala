@@ -512,6 +512,7 @@ object WechatStream extends JsonParse with SuportRouter {
     val config = system.settings.config.getConfig("app")
     val appid = config.getString("wechat.appid")
     val secret = config.getString("wechat.secret")
+    val domain = config.getString("file.domain")
     Flow[Code]
       .mapAsync(1) { code =>
         http
@@ -536,7 +537,7 @@ object WechatStream extends JsonParse with SuportRouter {
                       msg = Some("认证失效、重新登录"),
                       data = Some(
                         Map(
-                          "redirect" -> "https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx7b168b095eb4090e&redirect_uri=https%3A%2F%2Fdypay2.61week.com&response_type=code&scope=snsapi_base&state=wx7b168b095eb4090e#wechat_redirect"
+                          "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_userinfo&state=${appid}#wechat_redirect"
                         )
                       )
                     )
