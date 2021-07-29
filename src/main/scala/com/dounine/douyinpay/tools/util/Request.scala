@@ -69,10 +69,11 @@ object Request extends JsonParse {
           entity.dataBytes
             .runFold(ByteString.empty)(_ ++ _)
             .map(_.utf8String)
-            .map {
-              case t: T => t
-              case result => result.jsonTo[T]
-            }
+            .map(result => {
+              if (result.isInstanceOf[T]) {
+                result.asInstanceOf[T]
+              } else result.jsonTo[T]
+            })
         }
         case msg => {
           Future.failed(new Exception(msg.toString()))
