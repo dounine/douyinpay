@@ -8,12 +8,15 @@ import akka.http.scaladsl.model.{
   HttpRequest,
   HttpResponse,
   MediaTypes,
+  StatusCode,
+  StatusCodes,
   Uri
 }
 import akka.stream.{Materializer, SystemMaterializer}
 import akka.util.ByteString
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
+
 import scala.reflect._
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
@@ -33,17 +36,20 @@ object Request extends JsonParse {
         settings = ConnectSettings.httpSettings(system)
       )
       .flatMap {
-        case HttpResponse(code, value, entity, protocol) => {
-          entity.dataBytes
-            .runFold(ByteString.empty)(_ ++ _)
-            .map(_.utf8String)
-            .map(result => {
-              classTag[T].toString() match {
-                case "java.lang.String" => result.asInstanceOf[T]
-                case _                  => result.jsonTo[T]
-              }
-            })
-        }
+        case HttpResponse(code: StatusCode, value, entity, protocol) =>
+          code.intValue() match {
+            case 200 =>
+              entity.dataBytes
+                .runFold(ByteString.empty)(_ ++ _)
+                .map(_.utf8String)
+                .map((result: String) => {
+                  classTag[T].toString() match {
+                    case "java.lang.String" => result.asInstanceOf[T]
+                    case _                  => result.jsonTo[T]
+                  }
+                })
+            case value @ _ => Future.failed(new Exception(s"code is ${value}"))
+          }
         case msg => {
           Future.failed(new Exception(msg.toString()))
         }
@@ -70,17 +76,20 @@ object Request extends JsonParse {
         settings = ConnectSettings.httpSettings(system)
       )
       .flatMap {
-        case HttpResponse(code, value, entity, protocol) => {
-          entity.dataBytes
-            .runFold(ByteString.empty)(_ ++ _)
-            .map(_.utf8String)
-            .map(result => {
-              classTag[T].toString() match {
-                case "java.lang.String" => result.asInstanceOf[T]
-                case _                  => result.jsonTo[T]
-              }
-            })
-        }
+        case HttpResponse(code, value, entity, protocol) =>
+          code.intValue() match {
+            case 200 =>
+              entity.dataBytes
+                .runFold(ByteString.empty)(_ ++ _)
+                .map(_.utf8String)
+                .map((result: String) => {
+                  classTag[T].toString() match {
+                    case "java.lang.String" => result.asInstanceOf[T]
+                    case _                  => result.jsonTo[T]
+                  }
+                })
+            case value @ _ => Future.failed(new Exception(s"code is ${value}"))
+          }
         case msg => {
           Future.failed(new Exception(msg.toString()))
         }
