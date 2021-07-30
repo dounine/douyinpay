@@ -11,7 +11,7 @@ import slick.lifted.{PrimaryKey, ProvenShape}
 import java.time.LocalDateTime
 
 class OrderTable(tag: Tag)
-    extends Table[OrderModel.DbInfo](tag, _tableName = "jb-pay-history")
+    extends Table[OrderModel.DbInfo](tag, _tableName = "douyinpay_pay_history")
     with EnumMappers {
 
   override def * : ProvenShape[OrderModel.DbInfo] =
