@@ -153,6 +153,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                           | - money: ${order.money}
                           | - payCount: ${order.payCount}
                           | - payMoney: ${order.payMoney}${errorMsg}${errorScreen}
+                          | - duration: ${java.time.Duration.between(order.createTime,LocalDateTime.now()).getSeconds}s
                           | - createTime: ${order.createTime.format(
                   timeFormatter
                 )}
@@ -186,8 +187,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
             {
               case r @ CreateOrderOk(request, qrcode) =>
                 logger.info(
-                  "create order ok -> {}",
-                  request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                  s"${request.order.orderId} create order ok -> {}",
+                  request.order.toJson
                 )
                 val order = r.request.order
                 sendNotifyMessage(
@@ -210,9 +211,9 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   screen
                 )
                 logger.error(
-                  "create order fail -> {} {}",
+                  s"${order.orderId} create order fail -> {} {}",
                   msg,
-                  r.request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                  r.request.order.toJson
                 )
                 Source.single(r)
               case r @ PayFail(_, msg, screen) =>
@@ -225,9 +226,9 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   screen
                 )
                 logger.error(
-                  "pay fail -> {} {}",
+                  s"${order.orderId} pay fail -> {} {}",
                   msg,
-                  r.request.order.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                  r.request.order.toJson
                 )
                 Source.single(r)
               case r @ PaySuccess(request) =>
@@ -248,10 +249,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   None
                 )
                 logger.info(
-                  "pay success -> {}",
+                  s"${order.orderId} pay success -> {}",
                   newRequest.request.order.toJson
-                    .jsonTo[Map[String, Any]]
-                    .mkString("\n")
                 )
                 Source.single(newRequest)
             }
@@ -464,7 +463,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   _.findElementByTagName("input").sendKeys(order.id)
                 )
               }.recover {
-                case _ => throw new Exception(s"${order.orderId} 无法输入帐号 -> ${order.id}")
+                case _ =>
+                  throw new Exception(s"${order.orderId} 无法输入帐号 -> ${order.id}")
               }
             }
             .mapAsync(1)(driver => {
@@ -472,7 +472,10 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 logger.info(s"${order.orderId} 确认帐号 -> {}", order.id)
                 driver.tap(_.findElementByClassName("confirm-btn").click())
               }.recover {
-                case _ => throw new Exception(s"${order.orderId} 无法点击确认帐号 -> ${order.id}")
+                case _ =>
+                  throw new Exception(
+                    s"${order.orderId} 无法点击确认帐号 -> ${order.id}"
+                  )
               }
             })
             .mapAsync(1) { driver =>
@@ -494,7 +497,10 @@ object QrcodeBehavior extends ActorSerializerSuport {
                     .sendKeys(order.money.toString)
                 )
               }.recover {
-                case _ => throw new Exception(s"${order.orderId} 无法输入充值金额 -> ${order.money}")
+                case _ =>
+                  throw new Exception(
+                    s"${order.orderId} 无法输入充值金额 -> ${order.money}"
+                  )
               }
             }
             .mapAsync(1) { driver =>
@@ -522,7 +528,11 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 })
                 .map(_ => Right("已跳转"))
                 .take(1)
-                .orElse(Source.single(Left(new Exception(s"${order.orderId} 没有二次确认框也没跳转"))))
+                .orElse(
+                  Source.single(
+                    Left(new Exception(s"${order.orderId} 没有二次确认框也没跳转"))
+                  )
+                )
                 //                .flatMapConcat {
                 //                  case Left(error) => throw error
                 //                  case Right(_) =>
@@ -551,7 +561,10 @@ object QrcodeBehavior extends ActorSerializerSuport {
                           .click()
                       )
                     }.recover {
-                      case _ => throw new Exception(s"${order.orderId} 切换微信支付失败 -> ${order.id}")
+                      case _ =>
+                        throw new Exception(
+                          s"${order.orderId} 切换微信支付失败 -> ${order.id}"
+                        )
                     }
                 }
                 .flatMapConcat { driver =>
@@ -575,7 +588,13 @@ object QrcodeBehavior extends ActorSerializerSuport {
                     .take(1)
                     .orElse(
                       Source
-                        .single(Left(new Exception(s"${order.orderId} 支付二维码找不到 -> ${order.id}")))
+                        .single(
+                          Left(
+                            new Exception(
+                              s"${order.orderId} 支付二维码找不到 -> ${order.id}"
+                            )
+                          )
+                        )
                     )
                     .mapAsync(1) {
                       case Left(error) => throw error
