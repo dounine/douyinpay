@@ -451,65 +451,65 @@ object QrcodeBehavior extends ActorSerializerSuport {
             .single(source.driver("douyin_cookie"))
             .mapAsync(1) { driver =>
               Future {
-                logger.info(s"切换用户 -> ${order.id}")
+                logger.info(s"${order.orderId} 切换用户 -> ${order.id}")
                 driver.tap(_.findElementByClassName("btn").click())
               }.recover {
-                case _ => throw new Exception("无法点击切换用户按钮")
+                case _ => throw new Exception(s"${order.orderId} 无法点击切换用户按钮")
               }
             }
             .mapAsync(1) { driver =>
               Future {
-                logger.info("输入帐号 -> {}", order.id)
+                logger.info(s"${order.orderId} 输入帐号 -> {}", order.id)
                 driver.tap(
                   _.findElementByTagName("input").sendKeys(order.id)
                 )
               }.recover {
-                case _ => throw new Exception(s"无法输入帐号 -> ${order.id}")
+                case _ => throw new Exception(s"${order.orderId} 无法输入帐号 -> ${order.id}")
               }
             }
             .mapAsync(1)(driver => {
               Future {
-                logger.info("确认帐号 -> {}", order.id)
+                logger.info(s"${order.orderId} 确认帐号 -> {}", order.id)
                 driver.tap(_.findElementByClassName("confirm-btn").click())
               }.recover {
-                case _ => throw new Exception(s"无法点击确认帐号 -> ${order.id}")
+                case _ => throw new Exception(s"${order.orderId} 无法点击确认帐号 -> ${order.id}")
               }
             })
             .mapAsync(1) { driver =>
               Future {
-                logger.info("点击自定义充值金额按钮")
+                logger.info(s"${order.orderId} 点击自定义充值金额按钮")
                 driver.tap(
                   _.findElementByClassName("customer-recharge").click()
                 )
               }.recover {
-                case _ => throw new Exception(s"无法点击自定义充值按钮")
+                case _ => throw new Exception(s"${order.orderId} 无法点击自定义充值按钮")
               }
             }
             .mapAsync(1) { driver =>
               Future {
-                logger.info(s"输入充值金额 -> ${order.money}")
+                logger.info(s"${order.orderId} 输入充值金额 -> ${order.money}")
                 driver.tap(
                   _.findElementByClassName("customer-recharge")
                     .findElement(By.tagName("input"))
                     .sendKeys(order.money.toString)
                 )
               }.recover {
-                case _ => throw new Exception(s"无法输入充值金额 -> ${order.money}")
+                case _ => throw new Exception(s"${order.orderId} 无法输入充值金额 -> ${order.money}")
               }
             }
             .mapAsync(1) { driver =>
               Future {
-                logger.info("点击支付")
+                logger.info(s"${order.orderId} 点击支付")
                 driver.tap(_.findElementByClassName("pay-button").click())
               }.recover {
-                case _ => throw new Exception("无法点击支付按钮")
+                case _ => throw new Exception(s"${order.orderId} 无法点击支付按钮")
               }
             }
             .flatMapConcat { driver =>
               Source(1 to 6)
                 .throttle(1, 500.milliseconds)
                 .filter(_ => {
-                  logger.info("判断是否已经跳转")
+                  logger.info(s"${order.orderId} 判断是否已经跳转")
                   try {
                     driver
                       .findElementByClassName("check-content")
@@ -522,7 +522,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 })
                 .map(_ => Right("已跳转"))
                 .take(1)
-                .orElse(Source.single(Left(new Exception("没有二次确认框也没跳转"))))
+                .orElse(Source.single(Left(new Exception(s"${order.orderId} 没有二次确认框也没跳转"))))
                 //                .flatMapConcat {
                 //                  case Left(error) => throw error
                 //                  case Right(_) =>
@@ -545,20 +545,20 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   case Left(error) => throw error
                   case Right(value) =>
                     Future {
-                      logger.info("切换微信支付")
+                      logger.info(s"${order.orderId} 切换微信支付")
                       driver.tap(
                         _.findElementByClassName("pay-channel-wx")
                           .click()
                       )
                     }.recover {
-                      case _ => throw new Exception(s"切换微信支付失败 -> ${order.id}")
+                      case _ => throw new Exception(s"${order.orderId} 切换微信支付失败 -> ${order.id}")
                     }
                 }
                 .flatMapConcat { driver =>
                   Source(1 to 3)
                     .throttle(1, 500.milliseconds)
                     .filter(_ => {
-                      logger.info("获取二维码支付图片")
+                      logger.info(s"${order.orderId} 获取二维码支付图片")
                       val findQrcode =
                         try {
                           driver
@@ -575,13 +575,13 @@ object QrcodeBehavior extends ActorSerializerSuport {
                     .take(1)
                     .orElse(
                       Source
-                        .single(Left(new Exception(s"支付二维码找不到 -> ${order.id}")))
+                        .single(Left(new Exception(s"${order.orderId} 支付二维码找不到 -> ${order.id}")))
                     )
                     .mapAsync(1) {
                       case Left(error) => throw error
                       case Right(_) =>
                         Future {
-                          logger.info("二维码图片保存")
+                          logger.info(s"${order.orderId} 二维码图片保存")
                           driver
                             .findElementByClassName(
                               "pay-method-scanpay-qrcode-image"
@@ -590,7 +590,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                         }.recover {
                           case e => {
                             logger.error(e.getMessage)
-                            throw new Exception("二维码保存失败")
+                            throw new Exception(s"${order.orderId} 二维码保存失败")
                           }
                         }
                     }
@@ -649,7 +649,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
         Source.single(
           Left(
             (
-              new Exception("未支付"),
+              new Exception(s"${order.orderId} 未支付"),
               Some(
                 chrome.driver().getScreenshotAs(OutputType.FILE).getAbsolutePath
               )
