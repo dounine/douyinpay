@@ -572,6 +572,13 @@ object WechatStream extends JsonParse with SuportRouter {
                         )
                       ) => {
                     val (token, expire) = jwtEncode(result._1.openid.get)
+                    val enought =
+                      (if (accountInfo.isEmpty)
+                         (limitMoney >= paySum.getOrElse(0))
+                       else true)
+                    if (enought) {
+                      logger.info("{} -> {} 需要收费", result._1.openid.get, paySum.getOrElse(0))
+                    }
                     RouterModel.Data(
                       Some(
                         Map(
@@ -579,7 +586,7 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
                           "volumn" -> accountInfo,
-                          "enought" -> (if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
+                          "enought" -> enought
                         )
                       )
                     )
@@ -602,6 +609,13 @@ object WechatStream extends JsonParse with SuportRouter {
                         paySum: Option[Int]
                       ) => {
                     val (token, expire) = jwtEncode(result._1.openid.get)
+                    val enought =
+                      (if (accountInfo.isEmpty)
+                        (limitMoney >= paySum.getOrElse(0))
+                      else true)
+                    if (enought) {
+                      logger.info("{} -> {} 需要收费", result._1.openid.get, paySum.getOrElse(0))
+                    }
                     RouterModel.Data(
                       Some(
                         Map(
@@ -609,7 +623,7 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
                           "volumn" -> accountInfo,
-                          "enought" -> (if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
+                          "enought" -> enought
                         )
                       )
                     )
