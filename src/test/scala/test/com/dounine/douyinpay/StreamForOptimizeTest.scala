@@ -10,7 +10,13 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.event.LogMarker
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
-import akka.http.scaladsl.model.{HttpEntity, MediaTypes, Uri}
+import akka.http.scaladsl.model.{
+  HttpEntity,
+  MediaTypes,
+  StatusCode,
+  StatusCodes,
+  Uri
+}
 import akka.http.scaladsl.server.{RequestContext, RouteResult}
 import akka.stream.{
   Attributes,
@@ -159,9 +165,31 @@ class StreamForOptimizeTest
 
   implicit val ec = system.executionContext
 
+  def hello[T: Manifest](result: String): T = {
+//    println(result.getClass)
+    val time = LocalDateTime.now()
+//    import scala.reflect.runtime.universe._
+    import scala.reflect._
+    val tt = classTag[T]
+    tt.toString() match {
+      case "java.lang.String" => "原类型".asInstanceOf[T]
+      case _                  => "非原类型".asInstanceOf[T]
+    }
+//    result.getClass match {
+//      case t if t == cc  => {
+//        "原类型".asInstanceOf[T]
+//      }
+//    }
+  }
+
   "stream optimize" should {
 
-    "jwt expire" in {
+    "hello tt" in {
+      val code = StatusCode.int2StatusCode(300)
+      println(code.isSuccess())
+    }
+
+    "jwt expire" ignore {
 
       val start = System.currentTimeMillis() / 1000
       val text = "hello"

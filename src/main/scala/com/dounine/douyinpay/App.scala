@@ -41,7 +41,8 @@ object App {
       new FileRouter().route,
       new OrderRouter().route,
       new WechatRouter().route,
-      new GraphqlRouter().route
+      new GraphqlRouter().route,
+      new CardRouter().route
     )
 
     Http(system)
@@ -56,7 +57,9 @@ object App {
           logger.info(
             s"""${appName} server http://${value.localAddress.getHostName}:${value.localAddress.getPort} running"""
           )
-          startup.httpAfter()
+          if (config.getBoolean("pro")) {
+            startup.httpAfter()
+          }
       })
 
   }

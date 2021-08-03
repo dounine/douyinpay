@@ -49,36 +49,38 @@ class FileRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
   }
 
   val route: Route = {
-    concat(
-      post {
-        path("file" / "image") {
-          storeUploadedFile("file", tempDestination) {
-            case (metadata, file) => {
-              ok(
-                Map(
-                  "domain" -> (domain + s"/${routerPrefix}/file/image?path="),
-                  "url" -> file.getAbsolutePath
+    pathPrefix("file") {
+      concat(
+        post {
+          path("image") {
+            storeUploadedFile("file", tempDestination) {
+              case (metadata, file) => {
+                ok(
+                  Map(
+                    "domain" -> (domain + s"/${routerPrefix}/file/image?path="),
+                    "url" -> file.getAbsolutePath
+                  )
                 )
-              )
+              }
+            }
+          }
+        },
+        get {
+          path("image") {
+            parameter("path") { path =>
+              {
+                val byteArray: Array[Byte] = Files.readAllBytes(Paths.get(path))
+                complete(
+                  HttpResponse(entity =
+                    HttpEntity(ContentType(MediaTypes.`image/png`), byteArray)
+                  )
+                )
+              }
             }
           }
         }
-      },
-      get {
-        path("file" / "image") {
-          parameter("path") { path =>
-            {
-              val byteArray: Array[Byte] = Files.readAllBytes(Paths.get(path))
-              complete(
-                HttpResponse(entity =
-                  HttpEntity(ContentType(MediaTypes.`image/png`), byteArray)
-                )
-              )
-            }
-          }
-        }
-      }
-    )
+      )
+    }
   }
 
 }

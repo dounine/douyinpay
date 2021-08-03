@@ -11,13 +11,13 @@ object WechatModel {
   ) extends BaseSerializer
 
   case class AccessTokenBase(
-      access_token: Option[String],
-      expires_in: Option[Int],
-      refresh_token: Option[String],
-      openid: Option[String],
-      scope: Option[String],
-      errcode: Option[String],
-      errmsg: Option[String]
+      access_token: Option[String] = None,
+      expires_in: Option[Int] = None,
+      refresh_token: Option[String] = None,
+      openid: Option[String] = None,
+      scope: Option[String] = None,
+      errcode: Option[String] = None,
+      errmsg: Option[String] = None
   ) extends BaseSerializer
 
   case class SNSUserInfo(

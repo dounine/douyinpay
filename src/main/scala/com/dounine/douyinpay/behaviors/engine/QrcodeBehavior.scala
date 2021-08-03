@@ -36,7 +36,7 @@ import akka.stream.{
   UniqueKillSwitch
 }
 import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel}
-import com.dounine.douyinpay.service.OrderService
+import com.dounine.douyinpay.service.{AccountStream, OrderService}
 import com.dounine.douyinpay.tools.akka.chrome.{Chrome, ChromePools}
 import com.dounine.douyinpay.tools.json.{ActorSerializerSuport, JsonParse}
 import com.dounine.douyinpay.tools.util.{DingDing, ServiceSingleton}
@@ -153,7 +153,9 @@ object QrcodeBehavior extends ActorSerializerSuport {
                           | - money: ${order.money}
                           | - payCount: ${order.payCount}
                           | - payMoney: ${order.payMoney}${errorMsg}${errorScreen}
-                          | - duration: ${java.time.Duration.between(order.createTime,LocalDateTime.now()).getSeconds}s
+                          | - duration: ${java.time.Duration
+                  .between(order.createTime, LocalDateTime.now())
+                  .getSeconds}s
                           | - createTime: ${order.createTime.format(
                   timeFormatter
                 )}
@@ -305,6 +307,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
               .via(notifyBeforeFlow)
               .via(coreFlow)
               .via(notifyAfterFlow)
+              .via(AccountStream.decreaseVolumn())
               .via(updateOrderFlow)
               .recover {
                 case e => {

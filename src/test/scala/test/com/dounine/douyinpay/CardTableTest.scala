@@ -4,45 +4,33 @@ import akka.actor.testkit.typed.scaladsl.{
   LogCapturing,
   ScalaTestWithActorTestKit
 }
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
-import akka.cluster.typed.{Cluster, Join}
-import akka.persistence.typed.PersistenceId
-import akka.stream.alpakka.udp.Datagram
-import akka.stream.alpakka.udp.scaladsl.Udp
-import akka.stream.scaladsl.{Flow, Sink, Source}
-import com.dounine.douyinpay.model.models.{StockTimeSerieModel, UserModel}
-import com.dounine.douyinpay.model.types.service.IntervalStatus
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import com.dounine.douyinpay.model.models.UserModel
 import com.dounine.douyinpay.service.UserService
-import com.dounine.douyinpay.store.{EnumMappers, UserTable}
+import com.dounine.douyinpay.store.{CardTable, EnumMappers, UserTable}
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.sksamuel.elastic4s.http.JavaClient
-import com.sksamuel.elastic4s._
 import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.mockito.MockitoSugar
-import slick.lifted.TableQuery
 import slick.jdbc.MySQLProfile.api._
+import slick.lifted.TableQuery
 
-import java.net.InetSocketAddress
+import java.time.LocalDateTime
+import scala.concurrent.Await
 import scala.concurrent.duration._
-import java.time.{Instant, LocalDateTime, ZoneId}
-import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
-import scala.concurrent.{Await, Future, duration}
-import scala.util.{Success, Try}
 
-class UserTableTest
+class CardTableTest
     extends ScalaTestWithActorTestKit(
       ConfigFactory
         .parseString(s"""
            |akka.remote.artery.canonical.port = 25520
            |akka.persistence.journal.leveldb.dir = "/tmp/journal_${classOf[
-          UserTableTest
+          CardTableTest
         ].getSimpleName}"
            |akka.persistence.snapshot-store.local.dir = "/tmp/snapshot_${classOf[
-          UserTableTest
+          CardTableTest
         ].getSimpleName}"
            |""".stripMargin)
         .withFallback(
@@ -59,13 +47,15 @@ class UserTableTest
   val sharding = ClusterSharding(system)
 
   val db = DataSource(system).source().db
-  val dict = TableQuery[UserTable]
+  val dict = TableQuery[CardTable]
 
   def beforeFun(): Unit = {
     try {
       Await.result(db.run(dict.schema.dropIfExists), Duration.Inf)
     } catch {
-      case e =>
+      case e => {
+        system.log.error(e.getMessage)
+      }
     }
     Await.result(db.run(dict.schema.createIfNotExists), Duration.Inf)
   }
@@ -76,24 +66,10 @@ class UserTableTest
   }
 
   val userService = new UserService()
-  "user table test" should {
+  "card table test" should {
     "table create" in {
       beforeFun()
-//      val info = UserModel.DbInfo(
-//        apiKey = "abc",
-//        apiSecret = "abc",
-//        balance = BigDecimal("0.00"),
-//        margin = BigDecimal("0.00"),
-//        callback = Option.empty,
-//        createTime = LocalDateTime.now()
-//      )
-//
-//      userService
-//        .add(
-//          info
-//        )
-//        .futureValue shouldBe Option(1)
-//      userService.info(apiKey = info.apiKey).futureValue shouldBe Option(info)
+
 //      afterFun()
     }
   }

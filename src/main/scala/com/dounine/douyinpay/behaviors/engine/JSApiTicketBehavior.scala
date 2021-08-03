@@ -50,9 +50,9 @@ object JSApiTicketBehavior extends JsonParse {
         implicit val system = context.system
         implicit val materializer = SystemMaterializer(system).materializer
         implicit val ec = context.executionContext
-        val http = Http(system)
         val config = system.settings.config.getConfig("app")
         val appid = config.getString("wechat.appid")
+        val pro = config.getBoolean("pro")
 
         var ticket: Option[String] = None
         Behaviors.withTimers[Event] { timers =>
@@ -68,7 +68,9 @@ object JSApiTicketBehavior extends JsonParse {
               case InitTicketOk(to, expire) => {
                 logger.info("ticket refresh -> {} {}", to, expire)
                 ticket = Some(to)
-                timers.startSingleTimer(InitTicket(), expire.seconds)
+                if (pro) {
+                  timers.startSingleTimer(InitTicket(), expire.seconds)
+                }
                 Behaviors.same
               }
               case InitTicketFail(code, msg) => {
@@ -109,49 +111,51 @@ object JSApiTicketBehavior extends JsonParse {
                       )
                     )
                   case None =>
-                    context.pipeToSelf(
-                      RestartSource
-                        .onFailuresWithBackoff(
-                          RestartSettings(
-                            minBackoff = 1.seconds,
-                            maxBackoff = 3.seconds,
-                            randomFactor = 0.2
-                          ).withMaxRestarts(3, 10.seconds)
-                        )(() => {
-                          WechatStream
-                            .accessToken()
-                            .mapAsync(1) { token =>
-                              {
-                                Request
-                                  .get[TicketResponse](
-                                    s"https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=${token}&type=jsapi"
-                                  )
-                                  .map(result => {
-                                    if (result.ticket.isDefined) {
-                                      ticketFile.write(
-                                        s"${result.ticket.get} ${LocalDateTime
-                                          .now()} ${result.expires_in.get}"
-                                      )
-                                    }
-                                    result
-                                  })
+                    if (pro) {
+                      context.pipeToSelf(
+                        RestartSource
+                          .onFailuresWithBackoff(
+                            RestartSettings(
+                              minBackoff = 1.seconds,
+                              maxBackoff = 3.seconds,
+                              randomFactor = 0.2
+                            ).withMaxRestarts(3, 10.seconds)
+                          )(() => {
+                            WechatStream
+                              .accessToken()
+                              .mapAsync(1) { token =>
+                                {
+                                  Request
+                                    .get[TicketResponse](
+                                      s"https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=${token}&type=jsapi"
+                                    )
+                                    .map(result => {
+                                      if (result.ticket.isDefined) {
+                                        ticketFile.write(
+                                          s"${result.ticket.get} ${LocalDateTime
+                                            .now()} ${result.expires_in.get}"
+                                        )
+                                      }
+                                      result
+                                    })
+                                }
                               }
-                            }
-                        })
-                        .runWith(Sink.head)
-                    ) {
-                      case Failure(exception) =>
-                        InitTicketFail(-1, exception.getMessage)
-                      case Success(value) =>
-                        if (value.errcode != 0) {
-                          InitTicketFail(value.errcode, value.errmsg)
-                        } else {
-                          InitTicketOk(
-                            value.ticket.get,
-                            value.expires_in.get
-                          )
-                        }
+                          })
+                          .runWith(Sink.head)
+                      ) {
+                        case Failure(exception) =>
+                          InitTicketFail(-1, exception.getMessage)
+                        case Success(value) =>
+                          if (value.errcode != 0) {
+                            InitTicketFail(value.errcode, value.errmsg)
+                          } else {
+                            InitTicketOk(
+                              value.ticket.get,
+                              value.expires_in.get
+                            )
+                          }
 
+                      }
                     }
                 }
 

@@ -65,125 +65,152 @@ class WechatRouter()(implicit system: ActorSystem[_])
 
   val route: Route =
     cors() {
-      concat(
-        get {
-          path("oauth") {
-            val params: String = Map(
-              "appid" -> appid,
-              "redirect_uri" -> URLEncoder.encode(domain, "utf-8"),
-              "response_type" -> "code",
-              "scope" -> "snsapi_base",
-              "state" -> appid
-            ).map(i => s"${i._1}=${i._2}")
-              .mkString("&")
-            redirect(
-              s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-              StatusCodes.PermanentRedirect
-            )
-          }
-        },
-        get {
-          path("wechat" / "web" / "user" / "login" / Segment) { code =>
-            {
-              val result = Source
-                .single(code)
-                .via(WechatStream.webBaseUserInfo())
-              complete(result)
+      pathPrefix("wechat") {
+        concat(
+          get {
+            path("oauth") {
+              val params: String = Map(
+                "appid" -> appid,
+                "redirect_uri" -> URLEncoder.encode(domain, "utf-8"),
+                "response_type" -> "code",
+                "scope" -> "snsapi_base",
+                "state" -> appid
+              ).map(i => s"${i._1}=${i._2}")
+                .mkString("&")
+              redirect(
+                s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+                StatusCodes.PermanentRedirect
+              )
             }
-          }
-        },
-        get {
-          path("wechat" / "jsapi" / "signature") {
-            parameters("url".as[String]) {
-              url =>
-                {
-                  val info = Map(
-                    "noncestr" -> UUID
-                      .randomUUID()
-                      .toString
-                      .replaceAll("-", ""),
-                    "timestamp" -> System.currentTimeMillis() / 1000,
-                    "url" -> url
-                  )
-                  val result = WechatStream
-                    .jsapiQuery()
-                    .map(ticket => {
-                      info ++ Map(
-                        "jsapi_ticket" -> ticket
-                      )
-                    })
-                    .map(result => {
-                      result
-                        .map(i => s"${i._1}=${i._2}")
-                        .toSeq
-                        .sorted
-                        .mkString("&")
-                    })
-                    .map(DigestUtils.sha1Hex)
-                    .map(signature => {
-                      info.filterNot(_._1 == "url") ++ Map(
-                        "signature" -> signature
-                      )
-                    })
-                    .map(okData)
+          },
+          get {
+            path("card" / "active" / Segment) {
+              card =>
+                val params: String = Map(
+                  "appid" -> appid,
+                  "redirect_uri" -> URLEncoder.encode(
+                    domain + s"?card=${card}",
+                    "utf-8"
+                  ),
+                  "response_type" -> "code",
+                  "scope" -> "snsapi_base",
+                  "state" -> appid
+                ).map(i => s"${i._1}=${i._2}")
+                  .mkString("&")
+                redirect(
+                  s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+                  StatusCodes.PermanentRedirect
+                )
+            }
+          },
+          get {
+            path("web" / "user" / "login" / Segment) { code =>
+              parameters("card".optional) { card: Option[String] =>
+                optionalHeaderValueByName("token") { token: Option[String] =>
+                  {
+                    val result = Source
+                      .single((code, card, token))
+                      .via(WechatStream.webBaseUserInfo())
+                    complete(result)
+                  }
 
+                }
+              }
+            }
+          },
+          get {
+            path("jsapi" / "signature") {
+              parameters("url".as[String]) {
+                url =>
+                  {
+                    val info = Map(
+                      "noncestr" -> UUID
+                        .randomUUID()
+                        .toString
+                        .replaceAll("-", ""),
+                      "timestamp" -> System.currentTimeMillis() / 1000,
+                      "url" -> url
+                    )
+                    val result = WechatStream
+                      .jsapiQuery()
+                      .map(ticket => {
+                        info ++ Map(
+                          "jsapi_ticket" -> ticket
+                        )
+                      })
+                      .map(result => {
+                        result
+                          .map(i => s"${i._1}=${i._2}")
+                          .toSeq
+                          .sorted
+                          .mkString("&")
+                      })
+                      .map(DigestUtils.sha1Hex)
+                      .map(signature => {
+                        info.filterNot(_._1 == "url") ++ Map(
+                          "signature" -> signature
+                        )
+                      })
+                      .map(okData)
+
+                    complete(result)
+                  }
+              }
+            }
+          },
+          post {
+            path("auth") {
+              entity(as[NodeSeq]) { data =>
+                try {
+                  val message = WechatModel.WechatMessage.fromXml(data)
+                  logger.info(
+                    message.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                  )
+                  val result = Source
+                    .single(message)
+                    .via(WechatStream.notifyMessage())
+                    .runWith(Sink.head)
                   complete(result)
                 }
+              }
             }
-          }
-        },
-        post {
-          path("wechat" / "auth") {
-            entity(as[NodeSeq]) { data =>
-              try {
-                val message = WechatModel.WechatMessage.fromXml(data)
-                logger.info(
-                  message.toJson.jsonTo[Map[String, Any]].mkString("\n")
-                )
-                val result = Source
-                  .single(message)
-                  .via(WechatStream.notifyMessage())
-                  .runWith(Sink.head)
-                complete(result)
+          },
+          get {
+            path("auth") {
+              parameters("signature", "timestamp", "nonce", "echostr") {
+                (
+                    signature: String,
+                    timestamp: String,
+                    nonce: String,
+                    echostr: String
+                ) =>
+                  {
+                    val sortArray: String =
+                      Array(
+                        config.getString("wechat.auth"),
+                        timestamp,
+                        nonce
+                      ).sorted.mkString("")
+                    if (
+                      signature == DigestUtils.sha1Hex(sortArray.mkString(""))
+                    ) {
+                      complete(
+                        HttpResponse(
+                          StatusCodes.OK,
+                          entity = HttpEntity(
+                            ContentTypes.`text/plain(UTF-8)`,
+                            echostr
+                          )
+                        )
+                      )
+                    } else {
+                      fail("fail")
+                    }
+                  }
               }
             }
           }
-        },
-        get {
-          path("wechat" / "auth") {
-            parameters("signature", "timestamp", "nonce", "echostr") {
-              (
-                  signature: String,
-                  timestamp: String,
-                  nonce: String,
-                  echostr: String
-              ) =>
-                {
-                  val sortArray: String =
-                    Array(
-                      config.getString("wechat.auth"),
-                      timestamp,
-                      nonce
-                    ).sorted.mkString("")
-                  if (
-                    signature == DigestUtils.sha1Hex(sortArray.mkString(""))
-                  ) {
-                    complete(
-                      HttpResponse(
-                        StatusCodes.OK,
-                        entity = HttpEntity(
-                          ContentTypes.`text/plain(UTF-8)`,
-                          echostr
-                        )
-                      )
-                    )
-                  } else {
-                    fail("fail")
-                  }
-                }
-            }
-          }
-        }
-      )
+        )
+      }
     }
 }

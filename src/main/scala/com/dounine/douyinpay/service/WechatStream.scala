@@ -20,6 +20,7 @@ import com.dounine.douyinpay.behaviors.engine.{
   JSApiTicketBehavior
 }
 import com.dounine.douyinpay.model.models.{
+  AccountModel,
   PayUserInfoModel,
   RouterModel,
   WechatModel
@@ -32,6 +33,7 @@ import com.dounine.douyinpay.tools.util.{DingDing, Request}
 import org.slf4j.LoggerFactory
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 
+import java.net.URLEncoder
 import java.time.{Clock, LocalDateTime}
 import java.time.format.DateTimeFormatter
 import scala.concurrent.Future
@@ -422,105 +424,201 @@ object WechatStream extends JsonParse with SuportRouter {
     } else None
   }
 
-  def webUserInfo()(implicit
-      system: ActorSystem[_]
-  ): Flow[Code, RouterModel.Data, NotUsed] = {
-    implicit val ec = system.executionContext
-    implicit val materializer = SystemMaterializer(system).materializer
-    val config = system.settings.config.getConfig("app")
-    val appid = config.getString("wechat.appid")
-    val secret = config.getString("wechat.secret")
-    val domain = config.getString("file.domain")
-    Flow[Code]
-      .mapAsync(1) { code =>
-        Request
-          .get[WechatModel.AccessTokenBase](
-            s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
-          )
-          .flatMap { result =>
-            if (result.errmsg.isDefined) {
-              Future.successful(
-                RouterModel.Data(
-                  status = ResponseCode.fail,
-                  msg = Some("认证失效、重新登录"),
-                  data = Some(
-                    Map(
-                      "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
-                    )
-                  )
-                )
-              )
-            } else {
-              logger.info(
-                "openid -> {} access_token -> {}",
-                result.openid.get,
-                result.access_token.get
-              )
-              Request
-                .get[
-                  WechatModel.SNSUserInfo
-                ](
-                  s"https://api.weixin.qq.com/sns/userinfo?access_token=${result.access_token.get}&openid=${result.openid.get}&lang=zh_CN"
-                )
-                .map(result => {
-                  val (token, expire) = jwtEncode(result.openid)
-                  RouterModel.Data(
-                    Some(
-                      Map(
-                        "open_id" -> result.openid,
-                        "token" -> token,
-                        "expire" -> expire
-                      )
-                    )
-                  )
-                })
-            }
-          }
-      }
-  }
+//  def webUserInfo()(implicit
+//      system: ActorSystem[_]
+//  ): Flow[Code, RouterModel.Data, NotUsed] = {
+//    implicit val ec = system.executionContext
+//    implicit val materializer = SystemMaterializer(system).materializer
+//    val config = system.settings.config.getConfig("app")
+//    val appid = config.getString("wechat.appid")
+//    val secret = config.getString("wechat.secret")
+//    val domain = config.getString("file.domain")
+//    Flow[Code]
+//      .mapAsync(1) { code =>
+//        Request
+//          .get[WechatModel.AccessTokenBase](
+//            s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
+//          )
+//          .flatMap { result =>
+//            if (result.errmsg.isDefined) {
+//              Future.successful(
+//                RouterModel.Data(
+//                  status = ResponseCode.fail,
+//                  msg = Some("认证失效、重新登录"),
+//                  data = Some(
+//                    Map(
+//                      "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
+//                    )
+//                  )
+//                )
+//              )
+//            } else {
+//              logger.info(
+//                "openid -> {} access_token -> {}",
+//                result.openid.get,
+//                result.access_token.get
+//              )
+//              Request
+//                .get[
+//                  WechatModel.SNSUserInfo
+//                ](
+//                  s"https://api.weixin.qq.com/sns/userinfo?access_token=${result.access_token.get}&openid=${result.openid.get}&lang=zh_CN"
+//                )
+//                .map(result => {
+//                  val (token, expire) = jwtEncode(result.openid)
+//                  RouterModel.Data(
+//                    Some(
+//                      Map(
+//                        "open_id" -> result.openid,
+//                        "token" -> token,
+//                        "expire" -> expire
+//                      )
+//                    )
+//                  )
+//                })
+//            }
+//          }
+//      }
+//  }
 
   type Code = String
   type Openid = String
   def webBaseUserInfo()(implicit
       system: ActorSystem[_]
-  ): Flow[Code, RouterModel.Data, NotUsed] = {
+  ): Flow[
+    (Code, Option[String], Option[String]),
+    RouterModel.JsonData,
+    NotUsed
+  ] = {
     implicit val ec = system.executionContext
     implicit val materializer = SystemMaterializer(system).materializer
-    val http = Http(system)
     val config = system.settings.config.getConfig("app")
     val appid = config.getString("wechat.appid")
     val secret = config.getString("wechat.secret")
     val domain = config.getString("file.domain")
-    Flow[Code]
-      .mapAsync(1) { code =>
-        Request
-          .get[WechatModel.AccessTokenBase](
-            s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
+    val limitMoney = config.getInt("limitMoney")
+    Flow[(Code, Option[String], Option[String])]
+      .mapAsync(1)(tp2 => {
+        val code = tp2._1
+        val tokenValid = tp2._3 match {
+          case Some(token) => jwtDecode(token)
+          case None        => None
+        }
+        tokenValid match {
+          case Some(session) =>
+            Future.successful(
+              (
+                WechatModel.AccessTokenBase(
+                  openid = Some(session.openid)
+                ),
+                tp2
+              )
+            )
+          case None =>
+            Request
+              .get[WechatModel.AccessTokenBase](
+                s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
+              )
+              .map(_ -> tp2)
+        }
+      })
+      .flatMapConcat(result => {
+        if (result._1.errmsg.isDefined) {
+          val domainEncode = URLEncoder.encode(
+            result._2._2 match {
+              case Some(card) => domain + "?card=" + card
+              case None       => domain
+            },
+            "utf-8"
           )
-          .map(i => {
-            if (i.errmsg.isDefined) { //code已使用过或code过期
-              RouterModel.Data(
-                status = ResponseCode.fail,
-                msg = Some("认证失效、重新登录"),
-                data = Some(
-                  Map(
-                    "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domain}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
-                  )
+          Source.single(
+            RouterModel.Data(
+              status = ResponseCode.fail,
+              msg = Some("认证失效、重新登录"),
+              data = Some(
+                Map(
+                  "redirect" -> s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domainEncode}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
                 )
               )
-            } else {
-              val (token, expire) = jwtEncode(i.openid.get)
-              RouterModel.Data(
-                Some(
-                  Map(
-                    "open_id" -> i.openid.get,
-                    "token" -> token,
-                    "expire" -> expire
+            )
+          )
+        } else {
+          result._2._2 match {
+            case Some(card) =>
+              Source
+                .single(
+                  AccountModel.AddVolumnToAccount(
+                    openid = result._1.openid.get,
+                    cardId = card
                   )
                 )
-              )
+                .via(AccountStream.addVolumnToAccount())
+                .zip(
+                  Source
+                    .single(result._1.openid.get)
+                    .via(AccountStream.queryVolumn())
+                    .zip(
+                      Source
+                        .single(result._1.openid.get)
+                        .via(OrderStream.queryPaySum())
+                    )
+                )
+                .map {
+                  case (
+                        update: Boolean,
+                        (
+                          accountInfo: Option[AccountModel.AccountInfo],
+                          paySum: Option[Int]
+                        )
+                      ) => {
+                    val (token, expire) = jwtEncode(result._1.openid.get)
+                    RouterModel.Data(
+                      Some(
+                        Map(
+                          "open_id" -> result._1.openid.get,
+                          "token" -> token,
+                          "expire" -> expire,
+                          "volumn" -> accountInfo,
+                          "enought" -> true //(if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
+                        )
+                      )
+                    )
+                  }
+                }
+
+            case None => {
+              val (token, expire) = jwtEncode(result._1.openid.get)
+              Source
+                .single(result._1.openid.get)
+                .via(AccountStream.queryVolumn())
+                .zip(
+                  Source
+                    .single(result._1.openid.get)
+                    .via(OrderStream.queryPaySum())
+                )
+                .map {
+                  case (
+                        accountInfo: Option[AccountModel.AccountInfo],
+                        paySum: Option[Int]
+                      ) => {
+                    val (token, expire) = jwtEncode(result._1.openid.get)
+                    RouterModel.Data(
+                      Some(
+                        Map(
+                          "open_id" -> result._1.openid.get,
+                          "token" -> token,
+                          "expire" -> expire,
+                          "volumn" -> accountInfo,
+                          "enought" -> true //(if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
+                        )
+                      )
+                    )
+                  }
+                }
+
             }
-          })
-      }
+          }
+        }
+      })
   }
 }

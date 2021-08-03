@@ -47,7 +47,7 @@ class Base64Test
     with EnumMappers
     with MockitoSugar
     with JsonParse {
-  val orderService = new OrderService(system)
+  val orderService = new OrderService()
   "base64 test" should {
     "encode64 and decode64" ignore {
       val file = FileIO.fromPath(Paths.get("/tmp/wechat.png"))

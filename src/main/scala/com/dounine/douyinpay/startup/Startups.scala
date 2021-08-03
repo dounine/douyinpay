@@ -19,8 +19,10 @@ import com.dounine.douyinpay.service.{
   UserService
 }
 import com.dounine.douyinpay.store.{
+  AccountTable,
   AkkaPersistenerJournalTable,
   AkkaPersistenerSnapshotTable,
+  CardTable,
   DictionaryTable,
   OrderTable,
   UserTable
@@ -40,6 +42,7 @@ class Startups(implicit system: ActorSystem[_]) {
   private val logger: Logger = LoggerFactory.getLogger(classOf[Startups])
   implicit val ec: ExecutionContextExecutor = system.executionContext
   val sharding: ClusterSharding = ClusterSharding(system)
+  val pro = system.settings.config.getBoolean("app.pro")
 
   def start(): Unit = {
     sharding.init(
@@ -100,6 +103,8 @@ class Startups(implicit system: ActorSystem[_]) {
       lifted.TableQuery[UserTable].schema,
       lifted.TableQuery[OrderTable].schema,
       lifted.TableQuery[DictionaryTable].schema,
+      lifted.TableQuery[CardTable].schema,
+      lifted.TableQuery[AccountTable].schema,
       lifted.TableQuery[AkkaPersistenerJournalTable].schema,
       lifted.TableQuery[AkkaPersistenerSnapshotTable].schema
     )

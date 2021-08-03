@@ -21,7 +21,12 @@ import scala.concurrent.duration.FiniteDuration
 
 trait EnumMappers extends JsonParse {
 
-  val localDateTime2timestamp
+  final val timestampOnUpdate: String =
+    "timestamp not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP"
+  final val timestampOnCreate: String =
+    "timestamp not null default CURRENT_TIMESTAMP"
+
+  implicit val localDateTime2timestamp
       : JdbcType[LocalDateTime] with BaseTypedType[LocalDateTime] =
     MappedColumnType.base[LocalDateTime, Timestamp](
       { instant: LocalDateTime =>

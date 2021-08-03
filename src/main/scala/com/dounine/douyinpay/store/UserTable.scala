@@ -32,7 +32,7 @@ class UserTable(tag: Tag)
   def margin: Rep[BigDecimal] = column[BigDecimal]("margin", O.Length(11))
 
   def createTime: Rep[LocalDateTime] =
-    column[LocalDateTime]("createTime", O.SqlType("timestamp"), O.Length(3))(
+    column[LocalDateTime]("createTime", O.SqlType(timestampOnCreate))(
       localDateTime2timestamp
     )
 

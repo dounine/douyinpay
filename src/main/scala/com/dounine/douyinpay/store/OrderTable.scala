@@ -58,7 +58,7 @@ class OrderTable(tag: Tag)
   def idx = index("jb-pay-history_orderId_uindex", (orderId), unique = true)
 
   def createTime: Rep[LocalDateTime] =
-    column[LocalDateTime]("createTime", O.SqlType("timestamp"), O.Length(3))(
+    column[LocalDateTime]("createTime", O.SqlType(timestampOnCreate))(
       localDateTime2timestamp
     )
 

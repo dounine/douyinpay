@@ -48,10 +48,10 @@ object AccessTokenBehavior extends JsonParse {
         implicit val system = context.system
         implicit val materializer = SystemMaterializer(system).materializer
         implicit val ec = context.executionContext
-        val http = Http(system)
         val config = system.settings.config.getConfig("app")
         val appid = config.getString("wechat.appid")
         val secret = config.getString("wechat.secret")
+        val pro = config.getBoolean("pro")
 
         var token: Option[String] = None
         Behaviors.withTimers[Event] { timers =>
@@ -67,7 +67,9 @@ object AccessTokenBehavior extends JsonParse {
               case InitTokenOk(to, expire) => {
                 logger.info("token refresh -> {} {}", to, expire)
                 token = Some(to)
-                timers.startSingleTimer(InitToken(), expire.seconds)
+                if (pro) {
+                  timers.startSingleTimer(InitToken(), expire.seconds)
+                }
                 Behaviors.same
               }
               case InitTokenFail(code, msg) => {
@@ -108,48 +110,50 @@ object AccessTokenBehavior extends JsonParse {
                       )
                     )
                   case None =>
-                    context.pipeToSelf(
-                      RestartSource
-                        .onFailuresWithBackoff(
-                          RestartSettings(
-                            minBackoff = 1.seconds,
-                            maxBackoff = 3.seconds,
-                            randomFactor = 0.2
-                          ).withMaxRestarts(3, 10.seconds)
-                        )(() => {
-                          Source
-                            .future(
-                              Request.get[TokenResponse](
-                                s"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${secret}"
-                              )
-                            )
-                            .map(result => {
-                              if (
-                                result.errcode.isEmpty && result.access_token.isDefined
-                              ) {
-                                tokenFile.write(
-                                  s"${result.access_token.get} ${LocalDateTime
-                                    .now()} ${result.expires_in.get}"
+                    if (pro) {
+                      context.pipeToSelf(
+                        RestartSource
+                          .onFailuresWithBackoff(
+                            RestartSettings(
+                              minBackoff = 1.seconds,
+                              maxBackoff = 3.seconds,
+                              randomFactor = 0.2
+                            ).withMaxRestarts(3, 10.seconds)
+                          )(() => {
+                            Source
+                              .future(
+                                Request.get[TokenResponse](
+                                  s"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appid}&secret=${secret}"
                                 )
-                              }
-                              result
-                            })
-                        })
-                        .runWith(Sink.head)
-                    ) {
-                      case Failure(exception) =>
-                        InitTokenFail(-1, exception.getMessage)
-                      case Success(value) =>
-                        value.errcode match {
-                          case Some(err) =>
-                            InitTokenFail(err, value.errmsg.getOrElse(""))
-                          case None =>
-                            InitTokenOk(
-                              value.access_token.get,
-                              value.expires_in.get
-                            )
-                        }
+                              )
+                              .map(result => {
+                                if (
+                                  result.errcode.isEmpty && result.access_token.isDefined
+                                ) {
+                                  tokenFile.write(
+                                    s"${result.access_token.get} ${LocalDateTime
+                                      .now()} ${result.expires_in.get}"
+                                  )
+                                }
+                                result
+                              })
+                          })
+                          .runWith(Sink.head)
+                      ) {
+                        case Failure(exception) =>
+                          InitTokenFail(-1, exception.getMessage)
+                        case Success(value) =>
+                          value.errcode match {
+                            case Some(err) =>
+                              InitTokenFail(err, value.errmsg.getOrElse(""))
+                            case None =>
+                              InitTokenOk(
+                                value.access_token.get,
+                                value.expires_in.get
+                              )
+                          }
 
+                      }
                     }
                 }
 
