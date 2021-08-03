@@ -579,7 +579,7 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
                           "volumn" -> accountInfo,
-                          "enought" -> true //(if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
+                          "enought" -> (if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
                         )
                       )
                     )
@@ -609,7 +609,7 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
                           "volumn" -> accountInfo,
-                          "enought" -> true //(if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
+                          "enought" -> (if(accountInfo.isEmpty) (limitMoney >= paySum.getOrElse(0)) else true)
                         )
                       )
                     )
