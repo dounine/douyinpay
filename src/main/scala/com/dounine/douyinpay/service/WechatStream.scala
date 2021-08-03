@@ -585,8 +585,8 @@ object WechatStream extends JsonParse with SuportRouter {
                           "open_id" -> result._1.openid.get,
                           "token" -> token,
                           "expire" -> expire,
-                          "volumn" -> accountInfo,
-                          "enought" -> enought
+//                          "volumn" -> accountInfo,
+//                          "enought" -> false
                         )
                       )
                     )
@@ -622,8 +622,8 @@ object WechatStream extends JsonParse with SuportRouter {
                           "open_id" -> result._1.openid.get,
                           "token" -> token,
                           "expire" -> expire,
-                          "volumn" -> accountInfo,
-                          "enought" -> enought
+//                          "volumn" -> accountInfo,
+//                          "enought" -> enought
                         )
                       )
                     )
