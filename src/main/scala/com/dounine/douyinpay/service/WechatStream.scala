@@ -586,7 +586,7 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
 //                          "volumn" -> accountInfo,
-//                          "enought" -> false
+                          "enought" -> true
                         )
                       )
                     )
@@ -623,7 +623,7 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
 //                          "volumn" -> accountInfo,
-//                          "enought" -> enought
+                          "enought" -> true
                         )
                       )
                     )
