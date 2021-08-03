@@ -7,24 +7,32 @@ val alpakka = "2.0.2"
 val elastic4sVersion = "7.12.0"
 
 lazy val app = (project in file("."))
-  .enablePlugins(DockerPlugin, JavaServerAppPackaging)
+  .enablePlugins(DockerPlugin, UniversalPlugin, JavaServerAppPackaging)
   .settings(
     name := "douyinpay",
     maintainer := "amwoqmgo@gmail.com",
     scalaVersion := "2.13.4",
     dockerRepository := Some("dounine"),
     version := "1.0.0",
-    dockerUsername  := sys.props.get("docker.username"),
+    dockerUsername := sys.props.get("docker.username"),
     dockerRepository := Some("dounine"),
     dockerBaseImage := "openjdk:11.0.8-slim",
-    dockerExposedPorts := Seq(30000),
+    dockerExposedPorts := Seq(30000, 33333),
     dockerEnvVars := Map("apiVersion" -> "1.0.0"),
     dockerEntrypoint := Seq("/opt/docker/bin/douyinpay"),
     dockerPermissionStrategy := DockerPermissionStrategy.Run,
+    javaOptions in Universal += Seq(
+      "-Dcom.sun.management.jmxremote=true",
+      "-Djava.rmi.server.hostname=douyinpay",
+      "-Dcom.sun.management.jmxremote.port=33333",
+      "-Dcom.sun.management.jmxremote.rmi.port=33333",
+      "-Dcom.sun.management.jmxremote.ssl=false",
+      "-Dcom.sun.management.jmxremote.authenticate=false"
+    ).mkString(" "),
     dockerCommands ++= Seq(
       Cmd("USER", "root"),
       Cmd("RUN", "ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime"),
-      Cmd("RUN", "echo 'Asia/Shanghai' > /etc/timezone"),
+      Cmd("RUN", "echo 'Asia/Shanghai' > /etc/timezone")
     ),
     parallelExecution in Test := false,
     libraryDependencies ++= Seq(
