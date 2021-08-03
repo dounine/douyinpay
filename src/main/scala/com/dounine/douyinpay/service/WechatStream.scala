@@ -573,11 +573,15 @@ object WechatStream extends JsonParse with SuportRouter {
                       ) => {
                     val (token, expire) = jwtEncode(result._1.openid.get)
                     val enought =
-                      (if (accountInfo.isEmpty)
-                         (paySum.getOrElse(0) > limitMoney)
-                       else true)
-                    if (enought) {
-                      logger.info("{} -> {} 需要收费", result._1.openid.get, paySum.getOrElse(0))
+                      if (accountInfo.isEmpty)
+                        paySum.getOrElse(0) < limitMoney
+                      else true
+                    if (!enought) {
+                      logger.info(
+                        "{} -> {} 需要收费",
+                        result._1.openid.get,
+                        paySum.getOrElse(0)
+                      )
                     }
                     RouterModel.Data(
                       Some(
@@ -585,8 +589,8 @@ object WechatStream extends JsonParse with SuportRouter {
                           "open_id" -> result._1.openid.get,
                           "token" -> token,
                           "expire" -> expire,
-//                          "volumn" -> accountInfo,
-                          "enought" -> true
+                          "volumn" -> accountInfo,
+                          "enought" -> enought
                         )
                       )
                     )
@@ -611,10 +615,14 @@ object WechatStream extends JsonParse with SuportRouter {
                     val (token, expire) = jwtEncode(result._1.openid.get)
                     val enought =
                       (if (accountInfo.isEmpty)
-                        (paySum.getOrElse(0) > limitMoney)
-                      else true)
-                    if (enought) {
-                      logger.info("{} -> {} 需要收费", result._1.openid.get, paySum.getOrElse(0))
+                         paySum.getOrElse(0) < limitMoney
+                       else true)
+                    if (!enought) {
+                      logger.info(
+                        "{} -> {} 需要收费",
+                        result._1.openid.get,
+                        paySum.getOrElse(0)
+                      )
                     }
                     RouterModel.Data(
                       Some(
@@ -622,8 +630,8 @@ object WechatStream extends JsonParse with SuportRouter {
                           "open_id" -> result._1.openid.get,
                           "token" -> token,
                           "expire" -> expire,
-//                          "volumn" -> accountInfo,
-                          "enought" -> true
+                          "volumn" -> accountInfo,
+                          "enought" -> enought
                         )
                       )
                     )
