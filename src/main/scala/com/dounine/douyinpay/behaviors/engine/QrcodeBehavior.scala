@@ -36,7 +36,7 @@ import akka.stream.{
   UniqueKillSwitch
 }
 import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel}
-import com.dounine.douyinpay.service.{AccountStream, OrderService}
+import com.dounine.douyinpay.service.{AccountStream, OrderService, OrderStream}
 import com.dounine.douyinpay.tools.akka.chrome.{Chrome, ChromePools}
 import com.dounine.douyinpay.tools.json.{ActorSerializerSuport, JsonParse}
 import com.dounine.douyinpay.tools.util.{DingDing, ServiceSingleton}
@@ -83,7 +83,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
       screen: Option[String]
   ) extends Event
 
-  case class PaySuccess(request: CreateOrder) extends Event
+  case class PaySuccess(request: CreateOrder, todaySum: Int) extends Event
 
   case class PayFail(request: CreateOrder, msg: String, screen: Option[String])
       extends Event
@@ -129,7 +129,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
             title: String,
             order: OrderModel.DbInfo,
             msg: Option[String],
-            screen: Option[String]
+            screen: Option[String],
+            sum: Option[Int]
         ) => {
           val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
           val errorMsg = msg match {
@@ -139,6 +140,11 @@ object QrcodeBehavior extends ActorSerializerSuport {
           val errorScreen = screen match {
             case Some(screen) =>
               s"\n- 页面：![error](${config.getString("file.domain") + s"/${routerPrefix}/file/image?path=" + screen})"
+            case None => ""
+          }
+          val paySum = sum match {
+            case Some(sumMoney) =>
+              s"\n- 今日：${sumMoney}"
             case None => ""
           }
           DingDing.sendMessage(
@@ -152,7 +158,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                           | - id: ${order.id}
                           | - money: ${order.money}
                           | - payCount: ${order.payCount}
-                          | - payMoney: ${order.payMoney}${errorMsg}${errorScreen}
+                          | - payMoney: ${order.payMoney}${paySum}${errorMsg}${errorScreen}
                           | - duration: ${java.time.Duration
                   .between(order.createTime, LocalDateTime.now())
                   .getSeconds}s
@@ -169,7 +175,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
           )
         }
 
-        val coreFlow = createCoreFlow(context.system)
+        val coreFlow = createCoreFlow()(context.system)
         val notifyBeforeFlow = Flow[Event]
           .map {
             case r @ CreateOrder(order) => {
@@ -177,6 +183,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 DingDing.MessageType.order,
                 "定单创建",
                 order,
+                None,
                 None,
                 None
               )
@@ -198,6 +205,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   "创建成功",
                   order,
                   None,
+                  None,
                   None
                 )
                 request.replyTo.tell(r)
@@ -210,7 +218,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   "创建失败",
                   order,
                   Some(msg),
-                  screen
+                  screen,
+                  None
                 )
                 logger.error(
                   s"${order.orderId} create order fail -> {} {}",
@@ -225,7 +234,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   "充值失败",
                   order,
                   Some(msg),
-                  screen
+                  screen,
+                  None
                 )
                 logger.error(
                   s"${order.orderId} pay fail -> {} {}",
@@ -233,7 +243,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   r.request.order.toJson
                 )
                 Source.single(r)
-              case r @ PaySuccess(request) =>
+              case r @ PaySuccess(request, sum) =>
                 val order = request.order
                 val newRequest = PaySuccess(
                   CreateOrder(
@@ -241,14 +251,16 @@ object QrcodeBehavior extends ActorSerializerSuport {
                       payCount = order.payCount + 1,
                       payMoney = order.payMoney + order.money
                     )
-                  )(request.replyTo)
+                  )(request.replyTo),
+                  sum
                 )
                 sendNotifyMessage(
                   DingDing.MessageType.payed,
                   "充值成功",
                   newRequest.request.order,
                   None,
-                  None
+                  None,
+                  Some(sum + order.money)
                 )
                 logger.info(
                   s"${order.orderId} pay success -> {}",
@@ -276,7 +288,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
 
         val updateOrderFlow = Flow[Event]
           .mapAsync(chromeSize) {
-            case PaySuccess(request) =>
+            case PaySuccess(request, sm) =>
               orderService.updateAll(
                 request.order.copy(
                   pay = true,
@@ -327,7 +339,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
       }
     }
 
-  def createCoreFlow(
+  def createCoreFlow()(implicit
       system: ActorSystem[_]
   ): Flow[Event, Event, NotUsed] = {
     implicit val ec = system.executionContext
@@ -380,11 +392,12 @@ object QrcodeBehavior extends ActorSerializerSuport {
                         chrome,
                         order,
                         id
-                      ).map {
-                        case Left((error, screen)) =>
-                          PayFail(r, error.getMessage, screen)
-                        case Right(_) => PaySuccess(r)
-                      }
+                      ).zip(OrderStream.queryTodayPaySum())
+                        .map {
+                          case (Left((error, screen)), sum) =>
+                            PayFail(r, error.getMessage, screen)
+                          case (Right(_), sum) => PaySuccess(r, sum)
+                        }
                     )
               }
 

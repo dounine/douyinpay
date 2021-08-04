@@ -34,7 +34,7 @@ object AccountStream {
     import slickSession.profile.api._
     Flow[QrcodeBehavior.Event]
       .mapAsync(1) {
-        case e @ PaySuccess(request) =>
+        case e @ PaySuccess(request, sum) =>
           val openid = request.order.openid
           val volumn = request.order.volumn
           db.run(
