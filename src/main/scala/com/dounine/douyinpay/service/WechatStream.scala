@@ -562,7 +562,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   )
                 )
                 .via(AccountStream.addVolumnToAccount())
-                .zip(
+                .flatMapConcat(update => {
                   Source
                     .single(result._1.openid.get)
                     .via(AccountStream.queryVolumn())
@@ -571,7 +571,8 @@ object WechatStream extends JsonParse with SuportRouter {
                         .single(result._1.openid.get)
                         .via(OrderStream.queryPaySum())
                     )
-                )
+                    .map(update -> _)
+                })
                 .map {
                   case (
                         update: Boolean,
