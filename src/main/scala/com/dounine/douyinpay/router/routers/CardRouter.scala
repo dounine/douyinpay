@@ -16,6 +16,7 @@ import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.dounine.douyinpay.model.models.{
   AccountModel,
   BaseSerializer,
+  RouterModel,
   WechatModel
 }
 import com.dounine.douyinpay.service.{AccountStream, CardStream, WechatStream}
@@ -78,7 +79,13 @@ class CardRouter()(implicit system: ActorSystem[_])
                     .single(money)
                     .via(CardStream.createCard())
                     .map(cardId => {
-                      s"${domain}/${routerProfix}/wechat/card/active/${cardId}"
+                      RouterModel.Data(
+                        Option(
+                          Map(
+                            "card" -> cardId
+                          )
+                        )
+                      )
                     })
                 )
               }
