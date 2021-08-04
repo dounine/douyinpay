@@ -355,22 +355,13 @@ object QrcodeBehavior extends ActorSerializerSuport {
                   minBackoff = 1.seconds,
                   maxBackoff = 1.seconds,
                   randomFactor = 0.2
-                ).withMaxRestarts(1, 1.seconds)
+                ).withMaxRestarts(2, 2.seconds)
               )(() => {
-//                Source(iterable = 0 until ChromePools(system).poolSize())
-//                  .flatMapMerge(
-//                    10,
-//                    id =>
                 createQrcodeSource(
                   system,
                   order,
                   0
-//                      )
-                ).filter(_.isRight)
-                  .take(1)
-                  .orElse(
-                    Source.single(Left((new Exception("all fail"), None)))
-                  )
+                )
               })
               .flatMapConcat {
                 case Left((error, screen)) =>
