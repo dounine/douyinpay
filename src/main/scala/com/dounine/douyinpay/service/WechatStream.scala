@@ -181,7 +181,7 @@ object WechatStream extends JsonParse with SuportRouter {
                       "FromUserName" -> message.toUserName,
                       "CreateTime" -> System.currentTimeMillis() / 1000,
                       "MsgType" -> "text",
-                      "Content" -> "\uD83C\uDF89抖币充值链接\uD83C\uDF89\nhttps://recharge.kuaiyugo.com/api/v1/auth/auth_redirect?appid=wxc1a77335b1dd223a"
+                      "Content" -> "\uD83C\uDF89抖币充值链接\uD83C\uDF89\nhttp://dypay2.61week.com/redirect"
                     )
                   )
                 }
@@ -330,7 +330,15 @@ object WechatStream extends JsonParse with SuportRouter {
                 ),
                 system
               )
-              textResponse("success")
+              xmlResponse(
+                Map(
+                  "ToUserName" -> message.fromUserName,
+                  "FromUserName" -> message.toUserName,
+                  "CreateTime" -> System.currentTimeMillis() / 1000,
+                  "MsgType" -> "text",
+                  "Content" -> "\uD83C\uDF89欢迎使用抖音直充、点击左下角菜单抖币充值快速充值\uD83C\uDF89"
+                )
+              )
             case "unsubscribe" =>
               DingDing.sendMessage(
                 DingDing.MessageType.fans,
