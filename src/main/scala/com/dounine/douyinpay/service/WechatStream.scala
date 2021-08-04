@@ -505,6 +505,7 @@ object WechatStream extends JsonParse with SuportRouter {
     val secret = config.getString("wechat.secret")
     val domain = config.getString("file.domain")
     val limitMoney = config.getInt("limitMoney")
+    val admins = config.getStringList("admins")
     Flow[(Code, Option[String], Option[String])]
       .mapAsync(1)(tp2 => {
         val code = tp2._1
@@ -598,7 +599,8 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
                           "volumn" -> accountInfo,
-                          "enought" -> enought
+                          "enought" -> enought,
+                          "admin" -> admins.contains(result._1.openid.get)
                         )
                       )
                     )
@@ -639,7 +641,8 @@ object WechatStream extends JsonParse with SuportRouter {
                           "token" -> token,
                           "expire" -> expire,
                           "volumn" -> accountInfo,
-                          "enought" -> enought
+                          "enought" -> enought,
+                          "admin" -> admins.contains(result._1.openid.get)
                         )
                       )
                     )
