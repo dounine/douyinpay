@@ -10,11 +10,13 @@ import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior.PaySuccess
 import com.dounine.douyinpay.model.models.{AccountModel, CardModel}
 import com.dounine.douyinpay.store.{AccountTable, CardTable}
 import com.dounine.douyinpay.tools.akka.db.DataSource
+import com.dounine.douyinpay.tools.util.DingDing
 import org.slf4j.LoggerFactory
 import slick.jdbc.{JdbcBackend, StreamingInvokerAction}
 import slick.sql.{FixedSqlAction, SqlStreamingAction}
 
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
@@ -70,6 +72,7 @@ object AccountStream {
     import slickSession.profile.api._
     val cardTable = TableQuery[CardTable]
     val accountTable = TableQuery[AccountTable]
+    val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
     implicit val materializer = SystemMaterializer(system).materializer
 
     Flow[AccountModel.AddVolumnToAccount]
@@ -91,9 +94,30 @@ object AccountStream {
                   .filter(_.id === info.cardId)
                   .map(_.openid)
                   .update(Some(info.openid))
-            } yield result == 1 && update == 1).transactionally
+            } yield (result == 1 && update == 1, info)).transactionally
           }
       )
+      .map(tp2 => {
+        val info = tp2._2
+        DingDing.sendMessage(
+          DingDing.MessageType.active,
+          data = DingDing.MessageData(
+            markdown = DingDing.Markdown(
+              title = "激活成功",
+              text = s"""
+                        |## 激活成功
+                        | - openid: ${info.openid}
+                        | - card: ${info.cardId}
+                        | - notifyTime: ${LocalDateTime
+                .now()
+                .format(timeFormatter)}
+                        |""".stripMargin
+            )
+          ),
+          system
+        )
+        tp2._1
+      })
       .recover {
         case e =>
           logger.error("card 已经激活、或不存在")
