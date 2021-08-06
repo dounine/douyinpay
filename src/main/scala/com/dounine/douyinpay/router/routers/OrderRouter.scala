@@ -57,6 +57,7 @@ import com.dounine.douyinpay.model.types.service.{
 }
 import com.dounine.douyinpay.service.{
   OrderService,
+  OrderStream,
   UserService,
   UserStream,
   WechatStream
@@ -177,6 +178,16 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 }
               }
             }
+          } ~ path("pay" / "today" / "sum") {
+            complete(
+              OrderStream
+                .queryTodayPaySum()
+                .map(money => {
+                  RouterModel.Data(
+                    Some(money)
+                  )
+                })
+            )
           } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
             id =>
               {
