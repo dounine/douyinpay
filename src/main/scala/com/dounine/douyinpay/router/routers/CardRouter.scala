@@ -33,7 +33,6 @@ class CardRouter()(implicit system: ActorSystem[_])
     extends SuportRouter
     with ScalaXmlSupport {
 
-  case class Hello(name: String) extends BaseSerializer
   private final val logger: Logger =
     LoggerFactory.getLogger(classOf[CardRouter])
   implicit val materializer: Materializer = SystemMaterializer(
