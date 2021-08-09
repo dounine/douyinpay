@@ -57,6 +57,13 @@ class OrderTable(tag: Tag)
 
   def idx = index("jb-pay-history_orderId_uindex", (orderId), unique = true)
 
+  def queryPayDay =
+    index(
+      "douyinpay_pay_history_createTime_pay_index",
+      (createTime.toString(), pay),
+      unique = true
+    )
+
   def createTime: Rep[LocalDateTime] =
     column[LocalDateTime]("createTime", O.SqlType(timestampOnCreate))(
       localDateTime2timestamp
