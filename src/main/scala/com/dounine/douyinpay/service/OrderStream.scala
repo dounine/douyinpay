@@ -44,7 +44,7 @@ object OrderStream {
 
   def queryTodayPaySum()(implicit
       system: ActorSystem[_]
-  ): Source[Int, NotUsed] = {
+  ): Source[(Int, Int), NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
     implicit val slickSession: SlickSession =
@@ -53,20 +53,39 @@ object OrderStream {
     val orderTable = TableQuery[OrderTable]
     implicit val materializer = SystemMaterializer(system).materializer
 
-    Source.future(
-      db.run(
-        orderTable
-          .filter(i =>
-            i.pay === true && i.createTime >= LocalDate
-              .now()
-              .atStartOfDay()
-          )
-          .map(_.money)
-          .sum
-          .result
-          .map(_.getOrElse(0))
+    Source
+      .future(
+        db.run(
+          orderTable
+            .filter(i =>
+              i.pay === true && i.createTime >= LocalDate
+                .now()
+                .minusDays(1)
+                .atStartOfDay()
+                && i.createTime < LocalDate.now().atStartOfDay()
+            )
+            .map(_.money)
+            .sum
+            .result
+            .map(_.getOrElse(0))
+        )
       )
-    )
+      .zip(
+        Source.future(
+          db.run(
+            orderTable
+              .filter(i =>
+                i.pay === true && i.createTime >= LocalDate
+                  .now()
+                  .atStartOfDay()
+              )
+              .map(_.money)
+              .sum
+              .result
+              .map(_.getOrElse(0))
+          )
+        )
+      )
   }
 
 }
