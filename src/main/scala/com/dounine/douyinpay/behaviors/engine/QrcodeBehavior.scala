@@ -387,7 +387,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
                         .map {
                           case (Left((error, screen)), sum) =>
                             PayFail(r, error.getMessage, screen)
-                          case (Right(_), sum) => PaySuccess(r, sum)
+                          case (Right(_), sum) => PaySuccess(r, sum._2)
                         }
                     )
               }
