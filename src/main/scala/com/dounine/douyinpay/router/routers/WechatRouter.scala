@@ -87,7 +87,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                 )
             }
           },
-          path("redirect" / "from" / Segment) { ccode: String =>
+          path("into" / "from" / Segment) { ccode: String =>
             val params: String = Map(
               "appid" -> appid,
               "redirect_uri" -> URLEncoder.encode(
