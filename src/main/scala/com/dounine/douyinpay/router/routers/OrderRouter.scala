@@ -184,7 +184,12 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 .queryTodayPaySum()
                 .map(money => {
                   RouterModel.Data(
-                    Some(money)
+                    Some(
+                      Map(
+                        "昨天" -> money._1,
+                        "今天" -> money._2
+                      )
+                    )
                   )
                 })
             )
