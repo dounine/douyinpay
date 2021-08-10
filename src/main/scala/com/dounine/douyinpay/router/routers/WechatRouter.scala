@@ -205,18 +205,22 @@ class WechatRouter()(implicit system: ActorSystem[_])
           },
           post {
             path("auth") {
-              entity(as[NodeSeq]) { data =>
-                try {
-                  val message = WechatModel.WechatMessage.fromXml(data)
-                  logger.info(
-                    message.toJson.jsonTo[Map[String, Any]].mkString("\n")
-                  )
-                  val result = Source
-                    .single(message)
-                    .via(WechatStream.notifyMessage())
-                    .runWith(Sink.head)
-                  complete(result)
-                }
+              entity(as[NodeSeq]) {
+                data =>
+                  try {
+                    data.foreach(item => {
+                      logger.info(item.label + " -> " + item.text)
+                    })
+                    val message = WechatModel.WechatMessage.fromXml(data)
+//                    logger.info(
+//                      message.toJson.jsonTo[Map[String, Any]].mkString("\n")
+//                    )
+                    val result = Source
+                      .single(message)
+                      .via(WechatStream.notifyMessage())
+                      .runWith(Sink.head)
+                    complete(result)
+                  }
               }
             }
           },
