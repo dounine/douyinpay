@@ -20,7 +20,7 @@ object CardStream {
 
   def createCard()(implicit
       system: ActorSystem[_]
-  ): Flow[Int, String, NotUsed] = {
+  ): Flow[BigDecimal, String, NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
     implicit val slickSession: SlickSession =
@@ -32,7 +32,7 @@ object CardStream {
     val insertCard: CardModel.CardInfo => DBIO[Int] =
       (card: CardModel.CardInfo) => cardTable += card
 
-    Flow[Int]
+    Flow[BigDecimal]
       .map(money => (money, UUID.randomUUID().toString.replaceAll("-", "")))
       .via(
         Slick

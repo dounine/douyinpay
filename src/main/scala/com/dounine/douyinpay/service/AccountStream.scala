@@ -47,7 +47,7 @@ object AccountStream {
       }
   }
 
-  def queryVolumn()(implicit
+  def queryAccount()(implicit
       system: ActorSystem[_]
   ): Flow[String, Option[AccountModel.AccountInfo], NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
@@ -86,8 +86,7 @@ object AccountStream {
                   .result
                   .head
               result: Int <- {
-                val volumn: Int = card.money * 500
-                sqlu"""INSERT INTO douyinpay_account VALUE(${info.openid},${volumn}) ON DUPLICATE KEY UPDATE volumn=volumn+${volumn}"""
+                sqlu"""INSERT INTO douyinpay_account VALUE(${info.openid},${card.money}) ON DUPLICATE KEY UPDATE money=money+${card.money}"""
               }
               update: Int <-
                 cardTable

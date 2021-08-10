@@ -31,6 +31,8 @@ object DingDing extends JsonParse {
     val fans = Value("fans_notify")
     val message = Value("message_notify")
     val active = Value("active_notify")
+    val phonePaySuccess = Value("phone_pay_success")
+    val phonePayFail = Value("phone_pay_fail")
   }
   case class Markdown(
       title: String,

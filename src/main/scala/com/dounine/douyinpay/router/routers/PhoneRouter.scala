@@ -11,30 +11,26 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server._
 import akka.stream._
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.Source
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.dounine.douyinpay.model.models.{
-  AccountModel,
   BaseSerializer,
-  RouterModel,
-  WechatModel
+  PhoneModel,
+  RouterModel
 }
-import com.dounine.douyinpay.service.{AccountStream, CardStream, WechatStream}
-import org.apache.commons.codec.digest.DigestUtils
+import com.dounine.douyinpay.service.CardStream
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.net.URLEncoder
-import java.util.UUID
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, duration}
 import scala.concurrent.duration._
-import scala.xml.NodeSeq
 
-class CardRouter()(implicit system: ActorSystem[_])
+class PhoneRouter()(implicit system: ActorSystem[_])
     extends SuportRouter
     with ScalaXmlSupport {
 
   private final val logger: Logger =
-    LoggerFactory.getLogger(classOf[CardRouter])
+    LoggerFactory.getLogger(classOf[PhoneRouter])
   implicit val materializer: Materializer = SystemMaterializer(
     system
   ).materializer
@@ -68,46 +64,14 @@ class CardRouter()(implicit system: ActorSystem[_])
 
   val route: Route =
     cors() {
-      pathPrefix("card") {
+      pathPrefix("phone") {
         concat(
-          get {
-            path("add" / IntNumber) { money =>
-              {
-                complete(
-                  Source
-                    .single(BigDecimal(money))
-                    .via(CardStream.createCard())
-                    .map(cardId => {
-                      RouterModel.Data(
-                        Option(
-                          Map(
-                            "card" -> cardId
-                          )
-                        )
-                      )
-                    })
-                )
+          post {
+            path("notification") {
+              entity(as[PhoneModel.PhoneNotification]) { data =>
+                logger.info("come in {}", data)
+                ok(data)
               }
-            }
-          },
-          get {
-            path("card" / "active" / Segment) {
-              card =>
-                val params: String = Map(
-                  "appid" -> appid,
-                  "redirect_uri" -> URLEncoder.encode(
-                    domain + s"?card=${card}",
-                    "utf-8"
-                  ),
-                  "response_type" -> "code",
-                  "scope" -> "snsapi_base",
-                  "state" -> appid
-                ).map(i => s"${i._1}=${i._2}")
-                  .mkString("&")
-                redirect(
-                  s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-                  StatusCodes.PermanentRedirect
-                )
             }
           }
         )

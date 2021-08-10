@@ -6,7 +6,7 @@ object AccountModel {
 
   case class AccountInfo(
       openid: String,
-      volumn: Int
+      money: BigDecimal
   ) extends BaseSerializer
 
   case class AddVolumnToAccount(

@@ -21,7 +21,8 @@ class CardTable(tag: Tag)
 
   def id: Rep[String] = column[String]("id", O.PrimaryKey, O.Length(32))
 
-  def money: Rep[Int] = column[Int]("money", O.Length(32))
+  def money: Rep[BigDecimal] =
+    column[BigDecimal]("money", O.SqlType("decimal(10, 2)"))
 
   def openid: Rep[Option[String]] =
     column[Option[String]]("openid", O.Length(100))

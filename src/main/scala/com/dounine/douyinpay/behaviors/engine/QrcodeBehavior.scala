@@ -319,7 +319,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
               .via(notifyBeforeFlow)
               .via(coreFlow)
               .via(notifyAfterFlow)
-              .via(AccountStream.decreaseVolumn()(context.system))
+//              .via(AccountStream.decreaseVolumn()(context.system))
               .via(updateOrderFlow)
               .recover {
                 case e => {

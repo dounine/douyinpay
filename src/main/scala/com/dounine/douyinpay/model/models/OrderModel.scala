@@ -20,6 +20,7 @@ object OrderModel {
       id: String,
       money: Int,
       volumn: Int,
+      fee: BigDecimal,
       platform: PayPlatform,
       createTime: LocalDateTime,
       payCount: Int,

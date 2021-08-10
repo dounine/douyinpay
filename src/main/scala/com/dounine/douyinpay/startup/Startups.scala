@@ -7,26 +7,10 @@ import akka.cluster.sharding.typed.ShardingEnvelope
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
 import akka.persistence.typed.PersistenceId
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.InitToken
-import com.dounine.douyinpay.behaviors.engine.{
-  AccessTokenBehavior,
-  JSApiTicketBehavior,
-  QrcodeBehavior
-}
+import com.dounine.douyinpay.behaviors.engine.{AccessTokenBehavior, JSApiTicketBehavior, QrcodeBehavior}
 import com.dounine.douyinpay.model.models.UserModel
-import com.dounine.douyinpay.service.{
-  DictionaryService,
-  OrderService,
-  UserService
-}
-import com.dounine.douyinpay.store.{
-  AccountTable,
-  AkkaPersistenerJournalTable,
-  AkkaPersistenerSnapshotTable,
-  CardTable,
-  DictionaryTable,
-  OrderTable,
-  UserTable
-}
+import com.dounine.douyinpay.service.{DictionaryService, OrderService, UserService}
+import com.dounine.douyinpay.store.{AccountTable, AkkaPersistenerJournalTable, AkkaPersistenerSnapshotTable, CardTable, DictionaryTable, OpenidTable, OrderTable, UserTable}
 import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.util.{DingDing, ServiceSingleton}
@@ -105,6 +89,7 @@ class Startups(implicit system: ActorSystem[_]) {
       lifted.TableQuery[DictionaryTable].schema,
       lifted.TableQuery[CardTable].schema,
       lifted.TableQuery[AccountTable].schema,
+      lifted.TableQuery[OpenidTable].schema,
       lifted.TableQuery[AkkaPersistenerJournalTable].schema,
       lifted.TableQuery[AkkaPersistenerSnapshotTable].schema
     )
@@ -115,7 +100,9 @@ class Startups(implicit system: ActorSystem[_]) {
           Duration.Inf
         )
       } catch {
-        case e: Throwable =>
+        case e: Throwable => {
+          logger.error(e.getMessage)
+        }
       }
     })
     ServiceSingleton
@@ -157,7 +144,6 @@ class Startups(implicit system: ActorSystem[_]) {
           logger.info(s"insert user apikey result ${value}")
       }
 
-
   }
 
   def httpAfter(): Unit = {
@@ -174,16 +160,6 @@ class Startups(implicit system: ActorSystem[_]) {
       ),
       system
     )
-//    sharding
-//      .entityRefFor(
-//        CoreEngine.typeKey,
-//        CoreEngine.typeKey.name
-//      )
-//      .ask(
-//        CoreEngine.Message(
-//          OrderSources.QueryOrderInit()
-//        )
-//      )(3.seconds)
   }
 
 }

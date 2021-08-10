@@ -7,7 +7,7 @@ object CardModel {
 
   case class CardInfo(
       id: String,
-      money: Int,
+      money: BigDecimal,
       openid: Option[String],
       activeTime: LocalDateTime,
       createTime: LocalDateTime

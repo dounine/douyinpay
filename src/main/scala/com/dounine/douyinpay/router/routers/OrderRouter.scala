@@ -141,7 +141,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
     ("688.00", "6,880"),
     ("1,888.00", "18,880"),
     ("6,666.00", "66,660"),
-    ("8,888.00", "88,880"),
+    ("8,888.00", "88,880")
   )
 
   val http = Http(system)
@@ -273,6 +273,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                       .replaceAll(",", "")
                       .toDouble
                       .toInt * 10,
+                    fee = BigDecimal("0.00"),
                     platform = data.platform,
                     createTime = LocalDateTime.now(),
                     payCount = 0,
@@ -357,6 +358,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 .replaceAll(",", "")
                                 .toDouble
                                 .toInt * 10,
+                              fee = BigDecimal("0.00"),
                               platform = PayPlatform.douyin,
                               createTime = LocalDateTime.now(),
                               payCount = 0,

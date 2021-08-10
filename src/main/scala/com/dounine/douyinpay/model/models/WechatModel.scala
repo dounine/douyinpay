@@ -10,6 +10,13 @@ object WechatModel {
       exp: Option[Long] = None //expire time seconds
   ) extends BaseSerializer
 
+  case class LoginParamers(
+      code: String,
+      ccode: String,
+      token: Option[String],
+      ip: String
+  ) extends BaseSerializer
+
   case class AccessTokenBase(
       access_token: Option[String] = None,
       expires_in: Option[Int] = None,

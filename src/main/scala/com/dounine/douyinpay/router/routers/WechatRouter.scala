@@ -15,12 +15,16 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior
-import com.dounine.douyinpay.model.models.{BaseSerializer, WechatModel}
-import com.dounine.douyinpay.service.WechatStream
+import com.dounine.douyinpay.model.models.{
+  BaseSerializer,
+  OpenidModel,
+  WechatModel
+}
+import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.net.URLEncoder
+import java.net.{Inet4Address, InetAddress, URLEncoder}
 import java.util.UUID
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
@@ -128,18 +132,35 @@ class WechatRouter()(implicit system: ActorSystem[_])
 //            }
 //          },
           get {
-            path("web" / "user" / "login" / Segment) { code =>
-              parameters("card".optional) { card: Option[String] =>
-                optionalHeaderValueByName("token") { token: Option[String] =>
-                  {
-                    val result = Source
-                      .single((code, card, token))
-                      .via(WechatStream.webBaseUserInfo())
-                    complete(result)
-                  }
-
+            path("web" / "user" / "login" / Segment) {
+              code =>
+                parameters("ccode".optional) {
+                  (ccode: Option[String]) =>
+                    extractClientIP {
+                      ip =>
+                        optionalHeaderValueByName("token") {
+                          token: Option[String] =>
+                            {
+                              val result = Source
+                                .single(
+                                  WechatModel.LoginParamers(
+                                    code = code,
+                                    ccode = ccode.getOrElse(""),
+                                    token = token,
+                                    ip = ip
+                                      .getAddress()
+                                      .orElse(
+                                        InetAddress.getByName("localhost")
+                                      )
+                                      .getHostAddress
+                                  )
+                                )
+                                .via(WechatStream.webBaseUserInfo())
+                              complete(result)
+                            }
+                        }
+                    }
                 }
-              }
             }
           },
           get {

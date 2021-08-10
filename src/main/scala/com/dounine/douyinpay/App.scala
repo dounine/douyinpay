@@ -42,7 +42,8 @@ object App {
       new OrderRouter().route,
       new WechatRouter().route,
       new GraphqlRouter().route,
-      new CardRouter().route
+      new CardRouter().route,
+      new PhoneRouter().route
     )
 
     Http(system)

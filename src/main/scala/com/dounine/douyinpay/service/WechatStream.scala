@@ -19,8 +19,10 @@ import com.dounine.douyinpay.behaviors.engine.{
   AccessTokenBehavior,
   JSApiTicketBehavior
 }
+import com.dounine.douyinpay.model.models.WechatModel.LoginParamers
 import com.dounine.douyinpay.model.models.{
   AccountModel,
+  OpenidModel,
   PayUserInfoModel,
   RouterModel,
   WechatModel
@@ -489,12 +491,10 @@ object WechatStream extends JsonParse with SuportRouter {
 //      }
 //  }
 
-  type Code = String
-  type Openid = String
   def webBaseUserInfo()(implicit
       system: ActorSystem[_]
   ): Flow[
-    (Code, Option[String], Option[String]),
+    LoginParamers,
     RouterModel.JsonData,
     NotUsed
   ] = {
@@ -506,10 +506,10 @@ object WechatStream extends JsonParse with SuportRouter {
     val domain = config.getString("file.domain")
     val limitMoney = config.getInt("limitMoney")
     val admins = config.getStringList("admins")
-    Flow[(Code, Option[String], Option[String])]
-      .mapAsync(1)(tp2 => {
-        val code = tp2._1
-        val tokenValid = tp2._3 match {
+    Flow[LoginParamers]
+      .mapAsync(1)(paramers => {
+        val code = paramers.code
+        val tokenValid = paramers.token match {
           case Some(token) => jwtDecode(token)
           case None        => None
         }
@@ -520,7 +520,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 WechatModel.AccessTokenBase(
                   openid = Some(session.openid)
                 ),
-                tp2
+                paramers
               )
             )
           case None =>
@@ -528,16 +528,14 @@ object WechatStream extends JsonParse with SuportRouter {
               .get[WechatModel.AccessTokenBase](
                 s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
               )
-              .map(_ -> tp2)
+              .map(_ -> paramers)
         }
       })
       .flatMapConcat(result => {
         if (result._1.errmsg.isDefined) {
+          val paramers = result._2
           val domainEncode = URLEncoder.encode(
-            result._2._2 match {
-              case Some(card) => domain + "?card=" + card
-              case None       => domain
-            },
+            domain + s"?ccode=${paramers.ccode}",
             "utf-8"
           )
           Source.single(
@@ -552,106 +550,118 @@ object WechatStream extends JsonParse with SuportRouter {
             )
           )
         } else {
-          result._2._2 match {
-            case Some(card) =>
+//          result._2._2 match {
+//            case Some(card) =>
+//              Source
+//                .single(
+//                  AccountModel.AddVolumnToAccount(
+//                    openid = result._1.openid.get,
+//                    cardId = card
+//                  )
+//                )
+//                .via(AccountStream.addVolumnToAccount())
+//                .flatMapConcat(update => {
+//                  Source
+//                    .single(result._1.openid.get)
+//                    .via(AccountStream.queryVolumn())
+//                    .zip(
+//                      Source
+//                        .single(result._1.openid.get)
+//                        .via(OrderStream.queryPaySum())
+//                    )
+//                    .map(update -> _)
+//                })
+//                .map {
+//                  case (
+//                        update: Boolean,
+//                        (
+//                          accountInfo: Option[AccountModel.AccountInfo],
+//                          paySum: Option[Int]
+//                        )
+//                      ) => {
+//                    val (token, expire) = jwtEncode(result._1.openid.get)
+//                    val enought =
+//                      if (accountInfo.isEmpty)
+//                        paySum.getOrElse(0) < limitMoney
+//                      else true
+//                    if (!enought) {
+//                      logger.info(
+//                        "{} -> {} 需要收费",
+//                        result._1.openid.get,
+//                        paySum.getOrElse(0)
+//                      )
+//                    }
+//                    RouterModel.Data(
+//                      Some(
+//                        Map(
+//                          "open_id" -> result._1.openid.get,
+//                          "token" -> token,
+//                          "expire" -> expire,
+////                          "volumn" -> accountInfo,
+//                          "enought" -> true, // enought,
+//                          "admin" -> admins.contains(result._1.openid.get)
+//                        )
+//                      )
+//                    )
+//                  }
+//                }
+//
+//            case None => {
+          val paramers = result._2
+          val openid = result._1.openid.get
+          Source
+            .single(openid)
+            .via(AccountStream.queryAccount())
+            .zip(
               Source
-                .single(
-                  AccountModel.AddVolumnToAccount(
-                    openid = result._1.openid.get,
-                    cardId = card
+                .single(openid)
+                .via(OrderStream.queryPaySum())
+                .zipWith(
+                  Source
+                    .single(
+                      OpenidModel.OpenidInfo(
+                        openid = openid,
+                        ccode = paramers.ccode,
+                        ip = paramers.ip,
+                        createTime = LocalDateTime.now()
+                      )
+                    )
+                    .via(OpenidStream.autoCreateOpenidInfo())
+                ) { (sum, _) => sum }
+            )
+            .map {
+              case (
+                    accountInfo: Option[AccountModel.AccountInfo],
+                    paySum: Option[Int]
+                  ) => {
+                val (token, expire) = jwtEncode(openid)
+                val enought =
+                  (if (accountInfo.isEmpty)
+                     paySum.getOrElse(0) < limitMoney
+                   else true)
+                if (!enought) {
+                  logger.info(
+                    "{} -> {} 需要收费",
+                    openid,
+                    paySum.getOrElse(0)
+                  )
+                }
+                RouterModel.Data(
+                  Some(
+                    Map(
+                      "open_id" -> openid,
+                      "token" -> token,
+                      "expire" -> expire,
+//                          "volumn" -> accountInfo,
+                      "enought" -> true, //enought,
+                      "admin" -> admins.contains(openid)
+                    )
                   )
                 )
-                .via(AccountStream.addVolumnToAccount())
-                .flatMapConcat(update => {
-                  Source
-                    .single(result._1.openid.get)
-                    .via(AccountStream.queryVolumn())
-                    .zip(
-                      Source
-                        .single(result._1.openid.get)
-                        .via(OrderStream.queryPaySum())
-                    )
-                    .map(update -> _)
-                })
-                .map {
-                  case (
-                        update: Boolean,
-                        (
-                          accountInfo: Option[AccountModel.AccountInfo],
-                          paySum: Option[Int]
-                        )
-                      ) => {
-                    val (token, expire) = jwtEncode(result._1.openid.get)
-                    val enought =
-                      if (accountInfo.isEmpty)
-                        paySum.getOrElse(0) < limitMoney
-                      else true
-                    if (!enought) {
-                      logger.info(
-                        "{} -> {} 需要收费",
-                        result._1.openid.get,
-                        paySum.getOrElse(0)
-                      )
-                    }
-                    RouterModel.Data(
-                      Some(
-                        Map(
-                          "open_id" -> result._1.openid.get,
-                          "token" -> token,
-                          "expire" -> expire,
-//                          "volumn" -> accountInfo,
-                          "enought" -> true, // enought,
-                          "admin" -> admins.contains(result._1.openid.get)
-                        )
-                      )
-                    )
-                  }
-                }
-
-            case None => {
-              val (token, expire) = jwtEncode(result._1.openid.get)
-              Source
-                .single(result._1.openid.get)
-                .via(AccountStream.queryVolumn())
-                .zip(
-                  Source
-                    .single(result._1.openid.get)
-                    .via(OrderStream.queryPaySum())
-                )
-                .map {
-                  case (
-                        accountInfo: Option[AccountModel.AccountInfo],
-                        paySum: Option[Int]
-                      ) => {
-                    val (token, expire) = jwtEncode(result._1.openid.get)
-                    val enought =
-                      (if (accountInfo.isEmpty)
-                         paySum.getOrElse(0) < limitMoney
-                       else true)
-                    if (!enought) {
-                      logger.info(
-                        "{} -> {} 需要收费",
-                        result._1.openid.get,
-                        paySum.getOrElse(0)
-                      )
-                    }
-                    RouterModel.Data(
-                      Some(
-                        Map(
-                          "open_id" -> result._1.openid.get,
-                          "token" -> token,
-                          "expire" -> expire,
-//                          "volumn" -> accountInfo,
-                          "enought" -> true, //enought,
-                          "admin" -> admins.contains(result._1.openid.get)
-                        )
-                      )
-                    )
-                  }
-                }
-
+              }
             }
-          }
+//            }
+//          }
         }
       })
   }

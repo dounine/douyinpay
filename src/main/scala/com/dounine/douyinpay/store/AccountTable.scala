@@ -14,11 +14,12 @@ class AccountTable(tag: Tag)
   override def * : ProvenShape[AccountModel.AccountInfo] =
     (
       openid,
-      volumn
+      money
     ).mapTo[AccountModel.AccountInfo]
 
   def openid: Rep[String] = column[String]("openid", O.PrimaryKey, O.Length(32))
 
-  def volumn: Rep[Int] = column[Int]("volumn", O.Length(32))
+  def money: Rep[BigDecimal] =
+    column[BigDecimal]("money", O.SqlType("decimal(10, 2)"))
 
 }

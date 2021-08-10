@@ -11,7 +11,7 @@ import slick.lifted.{PrimaryKey, ProvenShape}
 import java.time.LocalDateTime
 
 class OrderTable(tag: Tag)
-    extends Table[OrderModel.DbInfo](tag, _tableName = "douyinpay_pay_history")
+    extends Table[OrderModel.DbInfo](tag, _tableName = "douyinpay_order")
     with EnumMappers {
 
   override def * : ProvenShape[OrderModel.DbInfo] =
@@ -24,6 +24,7 @@ class OrderTable(tag: Tag)
       id,
       money,
       volumn,
+      fee,
       platform,
       createTime,
       payCount,
@@ -44,6 +45,9 @@ class OrderTable(tag: Tag)
 
   def volumn: Rep[Int] = column[Int]("volumn", O.Length(11))
 
+  def fee: Rep[BigDecimal] =
+    column[BigDecimal]("fee", O.SqlType("decimal(10, 2)"))
+
   def payCount: Rep[Int] = column[Int]("payCount", O.Length(11))
 
   def payMoney: Rep[Int] = column[Int]("payMoney", O.Length(11))
@@ -55,7 +59,13 @@ class OrderTable(tag: Tag)
 
   def expire: Rep[Boolean] = column[Boolean]("expire", O.Length(1))
 
-  def idx = index("jb-pay-history_orderId_uindex", (orderId), unique = true)
+  def idx = index("douyinpay_order_orderId_uindex", orderId, unique = true)
+
+  def queryPayDay =
+    index(
+      "douyinpay_order_createTime_pay_index",
+      (createTime, pay)
+    )
 
   def createTime: Rep[LocalDateTime] =
     column[LocalDateTime]("createTime", O.SqlType(timestampOnCreate))(
