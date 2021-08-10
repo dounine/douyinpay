@@ -85,26 +85,26 @@ class WechatRouter()(implicit system: ActorSystem[_])
                   s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
                   StatusCodes.PermanentRedirect
                 )
-            } ~ path("redirect" / "from" / Segment) {
-              ccode: String =>
-                val params: String = Map(
-                  "appid" -> appid,
-                  "redirect_uri" -> URLEncoder.encode(
-                    domain + "?ccode=" + ccode,
-                    "utf-8"
-                  ),
-                  "response_type" -> "code",
-                  "scope" -> "snsapi_base",
-                  "state" -> appid
-                ).map(i => s"${i._1}=${i._2}")
-                  .mkString("&")
-                redirect(
-                  s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-                  StatusCodes.PermanentRedirect
-                )
             }
           },
-//          get {
+          path("redirect" / "from" / Segment) { ccode: String =>
+            val params: String = Map(
+              "appid" -> appid,
+              "redirect_uri" -> URLEncoder.encode(
+                domain + "?ccode=" + ccode,
+                "utf-8"
+              ),
+              "response_type" -> "code",
+              "scope" -> "snsapi_base",
+              "state" -> appid
+            ).map(i => s"${i._1}=${i._2}")
+              .mkString("&")
+            redirect(
+              s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+              StatusCodes.PermanentRedirect
+            )
+          },
+          //          get {
 //            path("card" / "active" / Segment) {
 //              card =>
 //                val params: String = Map(
