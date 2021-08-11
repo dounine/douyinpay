@@ -208,13 +208,10 @@ class WechatRouter()(implicit system: ActorSystem[_])
               entity(as[NodeSeq]) {
                 data =>
                   try {
-                    data.foreach(item => {
-                      logger.info(item.label + " -> " + item.text)
-                    })
                     val message = WechatModel.WechatMessage.fromXml(data)
-//                    logger.info(
-//                      message.toJson.jsonTo[Map[String, Any]].mkString("\n")
-//                    )
+                    logger.info(
+                      message.toJson.jsonTo[Map[String, Any]].mkString("\n")
+                    )
                     val result = Source
                       .single(message)
                       .via(WechatStream.notifyMessage())
