@@ -146,6 +146,7 @@ object WechatStream extends JsonParse with SuportRouter {
   ): Flow[WechatModel.WechatMessage, HttpResponse, NotUsed] = {
     implicit val materializer = SystemMaterializer(system).materializer
     implicit val ec = system.executionContext
+    val domain = system.settings.config.getString("app.file.domain")
     val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
 
     Flow[WechatModel.WechatMessage]
@@ -183,7 +184,7 @@ object WechatStream extends JsonParse with SuportRouter {
                       "FromUserName" -> message.toUserName,
                       "CreateTime" -> System.currentTimeMillis() / 1000,
                       "MsgType" -> "text",
-                      "Content" -> "\uD83C\uDF89抖币充值链接\uD83C\uDF89\nhttp://dypay2.61week.com/redirect"
+                      "Content" -> s"\uD83C\uDF89抖币充值链接\uD83C\uDF89\n${domain}/redirect"
                     )
                   )
                 }
