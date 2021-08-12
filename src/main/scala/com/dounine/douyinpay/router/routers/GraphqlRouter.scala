@@ -4,6 +4,7 @@ import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives.cors
 import io.circe.Json
 import org.slf4j.LoggerFactory
 import sangria.execution.{
@@ -31,48 +32,51 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
   implicit val ec = system.executionContext
 
   val route: Route =
-    optionalHeaderValueByName("X-Apollo-Tracing") { tracing =>
-      path("graphql") {
-        graphQLPlayground ~
-          parameterMap { parameters: Map[String, String] =>
-            extractRequest { request =>
-              prepareGraphQLRequest {
-                case Success(req) =>
-                  val slowLog = SlowLog(logger, threshold = 1.seconds)
-                  val middleware = tracing match {
-                    case Some(value) => slowLog :: SlowLog.extension :: Nil
-                    case None        => Nil
-                  }
-                  val graphQLResponse = Executor
-                    .execute(
-                      schema = SchemaDef.UserSchema,
-                      queryAst = req.query,
-                      userContext = system,
-                      root = SchemaDef.RequestInfo(
-                        url = request.uri.toString(),
-                        parameters = parameters,
-                        headers =
-                          request.headers.map(h => h.name() -> h.value()).toMap
-                      ),
-                      variables = req.variables,
-                      operationName = req.operationName,
-                      middleware = middleware
-                    )
-                    .map(OK -> (_: Json))
-                    .recover {
-                      case error: QueryAnalysisError =>
-                        error.printStackTrace()
-                        BadRequest -> error.resolveError
-                      case error: ErrorWithResolver =>
-                        error.printStackTrace()
-                        InternalServerError -> error.resolveError
+    cors() {
+      optionalHeaderValueByName("X-Apollo-Tracing") { tracing =>
+        path("graphql") {
+          graphQLPlayground ~
+            parameterMap { parameters: Map[String, String] =>
+              extractRequest { request =>
+                prepareGraphQLRequest {
+                  case Success(req) =>
+                    val slowLog = SlowLog(logger, threshold = 1.seconds)
+                    val middleware = tracing match {
+                      case Some(value) => slowLog :: SlowLog.extension :: Nil
+                      case None        => Nil
                     }
-                  complete(graphQLResponse)
-                case Failure(preparationError) =>
-                  complete(BadRequest, formatError(preparationError))
+                    val graphQLResponse = Executor
+                      .execute(
+                        schema = SchemaDef.UserSchema,
+                        queryAst = req.query,
+                        userContext = system,
+                        root = SchemaDef.RequestInfo(
+                          url = request.uri.toString(),
+                          parameters = parameters,
+                          headers = request.headers
+                            .map(h => h.name() -> h.value())
+                            .toMap
+                        ),
+                        variables = req.variables,
+                        operationName = req.operationName,
+                        middleware = middleware
+                      )
+                      .map(OK -> (_: Json))
+                      .recover {
+                        case error: QueryAnalysisError =>
+                          error.printStackTrace()
+                          BadRequest -> error.resolveError
+                        case error: ErrorWithResolver =>
+                          error.printStackTrace()
+                          InternalServerError -> error.resolveError
+                      }
+                    complete(graphQLResponse)
+                  case Failure(preparationError) =>
+                    complete(BadRequest, formatError(preparationError))
+                }
               }
             }
-          }
+        }
       }
     }
 }
