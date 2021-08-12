@@ -79,6 +79,7 @@ object WechatSchema {
               ip = Seq("X-Forwarded-For", "X-Real-Ip", "Remote-Address")
                 .map(c.value.headers.get)
                 .find(_.isDefined)
+                .map(_.map(i => i.split(",").head))
                 .getOrElse("unknown")
                 .toString
             )
