@@ -550,63 +550,6 @@ object WechatStream extends JsonParse with SuportRouter {
             )
           )
         } else {
-//          result._2._2 match {
-//            case Some(card) =>
-//              Source
-//                .single(
-//                  AccountModel.AddVolumnToAccount(
-//                    openid = result._1.openid.get,
-//                    cardId = card
-//                  )
-//                )
-//                .via(AccountStream.addVolumnToAccount())
-//                .flatMapConcat(update => {
-//                  Source
-//                    .single(result._1.openid.get)
-//                    .via(AccountStream.queryVolumn())
-//                    .zip(
-//                      Source
-//                        .single(result._1.openid.get)
-//                        .via(OrderStream.queryPaySum())
-//                    )
-//                    .map(update -> _)
-//                })
-//                .map {
-//                  case (
-//                        update: Boolean,
-//                        (
-//                          accountInfo: Option[AccountModel.AccountInfo],
-//                          paySum: Option[Int]
-//                        )
-//                      ) => {
-//                    val (token, expire) = jwtEncode(result._1.openid.get)
-//                    val enought =
-//                      if (accountInfo.isEmpty)
-//                        paySum.getOrElse(0) < limitMoney
-//                      else true
-//                    if (!enought) {
-//                      logger.info(
-//                        "{} -> {} 需要收费",
-//                        result._1.openid.get,
-//                        paySum.getOrElse(0)
-//                      )
-//                    }
-//                    RouterModel.Data(
-//                      Some(
-//                        Map(
-//                          "open_id" -> result._1.openid.get,
-//                          "token" -> token,
-//                          "expire" -> expire,
-////                          "volumn" -> accountInfo,
-//                          "enought" -> true, // enought,
-//                          "admin" -> admins.contains(result._1.openid.get)
-//                        )
-//                      )
-//                    )
-//                  }
-//                }
-//
-//            case None => {
           val paramers = result._2
           val openid = result._1.openid.get
           Source
@@ -660,9 +603,116 @@ object WechatStream extends JsonParse with SuportRouter {
                 )
               }
             }
-//            }
-//          }
         }
       })
   }
+
+  def webBaseUserInfo2()(implicit
+      system: ActorSystem[_]
+  ): Flow[
+    LoginParamers,
+    WechatModel.WechatLoginResponse,
+    NotUsed
+  ] = {
+    implicit val ec = system.executionContext
+    implicit val materializer = SystemMaterializer(system).materializer
+    val config = system.settings.config.getConfig("app")
+    val appid = config.getString("wechat.appid")
+    val secret = config.getString("wechat.secret")
+    val domain = config.getString("file.domain")
+    val limitMoney = config.getInt("limitMoney")
+    val admins = config.getStringList("admins")
+    Flow[LoginParamers]
+      .mapAsync(1)(paramers => {
+        val code = paramers.code
+        val tokenValid = paramers.token match {
+          case Some(token) => jwtDecode(token)
+          case None        => None
+        }
+        tokenValid match {
+          case Some(session) =>
+            Future.successful(
+              (
+                WechatModel.AccessTokenBase(
+                  openid = Some(session.openid)
+                ),
+                paramers
+              )
+            )
+          case None =>
+            Request
+              .get[WechatModel.AccessTokenBase](
+                s"https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appid}&secret=${secret}&code=${code}&grant_type=authorization_code"
+              )
+              .map(_ -> paramers)
+        }
+      })
+      .flatMapConcat(result => {
+        if (result._1.errmsg.isDefined) {
+          val paramers = result._2
+          val domainEncode = URLEncoder.encode(
+            domain + s"?ccode=${paramers.ccode}",
+            "utf-8"
+          )
+          Source.single(
+            WechatModel.WechatLoginResponse(
+              redirect = Some(
+                s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domainEncode}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
+              )
+            )
+          )
+        } else {
+          val paramers = result._2
+          val openid = result._1.openid.get
+          Source
+            .single(openid)
+            .via(AccountStream.queryAccount())
+            .zip(
+              Source
+                .single(openid)
+                .via(OrderStream.queryPaySum())
+                .zipWith(
+                  Source
+                    .single(
+                      OpenidModel.OpenidInfo(
+                        openid = openid,
+                        ccode = paramers.ccode,
+                        ip = paramers.ip,
+                        createTime = LocalDateTime.now()
+                      )
+                    )
+                    .via(OpenidStream.autoCreateOpenidInfo())
+                ) { (sum, _) => sum }
+            )
+            .map {
+              case (
+                    accountInfo: Option[AccountModel.AccountInfo],
+                    paySum: Option[Int]
+                  ) => {
+                val (token, expire) = jwtEncode(openid)
+                val enought =
+                  (if (accountInfo.isEmpty)
+                     paySum.getOrElse(0) < limitMoney
+                   else true)
+                if (!enought) {
+                  logger.info(
+                    "{} -> {} 需要收费",
+                    openid,
+                    paySum.getOrElse(0)
+                  )
+                }
+                WechatModel.WechatLoginResponse(
+                  open_id = Some(openid),
+                  token = Some(token),
+                  expire = Some(expire),
+                  //                          "volumn" -> accountInfo,
+                  enought = Some(true), //enought,
+                  admin = Some(admins.contains(openid))
+                )
+              }
+            }
+        }
+      })
+  }
+
 }

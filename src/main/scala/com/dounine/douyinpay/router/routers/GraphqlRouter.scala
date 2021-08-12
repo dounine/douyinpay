@@ -1,56 +1,77 @@
 package com.dounine.douyinpay.router.routers
 
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.Behaviors
-import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
-import com.dounine.douyinpay.service.UserService
-import com.dounine.douyinpay.tools.util.ServiceSingleton
-import sangria.execution.deferred.DeferredResolver
-import sangria.execution.{ErrorWithResolver, Executor, QueryAnalysisError}
+import io.circe.Json
+import org.slf4j.LoggerFactory
+import sangria.execution.{
+  ErrorWithResolver,
+  ExceptionHandler,
+  ExecutionError,
+  Executor,
+  QueryAnalysisError,
+  ResultResolver
+}
 import sangria.marshalling.circe._
 import sangria.slowlog.SlowLog
 
+import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-
-// This is the trait that makes `graphQLPlayground and prepareGraphQLRequest` available
 import sangria.http.akka.circe.CirceHttpSupport
+import sangria.marshalling.ResultMarshaller
 
+case class GraphException(message: String, eh: Executor.ExceptionHandler)
+    extends ExecutionError(message, eh)
+    with QueryAnalysisError
 class GraphqlRouter()(implicit system: ActorSystem[_])
     extends CirceHttpSupport {
+  private val logger = LoggerFactory.getLogger(classOf[GraphqlRouter])
   implicit val ec = system.executionContext
 
   val route: Route =
     optionalHeaderValueByName("X-Apollo-Tracing") { tracing =>
       path("graphql") {
         graphQLPlayground ~
-          prepareGraphQLRequest {
-            case Success(req) =>
-              val middleware =
-                if (tracing.isDefined) SlowLog.apolloTracing :: Nil else Nil
-//              val deferredResolver = DeferredResolver.fetchers(SchemaDefinition.characters)
-              val graphQLResponse = Executor
-                .execute(
-                  schema = SchemaDef.UserSchema,
-                  queryAst = req.query,
-                  userContext = ServiceSingleton.get(classOf[UserService]),
-                  variables = req.variables,
-                  operationName = req.operationName,
-                  middleware = middleware
-                  //                deferredResolver = deferredResolver
-                )
-                .map(OK -> _)
-                .recover {
-                  case error: QueryAnalysisError =>
-                    BadRequest -> error.resolveError
-                  case error: ErrorWithResolver =>
-                    InternalServerError -> error.resolveError
-                }
-              complete(graphQLResponse)
-            case Failure(preparationError) =>
-              complete(BadRequest, formatError(preparationError))
+          parameterMap { parameters: Map[String, String] =>
+            extractRequest { request =>
+              prepareGraphQLRequest {
+                case Success(req) =>
+                  val slowLog = SlowLog(logger, threshold = 1.seconds)
+                  val middleware = tracing match {
+                    case Some(value) => slowLog :: SlowLog.extension :: Nil
+                    case None        => Nil
+                  }
+                  val graphQLResponse = Executor
+                    .execute(
+                      schema = SchemaDef.UserSchema,
+                      queryAst = req.query,
+                      userContext = system,
+                      root = SchemaDef.RequestInfo(
+                        url = request.uri.toString(),
+                        parameters = parameters,
+                        headers =
+                          request.headers.map(h => h.name() -> h.value()).toMap
+                      ),
+                      variables = req.variables,
+                      operationName = req.operationName,
+                      middleware = middleware
+                    )
+                    .map(OK -> (_: Json))
+                    .recover {
+                      case error: QueryAnalysisError =>
+                        error.printStackTrace()
+                        BadRequest -> error.resolveError
+                      case error: ErrorWithResolver =>
+                        error.printStackTrace()
+                        InternalServerError -> error.resolveError
+                    }
+                  complete(graphQLResponse)
+                case Failure(preparationError) =>
+                  complete(BadRequest, formatError(preparationError))
+              }
+            }
           }
       }
     }

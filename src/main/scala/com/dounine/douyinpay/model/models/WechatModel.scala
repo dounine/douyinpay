@@ -17,6 +17,15 @@ object WechatModel {
       ip: String
   ) extends BaseSerializer
 
+  case class WechatLoginResponse(
+      redirect: Option[String] = None,
+      open_id: Option[String] = None,
+      token: Option[String] = None,
+      expire: Option[Long] = None,
+      enought: Option[Boolean] = None,
+      admin: Option[Boolean] = None
+  ) extends BaseSerializer
+
   case class AccessTokenBase(
       access_token: Option[String] = None,
       expires_in: Option[Int] = None,

@@ -1,12 +1,18 @@
 package com.dounine.douyinpay.router.routers
 
+import akka.actor.typed.ActorSystem
+import akka.stream.SystemMaterializer
+import akka.stream.scaladsl.Sink
 import com.dounine.douyinpay.model.models.UserModel
 import com.dounine.douyinpay.service.UserService
+import sangria.execution.deferred.Fetcher
 import sangria.schema._
 import sangria.macros.derive._
 
 import java.time.LocalDateTime
+import sangria.streaming.ValidOutStreamType
 
+import scala.concurrent.Future
 object SchemaDef {
 
   implicit val UserTable = ObjectType(
@@ -52,42 +58,36 @@ object SchemaDef {
     )
   )
 
-//  implicit val UserType: ObjectType[Unit, UserModel.DbInfo] =
-//    deriveObjectType[Unit, UserModel.DbInfo](
-//      Interfaces(Userable),
-//      IncludeFields("apiKey", "密钥"),
-//      IncludeFields("balance", "余额"),
-//      IncludeFields("margin", "冻结金额")
-//    )
+  case class RequestInfo(
+      url: String,
+      headers: Map[String, String] = Map.empty,
+      parameters: Map[String, String] = Map.empty
+  )
 
-  val QueryType = ObjectType(
-    name = "UserQuery",
+  val query = ObjectType(
+    name = "Query",
     description = "用户信息",
-    fields = fields[UserService, Unit](
+    fields = fields[ActorSystem[_], RequestInfo](
       Field(
         name = "info",
-        fieldType = OptionType(UserTable),
+        fieldType = OptionType(StringType),
         description = Some("单个用户信息查询"),
-        arguments = Argument(
-          name = "apiKey",
-          argumentType = StringType,
-          description = "密钥"
-        ) :: Nil,
         resolve = c =>
-          Option(
-            UserModel.DbInfo(
-              apiKey = "abc",
-              apiSecret = "abc",
-              balance = BigDecimal("0.00"),
-              margin = BigDecimal("0.00"),
-              callback = Option.empty,
-              createTime = LocalDateTime.now()
-            )
-          ) //c.ctx.info(c.args.arg[String]("apiKey"))
+          GraphStream
+            .sourceSingle()(c.ctx)
+            .runWith(Sink.head)(SystemMaterializer(c.ctx).materializer)
       )
     )
   )
 
-  val UserSchema = Schema(QueryType)
+  val mutation = ObjectType(
+    name = "Mutation",
+    description = "修改",
+    fields = fields[ActorSystem[_], RequestInfo](
+      WechatSchema.mutation: _*
+    )
+  )
+
+  val UserSchema = Schema(query = query, mutation = Some(mutation))
 
 }
