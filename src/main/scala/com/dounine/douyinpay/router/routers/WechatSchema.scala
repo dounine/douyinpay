@@ -13,7 +13,7 @@ import java.net.InetAddress
 object WechatSchema {
 
   val WechatLoginResponse = ObjectType(
-    name = "LoginResponse",
+    name = "Response",
     description = "登录响应",
     fields = fields[Unit, WechatModel.WechatLoginResponse](
       Field(
