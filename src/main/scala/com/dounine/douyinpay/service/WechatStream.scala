@@ -184,7 +184,7 @@ object WechatStream extends JsonParse with SuportRouter {
                       "FromUserName" -> message.toUserName,
                       "CreateTime" -> System.currentTimeMillis() / 1000,
                       "MsgType" -> "text",
-                      "Content" -> s"\uD83C\uDF89抖币充值链接\uD83C\uDF89\n${domain}/redirect"
+                      "Content" -> s"\uD83C\uDF89点击左下角菜单抖币充值\uD83C\uDF89\n"
                     )
                   )
                 }
