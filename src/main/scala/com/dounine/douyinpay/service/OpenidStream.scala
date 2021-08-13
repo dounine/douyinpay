@@ -36,6 +36,8 @@ object OpenidStream {
         if (tp2._2.isEmpty) {
           db.run(openidTable += tp2._1)
             .map(_ == 1)
+        } else if (tp2._2.get.locked) {
+          throw new Exception("locked error")
         } else {
           Future.successful(false)
         }

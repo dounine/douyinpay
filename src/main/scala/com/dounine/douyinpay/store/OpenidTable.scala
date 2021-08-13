@@ -15,6 +15,7 @@ class OpenidTable(tag: Tag)
       openid,
       ccode,
       ip,
+      locked,
       createTime
     ).mapTo[OpenidModel.OpenidInfo]
 
@@ -26,6 +27,9 @@ class OpenidTable(tag: Tag)
 
   def ip: Rep[String] =
     column[String]("ip", O.Length(15))
+
+  def locked: Rep[Boolean] =
+    column[Boolean]("locked", O.Length(1))
 
   def createTime: Rep[LocalDateTime] =
     column[LocalDateTime](

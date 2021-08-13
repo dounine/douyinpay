@@ -8,6 +8,7 @@ object OpenidModel {
       openid: String,
       ccode: String,
       ip: String,
+      locked: Boolean,
       createTime: LocalDateTime
   ) extends BaseSerializer
 

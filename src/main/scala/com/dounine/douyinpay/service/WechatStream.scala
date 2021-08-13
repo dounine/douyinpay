@@ -567,6 +567,7 @@ object WechatStream extends JsonParse with SuportRouter {
                         openid = openid,
                         ccode = paramers.ccode,
                         ip = paramers.ip,
+                        locked = false,
                         createTime = LocalDateTime.now()
                       )
                     )
@@ -679,6 +680,7 @@ object WechatStream extends JsonParse with SuportRouter {
                         openid = openid,
                         ccode = paramers.ccode,
                         ip = paramers.ip,
+                        locked = false,
                         createTime = LocalDateTime.now()
                       )
                     )
