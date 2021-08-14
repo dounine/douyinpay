@@ -84,7 +84,7 @@ object WechatSchema extends JsonParse {
                 .map(c.value.headers.get)
                 .find(_.isDefined)
                 .flatMap(_.map(i => i.split(",").head))
-                .getOrElse("unknown")
+                .getOrElse("localhost")
             )
           )
           .map(i => {
