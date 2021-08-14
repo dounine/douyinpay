@@ -23,6 +23,7 @@ import com.dounine.douyinpay.model.models.WechatModel.LoginParamers
 import com.dounine.douyinpay.model.models.{
   AccountModel,
   OpenidModel,
+  OrderModel,
   PayUserInfoModel,
   RouterModel,
   WechatModel
@@ -61,6 +62,29 @@ object WechatStream extends JsonParse with SuportRouter {
             s"https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN"
           )
       }
+
+  def userInfoQuery2()(implicit
+      system: ActorSystem[_]
+  ): Flow[
+    (OrderModel.Recharge2, String),
+    (OrderModel.Recharge2, WechatModel.WechatUserInfo),
+    NotUsed
+  ] = {
+    implicit val ec = system.executionContext
+    Flow[(OrderModel.Recharge2, String)]
+      .flatMapConcat { tp2 =>
+        accessToken().map((tp2, _))
+      }
+      .mapAsync(1) { tp2 =>
+        val openid: String = tp2._1._2
+        val token: Token = tp2._2
+        Request
+          .get[WechatModel.WechatUserInfo](
+            s"https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN"
+          )
+          .map(tp2._1._1 -> _)
+      }
+  }
 
   def accessToken()(implicit
       system: ActorSystem[_]

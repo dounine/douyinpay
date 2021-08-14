@@ -270,63 +270,70 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
             }
           } ~
             path("pay" / "qrcode") {
-              entity(asSourceOf[OrderModel.Recharge]) {
-                source =>
-                  {
-                    val result = source
-                      .map(data => {
-                        logger.info(data.logJson)
-                        OrderModel.DbInfo(
-                          orderId =
-                            UUID.randomUUID().toString.replaceAll("-", ""),
-                          nickName = data.nickName,
-                          pay = false,
-                          expire = false,
-                          openid = data.openid,
-                          id = data.id,
-                          money = data.money
-                            .replaceAll("¥", "")
-                            .replaceAll(",", "")
-                            .toDouble
-                            .toInt,
-                          volumn = data.money
-                            .replaceAll("¥", "")
-                            .replaceAll(",", "")
-                            .toDouble
-                            .toInt * 10,
-                          fee = BigDecimal("0.00"),
-                          platform = data.platform,
-                          createTime = LocalDateTime.now(),
-                          payCount = 0,
-                          payMoney = 0
-                        )
-                      })
-                      .via(OrderStream.add())
-                      .map(_._1)
-                      .via(OrderStream.qrcode())
-                      .via(OrderStream.notifyOrderCreateStatus())
-                      .map(t => (t._1, t._2.qrcode.get))
-                      .via(OrderStream.downloadQrocdeFile())
-                      .map((result: (OrderModel.DbInfo, String)) => {
-                        okData(
-                          Map(
-                            "dbQuery" -> (config.getString(
-                              "file.domain"
-                            ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
-                            "qrcode" -> (config.getString(
-                              "file.domain"
-                            ) + s"/${routerPrefix}/file/image?path=" + result._2)
-                          )
-                        )
-                      })
-                      .recover { e =>
-                        {
-                          e.printStackTrace()
-                          failMsg("当前充值人数太多、请稍候再试")
-                        }
-                      }
+              auth {
+                session =>
+                  entity(asSourceOf[OrderModel.Recharge2]) {
+                    source =>
+                      {
+                        val result = source
+                          .map(_ -> session.openid)
+                          .via(WechatStream.userInfoQuery2())
+                          .map(tp2 => {
+                            val userInfo = tp2._2
+                            val data = tp2._1
+                            logger.info(data.logJson)
+                            OrderModel.DbInfo(
+                              orderId =
+                                UUID.randomUUID().toString.replaceAll("-", ""),
+                              nickName = userInfo.nickname,
+                              pay = false,
+                              expire = false,
+                              openid = session.openid,
+                              id = data.id,
+                              money = data.money
+                                .replaceAll("¥", "")
+                                .replaceAll(",", "")
+                                .toDouble
+                                .toInt,
+                              volumn = data.money
+                                .replaceAll("¥", "")
+                                .replaceAll(",", "")
+                                .toDouble
+                                .toInt * 10,
+                              fee = BigDecimal("0.00"),
+                              platform = PayPlatform.douyin,
+                              createTime = LocalDateTime.now(),
+                              payCount = 0,
+                              payMoney = 0
+                            )
+                          })
+                          .via(OrderStream.add())
+                          .map(_._1)
+                          .via(OrderStream.qrcode())
+                          .via(OrderStream.notifyOrderCreateStatus())
+                          .map(t => (t._1, t._2.qrcode.get))
+                          .via(OrderStream.downloadQrocdeFile())
+                          .map((result: (OrderModel.DbInfo, String)) => {
+                            okData(
+                              Map(
+                                "dbQuery" -> (config.getString(
+                                  "file.domain"
+                                ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
+                                "qrcode" -> (config.getString(
+                                  "file.domain"
+                                ) + s"/${routerPrefix}/file/image?path=" + result._2)
+                              )
+                            )
+                          })
+                          .recover { e =>
+                            {
+                              e.printStackTrace()
+                              failMsg("当前充值人数太多、请稍候再试")
+                            }
+                          }
 
-                    complete(result)
+                        complete(result)
+                      }
                   }
               }
             } ~ path("pay" / "qrcode2" / "douyin") {
