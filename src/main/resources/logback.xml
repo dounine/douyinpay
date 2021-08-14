@@ -16,7 +16,7 @@
         <file>logs/${byDate}.log</file>
         <append>true</append>
         <encoder>
-            <pattern>[%date{yyyy-MM-dd'T'HH:mm:ss.SSS}] [%logger:%line] %msg%n</pattern>
+            <pattern>[%date{yyyy-MM-dd'T'HH:mm:ss.SSS}] [%level] [%logger:%line] %msg%n</pattern>
         </encoder>
     </appender>
 
