@@ -128,8 +128,8 @@ class WechatRouter()(implicit system: ActorSystem[_])
           get {
             path("web" / "user" / "login" / Segment) {
               code =>
-                parameters("ccode".optional) {
-                  (ccode: Option[String]) =>
+                parameters("ccode".optional, "sign") {
+                  (ccode: Option[String], sign: String) =>
                     extractClientIP { ip =>
                       optionalHeaderValueByName("token") {
                         token: Option[String] =>
@@ -140,6 +140,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                   code = code,
                                   ccode = ccode.getOrElse(""),
                                   token = token,
+                                  sign = sign,
                                   ip = ip.getIp()
                                 )
                               )
@@ -153,56 +154,75 @@ class WechatRouter()(implicit system: ActorSystem[_])
           },
           get {
             path("jsapi" / "signature") {
-              parameters("url".as[String]) {
-                url =>
-                  {
-                    val info = Map(
-                      "noncestr" -> UUID
-                        .randomUUID()
-                        .toString
-                        .replaceAll("-", ""),
-                      "timestamp" -> System.currentTimeMillis() / 1000,
-                      "url" -> url
-                    )
-                    val result = WechatStream
-                      .jsapiQuery()
-                      .map(ticket => {
-                        info ++ Map(
-                          "jsapi_ticket" -> ticket
+              extractClientIP {
+                ip =>
+                  parameters("url".as[String]) {
+                    url =>
+                      {
+                        val info = Map(
+                          "noncestr" -> UUID
+                            .randomUUID()
+                            .toString
+                            .replaceAll("-", ""),
+                          "timestamp" -> System.currentTimeMillis() / 1000,
+                          "url" -> url
                         )
-                      })
-                      .map(result => {
-                        result
-                          .map(i => s"${i._1}=${i._2}")
-                          .toSeq
-                          .sorted
-                          .mkString("&")
-                      })
-                      .map(DigestUtils.sha1Hex)
-                      .map(signature => {
-                        info.filterNot(_._1 == "url") ++ Map(
-                          "signature" -> signature
+                        logger.info(
+                          Map(
+                            "time" -> System.currentTimeMillis(),
+                            "data" -> Map(
+                              "event" -> LogEventKey.wechatSignature,
+                              "url" -> url,
+                              "ip" -> ip.getIp()
+                            )
+                          ).toJson
                         )
-                      })
-                      .map(okData)
-
-                    complete(result)
+                        val result = WechatStream
+                          .jsapiQuery()
+                          .map(ticket => {
+                            info ++ Map(
+                              "jsapi_ticket" -> ticket
+                            )
+                          })
+                          .map(result => {
+                            result
+                              .map(i => s"${i._1}=${i._2}")
+                              .toSeq
+                              .sorted
+                              .mkString("&")
+                          })
+                          .map(DigestUtils.sha1Hex)
+                          .map(signature => {
+                            info.filterNot(_._1 == "url") ++ Map(
+                              "signature" -> signature
+                            )
+                          })
+                          .map(okData)
+                        complete(result)
+                      }
                   }
               }
             }
           },
           post {
             path("auth") {
-              entity(as[NodeSeq]) { data =>
-                val message = WechatModel.WechatMessage.fromXml(data)
-                logger.info(
-                  message.toJson.jsonTo[Map[String, Any]].mkString("\n")
-                )
-                val result = Source
-                  .single(message)
-                  .via(WechatStream.notifyMessage())
-                  .runWith(Sink.head)
-                complete(result)
+              entity(as[NodeSeq]) {
+                data =>
+                  val message = WechatModel.WechatMessage.fromXml(data)
+                  logger.info(
+                    Map(
+                      "time" -> System.currentTimeMillis(),
+                      "data" -> Map(
+                        "event" -> LogEventKey.wechatMessage,
+                        "message" -> message
+                      )
+                    ).toJson
+                  )
+                  val result = Source
+                    .single(message)
+                    .via(WechatStream.notifyMessage())
+                    .runWith(Sink.head)
+                  complete(result)
               }
             }
           },

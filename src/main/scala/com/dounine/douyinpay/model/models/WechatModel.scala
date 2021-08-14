@@ -14,6 +14,7 @@ object WechatModel {
       code: String,
       ccode: String,
       token: Option[String],
+      sign: String,
       ip: String
   ) extends BaseSerializer
 

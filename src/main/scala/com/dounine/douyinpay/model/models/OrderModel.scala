@@ -54,18 +54,10 @@ object OrderModel {
   ) extends BaseSerializer
 
   final case class Recharge(
-      openid: String,
-      nickName: Option[String],
-      id: String,
-      platform: PayPlatform,
-      money: String,
-      volumn: String
-  ) extends BaseSerializer
-
-  final case class Recharge2(
       id: String,
       money: String,
-      volumn: String
+      volumn: String,
+      sign: String
   ) extends BaseSerializer
 
   final case class Cancel(

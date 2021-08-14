@@ -66,12 +66,12 @@ object WechatStream extends JsonParse with SuportRouter {
   def userInfoQuery2()(implicit
       system: ActorSystem[_]
   ): Flow[
-    (OrderModel.Recharge2, String),
-    (OrderModel.Recharge2, WechatModel.WechatUserInfo),
+    (OrderModel.Recharge, String),
+    (OrderModel.Recharge, WechatModel.WechatUserInfo),
     NotUsed
   ] = {
     implicit val ec = system.executionContext
-    Flow[(OrderModel.Recharge2, String)]
+    Flow[(OrderModel.Recharge, String)]
       .flatMapConcat { tp2 =>
         accessToken().map((tp2, _))
       }

@@ -154,35 +154,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
       extractClientIP { ip: RemoteAddress =>
         concat(
           get {
-            path("user" / "login") {
-              val actor = system.systemActorOf(
-                LoginScanBehavior(),
-                s"${UUID.randomUUID().toString}"
-              )
-              import akka.actor.typed.scaladsl.AskPattern._
-              val future: Future[BaseSerializer] = actor.ask(
-                LoginScanBehavior.GetScan()
-              )(new Timeout(10.seconds), system.scheduler)
-              onComplete(future) {
-                case Failure(exception) => fail(exception.getMessage)
-                case Success(value) => {
-                  value match {
-                    case LoginScanBehavior.ScanSuccess(url) => {
-                      complete(
-                        HttpResponse(entity =
-                          HttpEntity(
-                            ContentType(MediaTypes.`image/png`),
-                            Files.readAllBytes(Paths.get(url))
-                          )
-                        )
-                      )
-                    }
-                    case LoginScanBehavior.ScanFail(msg) =>
-                      fail(msg)
-                  }
-                }
-              }
-            } ~ path("pay" / "today" / "sum") {
+            path("pay" / "today" / "sum") {
               complete(
                 OrderStream
                   .queryTodayPaySum()
@@ -199,70 +171,83 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
               )
             } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
               id =>
+                auth {
+                  session =>
+                    {
+                      logger.info(
+                        Map(
+                          "time" -> System.currentTimeMillis(),
+                          "data" -> Map(
+                            "event" -> LogEventKey.userInfoQuery,
+                            "userAccount" -> id,
+                            "openid" -> session.openid,
+                            "ip" -> ip.getIp()
+                          )
+                        ).toJson
+                      )
+                      cache(lfuCache, keyFunction) {
+                        if (id.contains("抖音")) {
+                          fail("帐号格式不正确噢")
+                        } else {
+                          val future = Request
+                            .get[PayUserInfoModel.DouYinSearchResponse](
+                              s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                                .currentTimeMillis()}"
+                            )
+                            .map(item => {
+                              if (item.data.open_info.nonEmpty) {
+                                val data
+                                    : PayUserInfoModel.DouYinSearchOpenInfo =
+                                  item.data.open_info.head
+                                Option(
+                                  PayUserInfoModel.Info(
+                                    nickName = data.nick_name,
+                                    id = data.search_id,
+                                    avatar = data.avatar_thumb.url_list.head
+                                  )
+                                )
+                              } else {
+                                Option.empty
+                              }
+                            })
+                          onComplete(future) {
+                            case Success(
+                                  value: Option[PayUserInfoModel.Info]
+                                ) =>
+                              value match {
+                                case Some(value) => ok(value)
+                                case None        => fail("用户不存在")
+                              }
+                            case Failure(exception) =>
+                              fail(exception.getLocalizedMessage)
+                          }
+                        }
+                      }
+                    }
+                }
+            } ~ path("pay" / "money" / "info" / "douyin") {
+              auth { session =>
                 {
                   logger.info(
                     Map(
                       "time" -> System.currentTimeMillis(),
                       "data" -> Map(
-                        "event" -> LogEventKey.userInfoQuery,
-                        "userAccount" -> id,
+                        "event" -> LogEventKey.payMoneyMenu,
+                        "openid" -> session.openid,
                         "ip" -> ip.getIp()
                       )
                     ).toJson
                   )
-                  cache(lfuCache, keyFunction) {
-                    if (id.contains("抖音")) {
-                      fail("帐号格式不正确噢")
-                    } else {
-                      val future = Request
-                        .get[PayUserInfoModel.DouYinSearchResponse](
-                          s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-                            .currentTimeMillis()}"
-                        )
-                        .map(item => {
-                          if (item.data.open_info.nonEmpty) {
-                            val data: PayUserInfoModel.DouYinSearchOpenInfo =
-                              item.data.open_info.head
-                            Option(
-                              PayUserInfoModel.Info(
-                                nickName = data.nick_name,
-                                id = data.search_id,
-                                avatar = data.avatar_thumb.url_list.head
-                              )
-                            )
-                          } else {
-                            Option.empty
-                          }
-                        })
-                      onComplete(future) {
-                        case Success(value: Option[PayUserInfoModel.Info]) =>
-                          value match {
-                            case Some(value) => ok(value)
-                            case None        => fail("用户不存在")
-                          }
-                        case Failure(exception) =>
-                          fail(exception.getLocalizedMessage)
-                      }
-                    }
-                  }
+                  ok(
+                    moneys.map(i => {
+                      Map(
+                        "money" -> s"¥${i._1}",
+                        "volumn" -> i._2
+                      )
+                    })
+                  )
                 }
-            } ~ path("pay" / "money" / "info" / "douyin") {
-              logger.info(
-                Map(
-                  "time" -> System.currentTimeMillis(),
-                  "data" -> Map(
-                    "event" -> LogEventKey.payMoneyMenu
-                  )
-                ).toJson
-              )
-              ok(
-                moneys.map(i => {
-                  Map(
-                    "money" -> s"¥${i._1}",
-                    "volumn" -> i._2
-                  )
-                })
-              )
+              }
             } ~ path("order" / "info" / Segment) { orderId =>
               {
                 onComplete(orderService.queryOrderStatus(orderId)) {
@@ -278,7 +263,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 source =>
                   val result = source
                     .map(data => {
-                      logger.info(
+                      logger.error(
                         Map(
                           "time" -> System.currentTimeMillis(),
                           "data" -> Map(
@@ -303,11 +288,40 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
               path("pay" / "qrcode") {
                 auth {
                   session =>
-                    entity(asSourceOf[OrderModel.Recharge2]) {
+                    entity(asSourceOf[OrderModel.Recharge]) {
                       source =>
                         {
                           val result = source
                             .map(_ -> session.openid)
+                            .map(i => {
+                              if (
+                                MD5Util.md5(
+                                  Array(
+                                    i._1.id,
+                                    i._1.money,
+                                    i._1.volumn,
+                                    session.openid
+                                  ).sorted.mkString("")
+                                ) != i._1.sign
+                              ) {
+                                logger.error(
+                                  Map(
+                                    "time" -> System.currentTimeMillis(),
+                                    "data" -> Map(
+                                      "event" -> LogEventKey.orderCreateSignError,
+                                      "openid" -> session.openid,
+                                      "payAccount" -> i._1.id,
+                                      "payMoney" -> i._1.money,
+                                      "payVolumn" -> i._1.volumn,
+                                      "sign" -> i._1.sign,
+                                      "ip" -> ip.getIp()
+                                    )
+                                  ).toJson
+                                )
+                                throw new Exception("创建定单验证不通过")
+                              }
+                              i
+                            })
                             .via(WechatStream.userInfoQuery2())
                             .map(tp2 => {
                               val data = tp2._1
@@ -365,7 +379,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                             .via(OrderStream.notifyOrderCreateStatus())
                             .map(i => {
                               if (i._2.qrcode.isEmpty) {
-                                logger.info(
+                                logger.error(
                                   Map(
                                     "time" -> System.currentTimeMillis(),
                                     "data" -> Map(
@@ -432,99 +446,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                         }
                     }
                 }
-              } ~ path("pay" / "qrcode2" / "douyin") {
-              auth {
-                session =>
-                  {
-                    entity(as[OrderModel.Recharge2]) {
-                      data =>
-                        {
-                          val result = Source
-                            .single(session.openid)
-                            .via(WechatStream.userInfoQuery())
-                            .map(userInfo => {
-                              OrderModel.DbInfo(
-                                orderId = UUID
-                                  .randomUUID()
-                                  .toString
-                                  .replaceAll("-", ""),
-                                nickName = userInfo.nickname,
-                                pay = false,
-                                expire = false,
-                                openid = session.openid,
-                                id = data.id,
-                                money = data.money
-                                  .replaceAll("¥", "")
-                                  .replaceAll(",", "")
-                                  .toDouble
-                                  .toInt,
-                                volumn = data.money
-                                  .replaceAll("¥", "")
-                                  .replaceAll(",", "")
-                                  .toDouble
-                                  .toInt * 10,
-                                fee = BigDecimal("0.00"),
-                                platform = PayPlatform.douyin,
-                                createTime = LocalDateTime.now(),
-                                payCount = 0,
-                                payMoney = 0
-                              )
-                            })
-                            .mapAsync(1)(order => {
-                              orderService.add(order).map(_ => order)
-                            })
-                            .mapAsync(1)(order => {
-                              sharding
-                                .entityRefFor(
-                                  QrcodeBehavior.typeKey,
-                                  QrcodeBehavior.typeKey.name
-                                )
-                                .ask(
-                                  QrcodeBehavior.CreateOrder(
-                                    order
-                                  )
-                                )(15.seconds)
-                                .map {
-                                  case QrcodeBehavior
-                                        .CreateOrderOk(request, qrcode) =>
-                                    ok(
-                                      Map(
-                                        "dbQuery" -> (config.getString(
-                                          "file.domain"
-                                        ) + s"/${routerPrefix}/order/info/" + order.orderId),
-                                        "qrcode" -> (config.getString(
-                                          "file.domain"
-                                        ) + s"/${routerPrefix}/file/image?path=" + qrcode)
-                                      )
-                                    )
-                                  case QrcodeBehavior
-                                        .CreateOrderFail(
-                                          request,
-                                          error,
-                                          screen
-                                        ) =>
-                                    logger.error(
-                                      "request -> {} , error -> {}",
-                                      request,
-                                      error
-                                    )
-                                    fail(
-                                      "当前充值人数太多、请稍后再试"
-                                    )
-                                }
-                            })
-                            .runWith(Sink.head)
-
-                          onComplete(result) {
-                            case Failure(exception) =>
-                              fail(exception.getMessage)
-                            case Success(value) => value
-                          }
-                        }
-                    }
-                  }
               }
-            }
           }
         )
       }

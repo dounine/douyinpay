@@ -8,6 +8,7 @@ import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.SchemaDef.RequestInfo
 import com.dounine.douyinpay.service.WechatStream
 import com.dounine.douyinpay.tools.json.JsonParse
+import com.dounine.douyinpay.tools.util.MD5Util
 import org.slf4j.LoggerFactory
 import sangria.schema._
 
@@ -72,6 +73,10 @@ object WechatSchema extends JsonParse {
         name = "ccode",
         argumentType = StringType,
         description = "来源渠道"
+      ) :: Argument(
+        name = "sign",
+        argumentType = StringType,
+        description = "加密"
       ) :: Nil,
       resolve = c =>
         Source
@@ -80,6 +85,7 @@ object WechatSchema extends JsonParse {
               code = c.arg[String]("code"),
               ccode = c.arg[String]("ccode"),
               token = c.value.headers.get("token"),
+              sign = c.arg[String]("sign"),
               ip = Seq("X-Forwarded-For", "X-Real-Ip", "Remote-Address")
                 .map(c.value.headers.get)
                 .find(_.isDefined)
@@ -88,17 +94,38 @@ object WechatSchema extends JsonParse {
             )
           )
           .map(i => {
-            logger.info(
-              Map(
-                "time" -> System.currentTimeMillis(),
-                "data" -> Map(
-                  "event" -> LogEventKey.wechatLogin,
-                  "ccode" -> i.ccode,
-                  "token" -> i.token.getOrElse(""),
-                  "ip" -> i.ip
-                )
-              ).toJson
-            )
+            if (
+              MD5Util.md5(
+                Array(i.ccode, i.code, i.token.getOrElse("")).sorted
+                  .mkString("")
+              ) != i.sign
+            ) {
+              logger.error(
+                Map(
+                  "time" -> System.currentTimeMillis(),
+                  "data" -> Map(
+                    "event" -> LogEventKey.wechatLoginSignError,
+                    "ccode" -> i.ccode,
+                    "code" -> i.code,
+                    "token" -> i.token.getOrElse(""),
+                    "sign" -> i.sign,
+                    "ip" -> i.ip
+                  )
+                ).toJson
+              )
+            } else {
+              logger.info(
+                Map(
+                  "time" -> System.currentTimeMillis(),
+                  "data" -> Map(
+                    "event" -> LogEventKey.wechatLogin,
+                    "ccode" -> i.ccode,
+                    "token" -> i.token.getOrElse(""),
+                    "ip" -> i.ip
+                  )
+                ).toJson
+              )
+            }
             i
           })
           .via(WechatStream.webBaseUserInfo2()(c.ctx))
