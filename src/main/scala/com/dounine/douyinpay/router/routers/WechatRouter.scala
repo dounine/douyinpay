@@ -139,7 +139,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                   WechatModel.LoginParamers(
                                     code = code,
                                     ccode = ccode.getOrElse(""),
-                                    token = token.getOrElse(""),
+                                    token = token,
                                     ip = ip.getIp()
                                   )
                                 )
