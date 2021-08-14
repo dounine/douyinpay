@@ -4,14 +4,18 @@ import akka.actor.typed.ActorSystem
 import akka.stream.SystemMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import com.dounine.douyinpay.model.models.{UserModel, WechatModel}
+import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.SchemaDef.RequestInfo
 import com.dounine.douyinpay.service.WechatStream
+import com.dounine.douyinpay.tools.json.JsonParse
+import org.slf4j.LoggerFactory
 import sangria.schema._
 
 import java.net.InetAddress
 
-object WechatSchema {
+object WechatSchema extends JsonParse {
 
+  private val logger = LoggerFactory.getLogger(WechatStream.getClass)
   val WechatLoginResponse = ObjectType(
     name = "Response",
     description = "登录响应",
@@ -83,6 +87,20 @@ object WechatSchema {
                 .getOrElse("unknown")
             )
           )
+          .map(i => {
+            logger.info(
+              Map(
+                "time" -> System.currentTimeMillis(),
+                "data" -> Map(
+                  "event" -> LogEventKey.wechatLogin,
+                  "ccode" -> i.ccode,
+                  "token" -> i.token.getOrElse(""),
+                  "ip" -> i.ip
+                )
+              ).toJson
+            )
+            i
+          })
           .via(WechatStream.webBaseUserInfo2()(c.ctx))
           .runWith(Sink.head)(SystemMaterializer(c.ctx).materializer)
     )

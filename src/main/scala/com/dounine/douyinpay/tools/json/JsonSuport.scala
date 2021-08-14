@@ -5,6 +5,7 @@ import com.dounine.douyinpay.model.types.router.ResponseCode
 import com.dounine.douyinpay.model.types.service.{
   AppPage,
   IntervalStatus,
+  LogEventKey,
   MechinePayStatus,
   MechineStatus,
   OrderStatus,
@@ -161,6 +162,7 @@ object JsonSuport {
     MechinePayStatus,
     MechineStatus,
     OrderStatus,
-    AppPage
+    AppPage,
+    LogEventKey
   ).map(new EnumNameSerializer(_))
 }

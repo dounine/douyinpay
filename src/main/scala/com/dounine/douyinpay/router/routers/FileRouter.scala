@@ -15,6 +15,7 @@ import akka.stream.scaladsl.{FileIO, Flow, Sink, Source}
 import akka.stream.typed.scaladsl.{ActorSink, ActorSource}
 import akka.stream.{CompletionStrategy, _}
 import akka.{NotUsed, actor}
+import com.dounine.douyinpay.model.types.service.LogEventKey
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.File
@@ -67,15 +68,31 @@ class FileRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
         },
         get {
           path("image") {
-            parameter("path") { path =>
-              {
-                val byteArray: Array[Byte] = Files.readAllBytes(Paths.get(path))
-                complete(
-                  HttpResponse(entity =
-                    HttpEntity(ContentType(MediaTypes.`image/png`), byteArray)
-                  )
-                )
-              }
+            parameter("path") {
+              path =>
+                extractClientIP {
+                  ip =>
+                    val byteArray: Array[Byte] =
+                      Files.readAllBytes(Paths.get(path))
+                    logger.info(
+                      Map(
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.payQrcodeAccess,
+                          "payQrcodeUrl" -> path,
+                          "ip" -> ip.getIp()
+                        )
+                      ).toJson
+                    )
+                    complete(
+                      HttpResponse(entity =
+                        HttpEntity(
+                          ContentType(MediaTypes.`image/png`),
+                          byteArray
+                        )
+                      )
+                    )
+                }
             }
           }
         }

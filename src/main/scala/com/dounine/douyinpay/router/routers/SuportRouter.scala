@@ -1,9 +1,22 @@
 package com.dounine.douyinpay.router.routers
 
-import akka.http.scaladsl.common.{EntityStreamingSupport, JsonEntityStreamingSupport}
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
+import akka.http.scaladsl.common.{
+  EntityStreamingSupport,
+  JsonEntityStreamingSupport
+}
+import akka.http.scaladsl.model.{
+  ContentTypes,
+  HttpEntity,
+  HttpResponse,
+  RemoteAddress,
+  StatusCodes
+}
 import akka.http.scaladsl.server.Directives.complete
-import akka.http.scaladsl.server.{ExceptionHandler, RejectionHandler, StandardRoute}
+import akka.http.scaladsl.server.{
+  ExceptionHandler,
+  RejectionHandler,
+  StandardRoute
+}
 import akka.pattern.AskTimeoutException
 import akka.stream.scaladsl.Flow
 import akka.util.ByteString
@@ -12,27 +25,40 @@ import com.dounine.douyinpay.model.models.RouterModel.Fail
 import com.dounine.douyinpay.model.types.router.ResponseCode
 import com.dounine.douyinpay.tools.json.JsonParse
 
+import java.net.InetAddress
+
 trait SuportRouter extends JsonParse {
 
   implicit def rejectionHandler =
     RejectionHandler.default
       .mapRejectionResponse {
-        case res@HttpResponse(code, a, ent: HttpEntity.Strict, url) =>
+        case res @ HttpResponse(code, a, ent: HttpEntity.Strict, url) =>
           if (code.intValue() == 404) {
-            res.withEntity(HttpEntity(ContentTypes.`application/json`, s"""{"status":"fail","msg": "resource not found"}"""))
+            res.withEntity(
+              HttpEntity(
+                ContentTypes.`application/json`,
+                s"""{"status":"fail","msg": "resource not found"}"""
+              )
+            )
           } else {
             val message = ent.data.utf8String.replaceAll("\"", """\"""")
-            res.withEntity(HttpEntity(ContentTypes.`application/json`, s"""{"status":"fail","msg": "$message"}"""))
+            res.withEntity(
+              HttpEntity(
+                ContentTypes.`application/json`,
+                s"""{"status":"fail","msg": "$message"}"""
+              )
+            )
           }
         case x => x
       }
 
-  implicit def exceptionHandler = ExceptionHandler {
-    case timeout: AskTimeoutException =>
-      fail("网络超时、请重试")
-    case e: Exception =>
-      fail(e.getMessage)
-  }
+  implicit def exceptionHandler =
+    ExceptionHandler {
+      case timeout: AskTimeoutException =>
+        fail("网络超时、请重试")
+      case e: Exception =>
+        fail(e.getMessage)
+    }
 
   val timeoutResponse = HttpResponse(
     StatusCodes.OK,
@@ -95,6 +121,17 @@ trait SuportRouter extends JsonParse {
       msg = Some(msg),
       status = ResponseCode.fail
     )
+  }
+
+  implicit class AdressExt(remoteAdress: RemoteAddress) {
+    def getIp(): String = {
+      remoteAdress
+        .getAddress()
+        .orElse(
+          InetAddress.getByName("unknown")
+        )
+        .getHostAddress
+    }
   }
 
   val failData = RouterModel.Fail()

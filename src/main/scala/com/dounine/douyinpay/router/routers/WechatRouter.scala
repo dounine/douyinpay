@@ -94,21 +94,39 @@ class WechatRouter()(implicit system: ActorSystem[_])
           get {
             path("into" / "from" / Segment) {
               ccode: String =>
-                val params: String = Map(
-                  "appid" -> appid,
-                  "redirect_uri" -> URLEncoder.encode(
-                    domain + "?ccode=" + ccode,
-                    "utf-8"
-                  ),
-                  "response_type" -> "code",
-                  "scope" -> "snsapi_base",
-                  "state" -> appid
-                ).map(i => s"${i._1}=${i._2}")
-                  .mkString("&")
-                redirect(
-                  s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-                  StatusCodes.PermanentRedirect
-                )
+                extractClientIP {
+                  ip =>
+                    logger.info(
+                      Map(
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> "intoFromCcode",
+                          "ccode" -> ccode,
+                          "ip" -> ip
+                            .getAddress()
+                            .orElse(
+                              InetAddress.getByName("unknown")
+                            )
+                            .getHostAddress
+                        )
+                      ).toJson
+                    )
+                    val params: String = Map(
+                      "appid" -> appid,
+                      "redirect_uri" -> URLEncoder.encode(
+                        domain + "?ccode=" + ccode,
+                        "utf-8"
+                      ),
+                      "response_type" -> "code",
+                      "scope" -> "snsapi_base",
+                      "state" -> appid
+                    ).map(i => s"${i._1}=${i._2}")
+                      .mkString("&")
+                    redirect(
+                      s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+                      StatusCodes.PermanentRedirect
+                    )
+                }
             }
           },
           get {
@@ -130,7 +148,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                     ip = ip
                                       .getAddress()
                                       .orElse(
-                                        InetAddress.getByName("localhost")
+                                        InetAddress.getByName("unknown")
                                       )
                                       .getHostAddress
                                   )

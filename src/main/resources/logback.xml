@@ -10,15 +10,18 @@
         </encoder>
     </appender>
 
-<!--    <appender name="FILE" class="ch.qos.logback.core.FileAppender">-->
-<!--        <file>douyinpay.log</file>-->
-<!--        <encoder>-->
-<!--            <pattern>[%date{ISO8601}] [%level] [%logger:%line] [%marker] [%thread] - %msg MDC: {%mdc}%n</pattern>-->
-<!--        </encoder>-->
-<!--    </appender>-->
+    <timestamp key="byDate" datePattern="yyyy-MM-dd" />
 
-    <root level="DEBUG">
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>logs/${byDate}.log</file>
+        <append>true</append>
+        <encoder>
+            <pattern>[%date{yyyy-MM-dd'T'HH:mm:ss.SSS}] [%logger:%line] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
         <appender-ref ref="STDOUT"/>
-<!--        <appender-ref ref="FILE"/>-->
+        <appender-ref ref="FILE"/>
     </root>
 </configuration>
