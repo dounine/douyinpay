@@ -16,7 +16,7 @@ import com.dounine.douyinpay.model.models.{AccountModel, OrderModel}
 import com.dounine.douyinpay.store.{AccountTable, OrderTable}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.akka.db.DataSource
-import com.dounine.douyinpay.tools.util.{DingDing, Request}
+import com.dounine.douyinpay.tools.util.{DingDing, QrcodeUrlRandom, Request}
 import slick.jdbc.JdbcBackend
 
 import java.nio.file.Files
@@ -34,7 +34,7 @@ object OrderStream {
     NotUsed
   ] = {
     val config = system.settings.config
-    val qrcodeUrl = config.getString("app.qrcodeUrl")
+    val qrcodeUrl = QrcodeUrlRandom.random()
     val domain = config.getString("app.file.domain")
     val routerPrefix = config.getString("app.routerPrefix")
     Flow[OrderModel.DbInfo]
