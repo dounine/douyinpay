@@ -9,6 +9,7 @@ object LogEventKey extends Enumeration {
     "event_order_create_request"
   )
 
+  val userLockedAccess: LogEventKey.Value = Value("event_user_locked_access")
   val orderCreateSignError: LogEventKey.Value = Value("event_order_create_sign_error")
   val orderCreateOk: LogEventKey.Value = Value("event_order_create_ok")
   val wechatSignature: LogEventKey.Value = Value("event_wechat_signature")
