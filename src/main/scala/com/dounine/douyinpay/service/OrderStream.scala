@@ -93,7 +93,7 @@ object OrderStream {
     val notify = (order: OrderModel.DbInfo, title: String) => {
       DingDing
         .sendMessageFuture(
-          DingDing.MessageType.payed,
+          DingDing.MessageType.order,
           data = DingDing.MessageData(
             markdown = DingDing.Markdown(
               title = "定单通知",
@@ -136,10 +136,14 @@ object OrderStream {
   ): Flow[OrderModel.DbInfo, OrderModel.DbInfo, NotUsed] = {
     implicit val ec = system.executionContext
     val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
-    val notify = (order: OrderModel.DbInfo, title: String) => {
+    val notify = (
+        typ: DingDing.MessageType.MessageType,
+        order: OrderModel.DbInfo,
+        title: String
+    ) => {
       DingDing
         .sendMessageFuture(
-          DingDing.MessageType.payed,
+          typ,
           data = DingDing.MessageData(
             markdown = DingDing.Markdown(
               title = "定单通知",
@@ -168,9 +172,9 @@ object OrderStream {
     Flow[OrderModel.DbInfo]
       .mapAsync(1) { order =>
         if (order.pay) {
-          notify(order, "充值成功")
+          notify(DingDing.MessageType.payed, order, "充值成功")
         } else {
-          notify(order, "充值失败")
+          notify(DingDing.MessageType.payerr, order, "充值失败")
         }
       }
   }
