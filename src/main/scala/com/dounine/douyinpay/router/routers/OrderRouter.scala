@@ -263,7 +263,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 source =>
                   val result = source
                     .map(data => {
-                      logger.error(
+                      logger.info(
                         Map(
                           "time" -> System.currentTimeMillis(),
                           "data" -> Map(
