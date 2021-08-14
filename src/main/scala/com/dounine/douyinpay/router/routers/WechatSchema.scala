@@ -99,7 +99,6 @@ object WechatSchema extends JsonParse {
               case Some(token) =>
                 WechatStream.jwtDecode(token)(c.ctx) match {
                   case Some(session) =>
-                    println("---------")
                     Source
                       .single(session.openid)
                       .via(OpenidStream.query()(c.ctx))
