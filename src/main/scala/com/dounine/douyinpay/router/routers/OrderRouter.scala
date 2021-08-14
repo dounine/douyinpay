@@ -348,7 +348,6 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 ).toJson
                               )
                               val userInfo = tp2._2
-                              logger.info(data.logJson)
                               OrderModel.DbInfo(
                                 orderId = orderId,
                                 nickName = userInfo.nickname,
