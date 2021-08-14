@@ -102,12 +102,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         "data" -> Map(
                           "event" -> "intoFromCcode",
                           "ccode" -> ccode,
-                          "ip" -> ip
-                            .getAddress()
-                            .orElse(
-                              InetAddress.getByName("unknown")
-                            )
-                            .getHostAddress
+                          "ip" -> ip.getIp()
                         )
                       ).toJson
                     )
@@ -144,13 +139,8 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                   WechatModel.LoginParamers(
                                     code = code,
                                     ccode = ccode.getOrElse(""),
-                                    token = token,
-                                    ip = ip
-                                      .getAddress()
-                                      .orElse(
-                                        InetAddress.getByName("unknown")
-                                      )
-                                      .getHostAddress
+                                    token = token.getOrElse(""),
+                                    ip = ip.getIp()
                                   )
                                 )
                                 .via(WechatStream.webBaseUserInfo())
