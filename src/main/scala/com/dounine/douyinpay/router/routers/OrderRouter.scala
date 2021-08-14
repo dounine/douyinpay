@@ -313,6 +313,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           .via(OrderStream.notifyOrderCreateStatus())
                           .map(t => (t._1, t._2.qrcode.get))
                           .via(OrderStream.downloadQrocdeFile())
+                          .idleTimeout(15.seconds)
                           .map((result: (OrderModel.DbInfo, String)) => {
                             okData(
                               Map(
