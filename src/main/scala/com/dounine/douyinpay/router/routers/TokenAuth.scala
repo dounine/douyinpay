@@ -4,14 +4,19 @@ import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.Unmarshaller
-import com.dounine.douyinpay.model.models.{OrderModel, RouterModel, WechatModel}
-import com.dounine.douyinpay.service.WechatStream
+import akka.stream.scaladsl.{Sink, Source}
+import com.dounine.douyinpay.model.models.{RouterModel, WechatModel}
+import com.dounine.douyinpay.model.types.service.LogEventKey
+import com.dounine.douyinpay.router.routers.errors.LockedException
+import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
-import scala.concurrent.Future
+import org.slf4j.LoggerFactory
+
 import scala.util.{Failure, Success, Try}
 
 object TokenAuth extends JsonParse {
 
+  private val logger = LoggerFactory.getLogger(TokenAuth.getClass)
   val tokenName: String = "token"
 
   def apply()(implicit
@@ -38,10 +43,34 @@ object TokenAuth extends JsonParse {
 
   private def convertToUserData(
       session: WechatModel.Session
-  ): Directive1[WechatModel.Session] = {
+  )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] = {
     extractExecutionContext.flatMap { implicit ctx =>
       extractMaterializer.flatMap { implicit mat =>
-        onComplete(Future.successful(session)).flatMap(handleError)
+        val userInfo = Source
+          .single(session.openid)
+          .via(OpenidStream.query())
+          .map(_.get)
+          .map(info => {
+            if (info.locked) {
+              logger.error(
+                Map(
+                  "time" -> System.currentTimeMillis(),
+                  "data" -> Map(
+                    "event" -> LogEventKey.userLockedAccess,
+                    "openid" -> info.openid
+                  )
+                ).toJson
+              )
+              throw new LockedException(s"locked error -> ${info.openid} ")
+            }
+            info
+          })
+          .runWith(Sink.head)
+        onComplete(
+          userInfo.map(i =>
+            session
+          )
+        ).flatMap(handleError)
       }
     }
   }
@@ -63,6 +92,9 @@ object TokenAuth extends JsonParse {
         )
       case Failure(x: IllegalArgumentException) =>
         reject(ValidationRejection(x.getMessage, Some(x)))
+      case Failure(x: LockedException) =>
+        x.printStackTrace()
+        reject(ValidationRejection("Internal server error", Some(x)))
       case Failure(x) =>
         reject(MalformedRequestContentRejection(x.getMessage, x))
     }

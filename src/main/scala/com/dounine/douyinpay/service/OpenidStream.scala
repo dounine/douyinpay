@@ -40,20 +40,26 @@ object OpenidStream extends JsonParse {
         if (tp2._2.isEmpty) {
           db.run(openidTable += tp2._1)
             .map(_ == 1)
-        } else if (tp2._2.get.locked) {
-          logger.error(
-            Map(
-              "time" -> System.currentTimeMillis(),
-              "data" -> Map(
-                "event" -> LogEventKey.userLockedAccess,
-                "openid" -> tp2._1.openid
-              )
-            ).toJson
-          )
-          throw new Exception(s"locked error -> ${tp2._1.openid} ")
         } else {
           Future.successful(false)
         }
+      }
+  }
+
+  def query()(implicit
+      system: ActorSystem[_]
+  ): Flow[String, Option[OpenidModel.OpenidInfo], NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    val openidTable = TableQuery[OpenidTable]
+    implicit val materializer = SystemMaterializer(system).materializer
+
+    Flow[String]
+      .mapAsync(1) { openid =>
+        db.run(openidTable.filter(_.openid === openid).result.headOption)
       }
   }
 

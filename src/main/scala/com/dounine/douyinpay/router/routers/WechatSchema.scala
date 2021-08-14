@@ -6,7 +6,8 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.dounine.douyinpay.model.models.{UserModel, WechatModel}
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.SchemaDef.RequestInfo
-import com.dounine.douyinpay.service.WechatStream
+import com.dounine.douyinpay.router.routers.errors.LockedException
+import com.dounine.douyinpay.service.{AccountStream, OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
 import com.dounine.douyinpay.tools.util.MD5Util
 import org.slf4j.LoggerFactory
@@ -93,6 +94,35 @@ object WechatSchema extends JsonParse {
                 .getOrElse("localhost")
             )
           )
+          .flatMapConcat { i =>
+            i.token match {
+              case Some(token) =>
+                WechatStream.jwtDecode(token)(c.ctx) match {
+                  case Some(session) =>
+                    println("---------")
+                    Source
+                      .single(session.openid)
+                      .via(OpenidStream.query()(c.ctx))
+                      .map(result => {
+                        if (result.isDefined && result.get.locked) {
+                          logger.error(
+                            Map(
+                              "time" -> System.currentTimeMillis(),
+                              "data" -> Map(
+                                "event" -> LogEventKey.userLockedAccess,
+                                "openid" -> result.get.openid
+                              )
+                            ).toJson
+                          )
+                          throw new LockedException(result.get.openid)
+                        }
+                        i
+                      })
+                  case None => Source.single(i)
+                }
+              case None => Source.single(i)
+            }
+          }
           .map(i => {
             if (
               MD5Util.md5(
