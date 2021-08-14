@@ -20,6 +20,7 @@ import com.dounine.douyinpay.model.models.{
   OpenidModel,
   WechatModel
 }
+import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
@@ -100,7 +101,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                       Map(
                         "time" -> System.currentTimeMillis(),
                         "data" -> Map(
-                          "event" -> "intoFromCcode",
+                          "event" -> LogEventKey.fromCcode,
                           "ccode" -> ccode,
                           "ip" -> ip.getIp()
                         )
@@ -129,24 +130,23 @@ class WechatRouter()(implicit system: ActorSystem[_])
               code =>
                 parameters("ccode".optional) {
                   (ccode: Option[String]) =>
-                    extractClientIP {
-                      ip =>
-                        optionalHeaderValueByName("token") {
-                          token: Option[String] =>
-                            {
-                              val result = Source
-                                .single(
-                                  WechatModel.LoginParamers(
-                                    code = code,
-                                    ccode = ccode.getOrElse(""),
-                                    token = token,
-                                    ip = ip.getIp()
-                                  )
+                    extractClientIP { ip =>
+                      optionalHeaderValueByName("token") {
+                        token: Option[String] =>
+                          {
+                            val result = Source
+                              .single(
+                                WechatModel.LoginParamers(
+                                  code = code,
+                                  ccode = ccode.getOrElse(""),
+                                  token = token,
+                                  ip = ip.getIp()
                                 )
-                                .via(WechatStream.webBaseUserInfo())
-                              complete(result)
-                            }
-                        }
+                              )
+                              .via(WechatStream.webBaseUserInfo())
+                            complete(result)
+                          }
+                      }
                     }
                 }
             }
