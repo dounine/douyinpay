@@ -47,23 +47,33 @@ object DingDing extends JsonParse {
       data: MessageData,
       system: ActorSystem[_]
   ): Unit = {
+    implicit val ec = system.executionContext
+    sendMessageFuture(
+      mType = mType,
+      data = data
+    )(system)
+      .map(Right.apply)
+      .recover {
+        case e => Left(e.getMessage)
+      }
+      .foreach {
+        case Left(value)  => logger.error(value)
+        case Right(value) => logger.debug("消息发送成功 -> " + value)
+      }
+  }
+
+  def sendMessageFuture(
+      mType: MessageType,
+      data: MessageData
+  )(implicit system: ActorSystem[_]): Future[String] = {
     if (system.settings.config.getBoolean("app.pro")) {
       implicit val ec = system.executionContext
-      implicit val s = system
       Request
         .post[String](
           system.settings.config.getString(s"app.notify.${mType}"),
           data
         )
-        .map(Right.apply)
-        .recover {
-          case e => Left(e.getMessage)
-        }
-        .foreach {
-          case Left(value)  => logger.error(value)
-          case Right(value) => logger.debug("消息发送成功 -> " + value)
-        }
-    }
+    } else Future.successful("dev")
   }
 
 }

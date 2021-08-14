@@ -251,85 +251,85 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
           }
         },
         post {
-          path("pay" / "qrcode") {
-            entity(as[OrderModel.Recharge]) {
-              data =>
-                {
-                  logger.info(data.logJson)
-                  val order = OrderModel.DbInfo(
-                    orderId = UUID.randomUUID().toString.replaceAll("-", ""),
-                    nickName = data.nickName,
-                    pay = false,
-                    expire = false,
-                    openid = data.openid,
-                    id = data.id,
-                    money = data.money
-                      .replaceAll("¥", "")
-                      .replaceAll(",", "")
-                      .toDouble
-                      .toInt,
-                    volumn = data.money
-                      .replaceAll("¥", "")
-                      .replaceAll(",", "")
-                      .toDouble
-                      .toInt * 10,
-                    fee = BigDecimal("0.00"),
-                    platform = data.platform,
-                    createTime = LocalDateTime.now(),
-                    payCount = 0,
-                    payMoney = 0
-                  )
-
-                  val result =
-                    orderService
-                      .add(
-                        order
-                      )
-                      .flatMap {
-                        _ =>
-                          {
-                            sharding
-                              .entityRefFor(
-                                QrcodeBehavior.typeKey,
-                                QrcodeBehavior.typeKey.name
-                              )
-                              .ask(
-                                QrcodeBehavior.CreateOrder(
-                                  order
-                                )
-                              )(15.seconds)
-                              .map {
-                                case QrcodeBehavior
-                                      .CreateOrderOk(request, qrcode) =>
-                                  ok(
-                                    Map(
-                                      "dbQuery" -> (config.getString(
-                                        "file.domain"
-                                      ) + s"/${routerPrefix}/order/info/" + order.orderId),
-                                      "qrcode" -> (config.getString(
-                                        "file.domain"
-                                      ) + s"/${routerPrefix}/file/image?path=" + qrcode)
-                                    )
-                                  )
-                                case QrcodeBehavior
-                                      .CreateOrderFail(
-                                        request,
-                                        error,
-                                        screen
-                                      ) =>
-                                  fail(
-                                    error
-                                  )
-                              }
-                          }
-                      }
-                  onComplete(result) {
-                    case Failure(exception) => fail(exception.getMessage)
-                    case Success(value)     => value
-                  }
-                }
+          path("order" / "update") {
+            entity(asSourceOf[OrderModel.UpdateStatus]) {
+              source =>
+                val result = source
+                  .map(data => {
+                    logger.info("update -> {}", data.toJson)
+                    data
+                  })
+                  .via(OrderStream.updateOrderStatus())
+                  .map(_._1.orderId)
+                  .via(OrderStream.queryOrder())
+                  .via(OrderStream.notifyOrderPayStatus())
+                  .map(r => okData(r))
+                complete(
+                  result
+                )
             }
-          } ~ path("pay" / "qrcode2" / "douyin") {
+          } ~
+            path("pay" / "qrcode") {
+              entity(asSourceOf[OrderModel.Recharge]) {
+                source =>
+                  {
+                    val result = source
+                      .map(data => {
+                        logger.info(data.logJson)
+                        OrderModel.DbInfo(
+                          orderId =
+                            UUID.randomUUID().toString.replaceAll("-", ""),
+                          nickName = data.nickName,
+                          pay = false,
+                          expire = false,
+                          openid = data.openid,
+                          id = data.id,
+                          money = data.money
+                            .replaceAll("¥", "")
+                            .replaceAll(",", "")
+                            .toDouble
+                            .toInt,
+                          volumn = data.money
+                            .replaceAll("¥", "")
+                            .replaceAll(",", "")
+                            .toDouble
+                            .toInt * 10,
+                          fee = BigDecimal("0.00"),
+                          platform = data.platform,
+                          createTime = LocalDateTime.now(),
+                          payCount = 0,
+                          payMoney = 0
+                        )
+                      })
+                      .via(OrderStream.add())
+                      .map(_._1)
+                      .via(OrderStream.qrcode())
+                      .via(OrderStream.notifyOrderCreateStatus())
+                      .map(t => (t._1, t._2.qrcode.get))
+                      .via(OrderStream.downloadQrocdeFile())
+                      .map((result: (OrderModel.DbInfo, String)) => {
+                        okData(
+                          Map(
+                            "dbQuery" -> (config.getString(
+                              "file.domain"
+                            ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
+                            "qrcode" -> (config.getString(
+                              "file.domain"
+                            ) + s"/${routerPrefix}/file/image?path=" + result._2)
+                          )
+                        )
+                      })
+                      .recover { e =>
+                        {
+                          e.printStackTrace()
+                          failMsg("当前充值人数太多、请稍候再试")
+                        }
+                      }
+
+                    complete(result)
+                  }
+              }
+            } ~ path("pay" / "qrcode2" / "douyin") {
             auth {
               session =>
                 {

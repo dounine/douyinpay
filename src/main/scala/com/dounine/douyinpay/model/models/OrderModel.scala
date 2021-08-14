@@ -37,10 +37,21 @@ object OrderModel {
     }
   }
 
+  final case class QrcodeResponse(
+      message: Option[String],
+      qrcode: Option[String],
+      setup: Option[String]
+  ) extends BaseSerializer
+
   case class FutureCreateInfo(
       info: DbInfo,
       success: Promise[String]
   )
+
+  final case class UpdateStatus(
+      orderId: String,
+      pay: Boolean
+  ) extends BaseSerializer
 
   final case class Recharge(
       openid: String,

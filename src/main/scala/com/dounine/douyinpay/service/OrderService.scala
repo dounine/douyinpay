@@ -48,6 +48,17 @@ class OrderService(implicit system: ActorSystem[_]) extends EnumMappers {
       })
   }
 
+  def updateOrderStatus(orderId: String, pay: Boolean): Future[Int] = {
+    db.run(dict.filter(_.orderId === orderId).result.headOption)
+      .flatMap {
+        case Some(value) =>
+          db.run(
+            dict.filter(_.orderId === value.orderId).map(_.pay).update(pay)
+          )
+        case None => Future.successful(0)
+      }
+  }
+
   def queryOrderStatus(
       orderId: String
   ): Future[String] = {
