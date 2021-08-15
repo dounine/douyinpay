@@ -11,7 +11,7 @@ object QrcodeUrlRandom {
   def random()(implicit system: ActorSystem[_]): String = {
     val urls: util.List[String] =
       system.settings.config.getStringList("app.qrcodeUrls")
-    urls.get(randomCount.getAndIncrement() % 2)
+    urls.get(randomCount.getAndIncrement() % urls.size())
   }
 
 }
