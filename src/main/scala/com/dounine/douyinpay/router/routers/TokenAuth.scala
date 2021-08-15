@@ -1,6 +1,7 @@
 package com.dounine.douyinpay.router.routers
 
 import akka.actor.typed.ActorSystem
+import akka.http.scaladsl.model.RemoteAddress
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.Unmarshaller
@@ -12,6 +13,7 @@ import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
 import org.slf4j.LoggerFactory
 
+import java.net.InetAddress
 import scala.util.{Failure, Success, Try}
 
 object TokenAuth extends JsonParse {
@@ -25,24 +27,30 @@ object TokenAuth extends JsonParse {
     for {
       parameters <- parameterMap
       headerToken <- optionalHeaderValueByName(headerName = tokenName)
-      userData <- jwtAuthenticateToken((headerToken match {
-        case Some(token) => Map(tokenName -> token)
-        case _           => Map.empty[String, String]
-      }) ++ parameters)
+      ip <- extractClientIP
+      userData <- jwtAuthenticateToken(
+        (headerToken match {
+          case Some(token) => Map(tokenName -> token)
+          case _           => Map.empty[String, String]
+        }) ++ parameters,
+        ip
+      )
     } yield userData
   }
 
   def jwtAuthenticateToken(
-      params: Map[String, String]
+      params: Map[String, String],
+      ip: RemoteAddress
   )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] =
     for {
       authorizedToken <- checkAuthorization(params)
       decodedToken <- decodeToken(authorizedToken)
-      userData <- convertToUserData(decodedToken)
+      userData <- convertToUserData(decodedToken, ip)
     } yield userData
 
   private def convertToUserData(
-      session: WechatModel.Session
+      session: WechatModel.Session,
+      ip: RemoteAddress
   )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] = {
     extractExecutionContext.flatMap { implicit ctx =>
       extractMaterializer.flatMap { implicit mat =>
@@ -57,7 +65,13 @@ object TokenAuth extends JsonParse {
                   "time" -> System.currentTimeMillis(),
                   "data" -> Map(
                     "event" -> LogEventKey.userLockedAccess,
-                    "openid" -> info.openid
+                    "openid" -> info.openid,
+                    "ip" -> ip
+                      .getAddress()
+                      .orElse(
+                        InetAddress.getByName("localhost")
+                      )
+                      .getHostAddress
                   )
                 ).toJson
               )
@@ -67,9 +81,7 @@ object TokenAuth extends JsonParse {
           })
           .runWith(Sink.head)
         onComplete(
-          userInfo.map(i =>
-            session
-          )
+          userInfo.map(i => session)
         ).flatMap(handleError)
       }
     }

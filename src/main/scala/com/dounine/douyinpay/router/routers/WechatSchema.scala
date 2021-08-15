@@ -109,7 +109,8 @@ object WechatSchema extends JsonParse {
                               "time" -> System.currentTimeMillis(),
                               "data" -> Map(
                                 "event" -> LogEventKey.userLockedAccess,
-                                "openid" -> result.get.openid
+                                "openid" -> result.get.openid,
+                                "ip" -> i.ip
                               )
                             ).toJson
                           )
