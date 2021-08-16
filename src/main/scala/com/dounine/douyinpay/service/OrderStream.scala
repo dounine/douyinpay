@@ -124,9 +124,15 @@ object OrderStream {
         if (tp2._2.qrcode.isDefined) {
           notify(tp2._1, "创建成功")
             .map(_ => tp2)
+            .recover {
+              case e => tp2
+            }
         } else {
           notify(tp2._1, "创建失败")
             .map(_ => tp2)
+            .recover {
+              case e => tp2
+            }
         }
       }
   }
@@ -173,8 +179,14 @@ object OrderStream {
       .mapAsync(1) { order =>
         if (order.pay) {
           notify(DingDing.MessageType.payed, order, "充值成功")
+            .recover {
+              case e => order
+            }
         } else {
           notify(DingDing.MessageType.payerr, order, "充值失败")
+            .recover {
+              case e => order
+            }
         }
       }
   }
