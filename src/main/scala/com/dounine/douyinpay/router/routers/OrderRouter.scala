@@ -282,7 +282,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                       ).toJson
                     )
                     onComplete(orderService.queryOrderStatus(orderId)) {
-                      case Success(value)     => ok(value)
+                      case Success(value)     => ok(Map("status" -> value))
                       case Failure(exception) => fail(exception.getMessage)
                     }
                 }
