@@ -253,7 +253,7 @@ object OrderStream {
                   orderTable
                     .filter(_.orderId === value.orderId)
                     .map(i => (i.pay, i.expire))
-                    .update((info.order.pay, true))
+                    .update((info.pay, true))
                 )
                 .map(info -> _)
             case None => Future.successful((info, 0))
