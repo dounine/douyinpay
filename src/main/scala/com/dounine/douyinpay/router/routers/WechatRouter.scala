@@ -22,6 +22,7 @@ import com.dounine.douyinpay.model.models.{
 }
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
+import com.dounine.douyinpay.tools.util.IpUtils
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -97,13 +98,17 @@ class WechatRouter()(implicit system: ActorSystem[_])
               ccode: String =>
                 extractClientIP {
                   ip =>
+                    val (province, city) =
+                      IpUtils.convertIpToProvinceCity(ip.getIp())
                     logger.info(
                       Map(
                         "time" -> System.currentTimeMillis(),
                         "data" -> Map(
                           "event" -> LogEventKey.fromCcode,
                           "ccode" -> ccode,
-                          "ip" -> ip.getIp()
+                          "ip" -> ip.getIp(),
+                          "province" -> province,
+                          "city" -> city
                         )
                       ).toJson
                     )
@@ -167,13 +172,17 @@ class WechatRouter()(implicit system: ActorSystem[_])
                           "timestamp" -> System.currentTimeMillis() / 1000,
                           "url" -> url
                         )
+                        val (province, city) =
+                          IpUtils.convertIpToProvinceCity(ip.getIp())
                         logger.info(
                           Map(
                             "time" -> System.currentTimeMillis(),
                             "data" -> Map(
                               "event" -> LogEventKey.wechatSignature,
                               "url" -> url,
-                              "ip" -> ip.getIp()
+                              "ip" -> ip.getIp(),
+                              "province" -> province,
+                              "city" -> city
                             )
                           ).toJson
                         )

@@ -16,6 +16,7 @@ import akka.stream.typed.scaladsl.{ActorSink, ActorSource}
 import akka.stream.{CompletionStrategy, _}
 import akka.{NotUsed, actor}
 import com.dounine.douyinpay.model.types.service.LogEventKey
+import com.dounine.douyinpay.tools.util.IpUtils
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.File
@@ -74,13 +75,17 @@ class FileRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                   ip =>
                     val byteArray: Array[Byte] =
                       Files.readAllBytes(Paths.get(path))
+                    val (province, city) =
+                      IpUtils.convertIpToProvinceCity(ip.getIp())
                     logger.info(
                       Map(
                         "time" -> System.currentTimeMillis(),
                         "data" -> Map(
                           "event" -> LogEventKey.payQrcodeAccess,
                           "payQrcodeUrl" -> path,
-                          "ip" -> ip.getIp()
+                          "ip" -> ip.getIp(),
+                          "province" -> province,
+                          "city" -> city
                         )
                       ).toJson
                     )

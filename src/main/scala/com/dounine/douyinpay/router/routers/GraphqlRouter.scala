@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives.cors
+import com.dounine.douyinpay.tools.util.IpUtils
 import io.circe.Json
 import org.slf4j.LoggerFactory
 import sangria.execution.{
@@ -45,6 +46,23 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
                       case Some(value) => slowLog :: SlowLog.extension :: Nil
                       case None        => Nil
                     }
+                    val ip: String = Seq(
+                      "X-Forwarded-For",
+                      "X-Real-Ip",
+                      "Remote-Address"
+                    ).map(
+                        request.headers
+                          .map(h => h.name() -> h.value())
+                          .toMap
+                          .get
+                      )
+                      .find(_.isDefined)
+                      .flatMap(_.map(i => i.split(",").head))
+                      .getOrElse("localhost")
+
+                    val (province, city) =
+                      IpUtils.convertIpToProvinceCity(ip)
+
                     val graphQLResponse = Executor
                       .execute(
                         schema = SchemaDef.UserSchema,
@@ -56,19 +74,11 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
                           headers = request.headers
                             .map(h => h.name() -> h.value())
                             .toMap,
-                          ip = Seq(
-                            "X-Forwarded-For",
-                            "X-Real-Ip",
-                            "Remote-Address"
-                          ).map(
-                              request.headers
-                                .map(h => h.name() -> h.value())
-                                .toMap
-                                .get
-                            )
-                            .find(_.isDefined)
-                            .flatMap(_.map(i => i.split(",").head))
-                            .getOrElse("localhost")
+                          addressInfo = SchemaDef.AddressInfo(
+                            ip = ip,
+                            province = province,
+                            city = city
+                          )
                         ),
                         variables = req.variables,
                         operationName = req.operationName,

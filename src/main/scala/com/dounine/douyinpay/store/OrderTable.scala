@@ -67,6 +67,12 @@ class OrderTable(tag: Tag)
       (createTime, pay)
     )
 
+  def payIndex =
+    index(
+      "douyinpay_order_pay_index",
+      pay
+    )
+
   def createTime: Rep[LocalDateTime] =
     column[LocalDateTime]("createTime", O.SqlType(timestampOnCreate))(
       localDateTime2timestamp

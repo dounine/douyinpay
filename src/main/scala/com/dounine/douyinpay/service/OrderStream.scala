@@ -26,6 +26,32 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object OrderStream {
 
+  def queryOrdersSuccess()(implicit
+      system: ActorSystem[_]
+  ): Source[
+    Map[String, Int],
+    NotUsed
+  ] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    val orderTable = TableQuery[OrderTable]
+
+    Source.future(
+      db.run(
+        orderTable
+          .filter(_.pay === true)
+          .groupBy(_.openid)
+          .map {
+            case (openid, paySuccessOrders) => (openid, paySuccessOrders.length)
+          }
+          .result
+          .map(_.map(i => i._1 -> i._2).toMap)
+      )
+    )
+  }
   def qrcodeCreate()(implicit
       system: ActorSystem[_]
   ): Flow[
@@ -43,9 +69,7 @@ object OrderStream {
           .post[OrderModel.QrcodeResponse](
             qrcodeUrl,
             Map(
-              "orderId" -> order.orderId,
-              "money" -> order.money,
-              "id" -> order.id,
+              "order" -> order,
               "timeout" -> 10 * 1000,
               "callback" -> s"${domain}/${routerPrefix}/order/update"
             )
@@ -216,18 +240,23 @@ object OrderStream {
     import slickSession.profile.api._
     val orderTable = TableQuery[OrderTable]
     Flow[OrderModel.UpdateStatus]
-      .mapAsync(1) { order =>
-        db.run(orderTable.filter(_.orderId === order.orderId).result.headOption)
+      .mapAsync(1) { info =>
+        db.run(
+            orderTable
+              .filter(_.orderId === info.order.orderId)
+              .result
+              .headOption
+          )
           .flatMap {
             case Some(value) =>
               db.run(
                   orderTable
                     .filter(_.orderId === value.orderId)
                     .map(i => (i.pay, i.expire))
-                    .update((order.pay, true))
+                    .update((info.order.pay, true))
                 )
-                .map(order -> _)
-            case None => Future.successful((order, 0))
+                .map(info -> _)
+            case None => Future.successful((info, 0))
           }
       }
   }

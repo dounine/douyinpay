@@ -25,6 +25,7 @@ object LogEventKey extends Enumeration {
   val orderPayOk: LogEventKey.Value = Value("event_order_pay_ok")
   val payMoneyMenu: LogEventKey.Value = Value("event_pay_money_menu")
   val orderPayFail: LogEventKey.Value = Value("event_order_pay_fail")
+  val orderQuery: LogEventKey.Value = Value("event_order_query")
   val userInfoQuery: LogEventKey.Value = Value("event_user_info_query")
   val payQrcodeAccess: LogEventKey.Value = Value("event_pay_qrcode_access")
 

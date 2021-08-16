@@ -65,7 +65,13 @@ import com.dounine.douyinpay.service.{
   WechatStream
 }
 import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.{MD5Util, Request, ServiceSingleton}
+import com.dounine.douyinpay.tools.util.{
+  IpUtils,
+  MD5Util,
+  OpenidPaySuccess,
+  Request,
+  ServiceSingleton
+}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 
@@ -174,6 +180,8 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 auth {
                   session =>
                     {
+                      val (province, city) =
+                        IpUtils.convertIpToProvinceCity(ip.getIp())
                       logger.info(
                         Map(
                           "time" -> System.currentTimeMillis(),
@@ -181,7 +189,9 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                             "event" -> LogEventKey.userInfoQuery,
                             "userAccount" -> id,
                             "openid" -> session.openid,
-                            "ip" -> ip.getIp()
+                            "ip" -> ip.getIp(),
+                            "province" -> province,
+                            "city" -> city
                           )
                         ).toJson
                       )
@@ -226,35 +236,56 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                     }
                 }
             } ~ path("pay" / "money" / "info" / "douyin") {
-              auth { session =>
-                {
-                  logger.info(
-                    Map(
-                      "time" -> System.currentTimeMillis(),
-                      "data" -> Map(
-                        "event" -> LogEventKey.payMoneyMenu,
-                        "openid" -> session.openid,
-                        "ip" -> ip.getIp()
-                      )
-                    ).toJson
-                  )
-                  ok(
-                    moneys.map(i => {
+              auth {
+                session =>
+                  {
+                    val (province, city) =
+                      IpUtils.convertIpToProvinceCity(ip.getIp())
+                    logger.info(
                       Map(
-                        "money" -> s"¥${i._1}",
-                        "volumn" -> i._2
-                      )
-                    })
-                  )
-                }
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.payMoneyMenu,
+                          "openid" -> session.openid,
+                          "ip" -> ip.getIp(),
+                          "province" -> province,
+                          "city" -> city
+                        )
+                      ).toJson
+                    )
+                    ok(
+                      moneys.map(i => {
+                        Map(
+                          "money" -> s"¥${i._1}",
+                          "volumn" -> i._2
+                        )
+                      })
+                    )
+                  }
               }
-            } ~ path("order" / "info" / Segment) { orderId =>
-              {
-                onComplete(orderService.queryOrderStatus(orderId)) {
-                  case Success(value)     => ok(value)
-                  case Failure(exception) => fail(exception.getMessage)
+            } ~ path("order" / "info" / Segment) {
+              orderId =>
+                auth {
+                  session =>
+                    val (province, city) =
+                      IpUtils.convertIpToProvinceCity(ip.getIp())
+                    logger.info(
+                      Map(
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.orderQuery,
+                          "openid" -> session.openid,
+                          "ip" -> ip.getIp(),
+                          "province" -> province,
+                          "city" -> city
+                        )
+                      ).toJson
+                    )
+                    onComplete(orderService.queryOrderStatus(orderId)) {
+                      case Success(value)     => ok(value)
+                      case Failure(exception) => fail(exception.getMessage)
+                    }
                 }
-              }
             }
           },
           post {
@@ -269,14 +300,15 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           "data" -> Map(
                             "event" -> (if (data.pay) LogEventKey.orderPayOk
                                         else LogEventKey.orderPayFail),
-                            "payOrderId" -> data.orderId
+                            "order" -> data.order
                           )
                         ).toJson
                       )
+                      OpenidPaySuccess.add(data.order.openid)
                       data
                     })
                     .via(OrderStream.updateOrderStatus())
-                    .map(_._1.orderId)
+                    .map(_._1.order.orderId)
                     .via(OrderStream.queryOrder())
                     .via(OrderStream.notifyOrderPayStatus())
                     .map(r => okData(r))
@@ -291,6 +323,8 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                     entity(asSourceOf[OrderModel.Recharge]) {
                       source =>
                         {
+                          val (province, city) =
+                            IpUtils.convertIpToProvinceCity(ip.getIp())
                           val result = source
                             .map(_ -> session.openid)
                             .map(i => {
@@ -314,7 +348,9 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                       "payMoney" -> i._1.money,
                                       "payVolumn" -> i._1.volumn,
                                       "sign" -> i._1.sign,
-                                      "ip" -> ip.getIp()
+                                      "ip" -> ip.getIp(),
+                                      "province" -> province,
+                                      "city" -> city
                                     )
                                   ).toJson
                                 )
@@ -334,21 +370,8 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 .replaceAll(",", "")
                                 .toDouble
                                 .toInt
-                              logger.info(
-                                Map(
-                                  "time" -> System.currentTimeMillis(),
-                                  "data" -> Map(
-                                    "event" -> LogEventKey.orderCreateRequest,
-                                    "openid" -> session.openid,
-                                    "payAccount" -> tp2._1.id,
-                                    "payMoney" -> money,
-                                    "payOrderId" -> orderId,
-                                    "ip" -> ip.getIp()
-                                  )
-                                ).toJson
-                              )
                               val userInfo = tp2._2
-                              OrderModel.DbInfo(
+                              val order = OrderModel.DbInfo(
                                 orderId = orderId,
                                 nickName = userInfo.nickname,
                                 pay = false,
@@ -371,6 +394,19 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 payCount = 0,
                                 payMoney = 0
                               )
+                              logger.info(
+                                Map(
+                                  "time" -> System.currentTimeMillis(),
+                                  "data" -> Map(
+                                    "event" -> LogEventKey.orderCreateRequest,
+                                    "order" -> order,
+                                    "ip" -> ip.getIp(),
+                                    "province" -> province,
+                                    "city" -> city
+                                  )
+                                ).toJson
+                              )
+                              order
                             })
                             .via(OrderStream.add())
                             .map(_._1)
@@ -383,16 +419,15 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                     "time" -> System.currentTimeMillis(),
                                     "data" -> Map(
                                       "event" -> LogEventKey.orderCreateFail,
-                                      "openid" -> session.openid,
-                                      "payAccount" -> i._1.id,
-                                      "payMoney" -> i._1.money,
-                                      "payOrderId" -> i._1.orderId,
+                                      "order" -> i._1,
                                       "payQrcode" -> "",
                                       "payMessage" -> i._2.message.getOrElse(
                                         ""
                                       ),
                                       "paySetup" -> i._2.setup.getOrElse(""),
-                                      "ip" -> ip.getIp()
+                                      "ip" -> ip.getIp(),
+                                      "province" -> province,
+                                      "city" -> city
                                     )
                                   ).toJson
                                 )
@@ -405,14 +440,13 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                     "time" -> System.currentTimeMillis(),
                                     "data" -> Map(
                                       "event" -> LogEventKey.orderCreateOk,
-                                      "openid" -> session.openid,
-                                      "payAccount" -> i._1.id,
-                                      "payMoney" -> i._1.money,
-                                      "payOrderId" -> i._1.orderId,
+                                      "order" -> i._1,
                                       "payQrcode" -> i._2.qrcode.getOrElse(
                                         ""
                                       ),
-                                      "ip" -> ip.getIp()
+                                      "ip" -> ip.getIp(),
+                                      "province" -> province,
+                                      "city" -> city
                                     )
                                   ).toJson
                                 )

@@ -577,7 +577,7 @@ object WechatStream extends JsonParse with SuportRouter {
             )
           )
         } else {
-          val paramers = result._2
+          val paramers: LoginParamers = result._2
           val openid = result._1.openid.get
           Source
             .single(openid)

@@ -58,11 +58,16 @@ object SchemaDef {
     )
   )
 
+  case class AddressInfo(
+      ip: String,
+      province: String,
+      city: String
+  )
   case class RequestInfo(
       url: String,
       headers: Map[String, String] = Map.empty,
       parameters: Map[String, String] = Map.empty,
-      ip: String
+      addressInfo: AddressInfo
   )
 
   val query = ObjectType(

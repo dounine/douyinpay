@@ -40,6 +40,7 @@ object OrderModel {
   final case class QrcodeResponse(
       message: Option[String],
       qrcode: Option[String],
+      qrcodeBase64: Option[String],
       setup: Option[String]
   ) extends BaseSerializer
 
@@ -49,8 +50,8 @@ object OrderModel {
   )
 
   final case class UpdateStatus(
-      orderId: String,
-      pay: Boolean
+      pay: Boolean,
+      order: DbInfo
   ) extends BaseSerializer
 
   final case class Recharge(

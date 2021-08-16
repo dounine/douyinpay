@@ -6,14 +6,37 @@ import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.ShardingEnvelope
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
 import akka.persistence.typed.PersistenceId
+import akka.stream.scaladsl.Sink
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.InitToken
-import com.dounine.douyinpay.behaviors.engine.{AccessTokenBehavior, JSApiTicketBehavior, QrcodeBehavior}
+import com.dounine.douyinpay.behaviors.engine.{
+  AccessTokenBehavior,
+  JSApiTicketBehavior,
+  QrcodeBehavior
+}
 import com.dounine.douyinpay.model.models.UserModel
-import com.dounine.douyinpay.service.{DictionaryService, OrderService, UserService}
-import com.dounine.douyinpay.store.{AccountTable, AkkaPersistenerJournalTable, AkkaPersistenerSnapshotTable, CardTable, DictionaryTable, OpenidTable, OrderTable, UserTable}
+import com.dounine.douyinpay.service.{
+  DictionaryService,
+  OrderService,
+  OrderStream,
+  UserService
+}
+import com.dounine.douyinpay.store.{
+  AccountTable,
+  AkkaPersistenerJournalTable,
+  AkkaPersistenerSnapshotTable,
+  CardTable,
+  DictionaryTable,
+  OpenidTable,
+  OrderTable,
+  UserTable
+}
 import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
-import com.dounine.douyinpay.tools.util.{DingDing, ServiceSingleton}
+import com.dounine.douyinpay.tools.util.{
+  DingDing,
+  OpenidPaySuccess,
+  ServiceSingleton
+}
 import org.slf4j.{Logger, LoggerFactory}
 import slick.lifted
 
@@ -143,7 +166,11 @@ class Startups(implicit system: ActorSystem[_]) {
         case Success(value) =>
           logger.info(s"insert user apikey result ${value}")
       }
-
+    OrderStream
+      .queryOrdersSuccess()
+      .runForeach(maps => {
+        OpenidPaySuccess.init(maps)
+      })
   }
 
   def httpAfter(): Unit = {
