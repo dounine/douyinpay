@@ -374,7 +374,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                             })
                             .via(OrderStream.add())
                             .map(_._1)
-                            .via(OrderStream.qrcode())
+                            .via(OrderStream.qrcodeCreate())
                             .via(OrderStream.notifyOrderCreateStatus())
                             .map(i => {
                               if (i._2.qrcode.isEmpty) {
@@ -404,7 +404,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                   Map(
                                     "time" -> System.currentTimeMillis(),
                                     "data" -> Map(
-                                      "event" -> LogEventKey.wechatLogin,
+                                      "event" -> LogEventKey.orderCreateOk,
                                       "openid" -> session.openid,
                                       "payAccount" -> i._1.id,
                                       "payMoney" -> i._1.money,

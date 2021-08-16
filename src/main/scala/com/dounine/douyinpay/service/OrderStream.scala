@@ -26,7 +26,7 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object OrderStream {
 
-  def qrcode()(implicit
+  def qrcodeCreate()(implicit
       system: ActorSystem[_]
   ): Flow[
     OrderModel.DbInfo,
