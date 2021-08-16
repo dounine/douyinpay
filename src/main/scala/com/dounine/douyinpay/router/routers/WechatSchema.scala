@@ -9,7 +9,7 @@ import com.dounine.douyinpay.router.routers.SchemaDef.RequestInfo
 import com.dounine.douyinpay.router.routers.errors.LockedException
 import com.dounine.douyinpay.service.{AccountStream, OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.MD5Util
+import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util}
 import org.slf4j.LoggerFactory
 import sangria.schema._
 
@@ -87,11 +87,7 @@ object WechatSchema extends JsonParse {
               ccode = c.arg[String]("ccode"),
               token = c.value.headers.get("token"),
               sign = c.arg[String]("sign"),
-              ip = Seq("X-Forwarded-For", "X-Real-Ip", "Remote-Address")
-                .map(c.value.headers.get)
-                .find(_.isDefined)
-                .flatMap(_.map(i => i.split(",").head))
-                .getOrElse("localhost")
+              ip = c.value.ip
             )
           )
           .flatMapConcat { i =>
@@ -109,6 +105,20 @@ object WechatSchema extends JsonParse {
                               "time" -> System.currentTimeMillis(),
                               "data" -> Map(
                                 "event" -> LogEventKey.userLockedAccess,
+                                "openid" -> result.get.openid,
+                                "ip" -> i.ip
+                              )
+                            ).toJson
+                          )
+                          throw new LockedException(result.get.openid)
+                        } else if (
+                          IpUtils.convertIpToProvinceCity(i.ip)._2 == "济南"
+                        ) {
+                          logger.error(
+                            Map(
+                              "time" -> System.currentTimeMillis(),
+                              "data" -> Map(
+                                "event" -> LogEventKey.ipRangeLockedAccess,
                                 "openid" -> result.get.openid,
                                 "ip" -> i.ip
                               )

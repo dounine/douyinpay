@@ -55,7 +55,20 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
                           parameters = parameters,
                           headers = request.headers
                             .map(h => h.name() -> h.value())
-                            .toMap
+                            .toMap,
+                          ip = Seq(
+                            "X-Forwarded-For",
+                            "X-Real-Ip",
+                            "Remote-Address"
+                          ).map(
+                              request.headers
+                                .map(h => h.name() -> h.value())
+                                .toMap
+                                .get
+                            )
+                            .find(_.isDefined)
+                            .flatMap(_.map(i => i.split(",").head))
+                            .getOrElse("localhost")
                         ),
                         variables = req.variables,
                         operationName = req.operationName,
