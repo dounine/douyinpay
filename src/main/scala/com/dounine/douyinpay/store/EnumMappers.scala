@@ -24,7 +24,7 @@ trait EnumMappers extends JsonParse {
   final val timestampOnUpdate: String =
     "timestamp not null default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP"
   final val timestampOnCreate: String =
-    "timestamp not null default CURRENT_TIMESTAMP"
+    "datetime"
 
   implicit val localDateTime2timestamp
       : JdbcType[LocalDateTime] with BaseTypedType[LocalDateTime] =

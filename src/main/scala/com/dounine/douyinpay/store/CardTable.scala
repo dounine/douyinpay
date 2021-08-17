@@ -38,8 +38,7 @@ class CardTable(tag: Tag)
   def createTime: Rep[LocalDateTime] =
     column[LocalDateTime](
       "createTime",
-      O.SqlType(timestampOnCreate),
-      O.Default(LocalDateTime.now())
+      O.SqlType(timestampOnCreate)
     )(
       localDateTime2timestamp
     )
