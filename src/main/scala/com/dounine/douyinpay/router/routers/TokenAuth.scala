@@ -9,7 +9,6 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.dounine.douyinpay.model.models.{RouterModel, WechatModel}
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.errors.LockedException
-import com.dounine.douyinpay.router.routers.schema.WechatSchema.logger
 import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
 import com.dounine.douyinpay.tools.util.{IpUtils, OpenidPaySuccess}
