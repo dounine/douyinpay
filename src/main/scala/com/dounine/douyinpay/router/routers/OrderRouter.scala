@@ -177,62 +177,66 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
               )
             } ~ path("pay" / "user" / "info" / "douyin" / Segment) {
               id =>
-                auth {
-                  session =>
-                    {
-                      val (province, city) =
-                        IpUtils.convertIpToProvinceCity(ip.getIp())
-                      logger.info(
-                        Map(
-                          "time" -> System.currentTimeMillis(),
-                          "data" -> Map(
-                            "event" -> LogEventKey.userInfoQuery,
-                            "userAccount" -> id,
-                            "openid" -> session.openid,
-                            "ip" -> ip.getIp(),
-                            "province" -> province,
-                            "city" -> city
+                extractRequest {
+                  request =>
+                    auth {
+                      session =>
+                        {
+                          val (province, city) =
+                            IpUtils.convertIpToProvinceCity(ip.getIp())
+                          logger.info(
+                            Map(
+                              "time" -> System.currentTimeMillis(),
+                              "data" -> Map(
+                                "event" -> LogEventKey.userInfoQuery,
+                                "userAccount" -> id,
+                                "openid" -> session.openid,
+                                "ip" -> ip.getIp(),
+                                "province" -> province,
+                                "city" -> city
+                              )
+                            ).toJson
                           )
-                        ).toJson
-                      )
-                      cache(lfuCache, keyFunction) {
-                        if (id.contains("抖音")) {
-                          fail("帐号格式不正确噢")
-                        } else {
-                          val future = Request
-                            .get[PayUserInfoModel.DouYinSearchResponse](
-                              s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-                                .currentTimeMillis()}"
-                            )
-                            .map(item => {
-                              if (item.data.open_info.nonEmpty) {
-                                val data
-                                    : PayUserInfoModel.DouYinSearchOpenInfo =
-                                  item.data.open_info.head
-                                Option(
-                                  PayUserInfoModel.Info(
-                                    nickName = data.nick_name,
-                                    id = data.search_id,
-                                    avatar = data.avatar_thumb.url_list.head
-                                  )
+                          cache(lfuCache, keyFunction) {
+                            if (id.contains("抖音")) {
+                              fail("帐号格式不正确噢")
+                            } else {
+                              val future = Request
+                                .get[PayUserInfoModel.DouYinSearchResponse](
+                                  s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                                    .currentTimeMillis()}"
                                 )
-                              } else {
-                                Option.empty
+                                .map(item => {
+                                  if (item.data.open_info.nonEmpty) {
+                                    val data
+                                        : PayUserInfoModel.DouYinSearchOpenInfo =
+                                      item.data.open_info.head
+                                    Option(
+                                      PayUserInfoModel.Info(
+                                        nickName = data.nick_name,
+                                        id = data.search_id,
+                                        avatar = data.avatar_thumb.url_list.head
+                                      )
+                                    )
+                                  } else {
+                                    Option.empty
+                                  }
+                                })
+                              onComplete(future) {
+                                case Success(
+                                      value: Option[PayUserInfoModel.Info]
+                                    ) =>
+                                  value match {
+                                    case Some(value) => ok(value)
+                                    case None        => fail("用户不存在")
+                                  }
+                                case Failure(exception) =>
+                                  lfuCache.remove(request.uri)
+                                  fail(exception.getLocalizedMessage)
                               }
-                            })
-                          onComplete(future) {
-                            case Success(
-                                  value: Option[PayUserInfoModel.Info]
-                                ) =>
-                              value match {
-                                case Some(value) => ok(value)
-                                case None        => fail("用户不存在")
-                              }
-                            case Failure(exception) =>
-                              fail(exception.getLocalizedMessage)
+                            }
                           }
                         }
-                      }
                     }
                 }
             } ~ path("pay" / "money" / "info" / "douyin") {
