@@ -366,7 +366,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                                     "event" -> LogEventKey.orderPayManay,
                                                     "recharge" -> tp2._1,
                                                     "openid" -> tp2._2,
-                                                    "ip" -> ip.toIP,
+                                                    "ip" -> ip.getIp(),
                                                     "province" -> province,
                                                     "city" -> city
                                                   )
