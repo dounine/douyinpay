@@ -1,7 +1,7 @@
 package com.dounine.douyinpay.router.routers
 
 import akka.actor.typed.ActorSystem
-import akka.http.scaladsl.model.RemoteAddress
+import akka.http.scaladsl.model.{HttpRequest, RemoteAddress}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.Unmarshaller
@@ -9,8 +9,10 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.dounine.douyinpay.model.models.{RouterModel, WechatModel}
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.errors.LockedException
+import com.dounine.douyinpay.router.routers.schema.WechatSchema.logger
 import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
+import com.dounine.douyinpay.tools.util.{IpUtils, OpenidPaySuccess}
 import org.slf4j.LoggerFactory
 
 import java.net.InetAddress
@@ -28,29 +30,33 @@ object TokenAuth extends JsonParse {
       parameters <- parameterMap
       headerToken <- optionalHeaderValueByName(headerName = tokenName)
       ip <- extractClientIP
+      request <- extractRequest
       userData <- jwtAuthenticateToken(
         (headerToken match {
           case Some(token) => Map(tokenName -> token)
           case _           => Map.empty[String, String]
         }) ++ parameters,
-        ip
+        ip,
+        request
       )
     } yield userData
   }
 
   def jwtAuthenticateToken(
       params: Map[String, String],
-      ip: RemoteAddress
+      ip: RemoteAddress,
+      request: HttpRequest
   )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] =
     for {
       authorizedToken <- checkAuthorization(params)
       decodedToken <- decodeToken(authorizedToken)
-      userData <- convertToUserData(decodedToken, ip)
+      userData <- convertToUserData(decodedToken, ip, request)
     } yield userData
 
   private def convertToUserData(
       session: WechatModel.Session,
-      ip: RemoteAddress
+      ip: RemoteAddress,
+      request: HttpRequest
   )(implicit system: ActorSystem[_]): Directive1[WechatModel.Session] = {
     extractExecutionContext.flatMap { implicit ctx =>
       extractMaterializer.flatMap { implicit mat =>
@@ -59,23 +65,48 @@ object TokenAuth extends JsonParse {
           .via(OpenidStream.query())
           .map(_.get)
           .map(info => {
+            val ipHost = ip
+              .getAddress()
+              .orElse(
+                InetAddress.getByName("localhost")
+              )
+              .getHostAddress
+            val (province, city) =
+              IpUtils.convertIpToProvinceCity(ipHost)
             if (info.locked) {
               logger.error(
                 Map(
                   "time" -> System.currentTimeMillis(),
                   "data" -> Map(
                     "event" -> LogEventKey.userLockedAccess,
-                    "openid" -> info.openid,
-                    "ip" -> ip
-                      .getAddress()
-                      .orElse(
-                        InetAddress.getByName("localhost")
-                      )
-                      .getHostAddress
+                    "openid" -> session.openid,
+                    "uri" -> request.uri,
+                    "ip" -> ipHost,
+                    "province" -> province,
+                    "city" -> city
                   )
                 ).toJson
               )
-              throw new LockedException(s"locked error -> ${info.openid} ")
+              throw new LockedException(s"user locked -> ${info.openid} ")
+            } else if (city == "济南") {
+              if (OpenidPaySuccess.query(session.openid) <= 2) {
+                logger.error(
+                  Map(
+                    "time" -> System.currentTimeMillis(),
+                    "data" -> Map(
+                      "event" -> LogEventKey.ipRangeLockedAccess,
+                      "openid" -> session.openid,
+                      "uri" -> request.uri,
+                      "ip" -> ipHost,
+                      "province" -> province,
+                      "city" -> city
+                    )
+                  ).toJson
+                )
+                throw new LockedException(
+                  s"ip locked -> ${info.openid}"
+                )
+              }
             }
             info
           })
