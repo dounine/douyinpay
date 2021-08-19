@@ -70,10 +70,12 @@ import com.dounine.douyinpay.tools.util.{
   MD5Util,
   OpenidPaySuccess,
   Request,
-  ServiceSingleton
+  ServiceSingleton,
+  UUIDUtil
 }
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
+import com.dounine.douyinpay.router.routers.errors.PayManyException
 
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
@@ -123,6 +125,18 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
   val cachingSettings =
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
+
+  val qrcodeLfuCacheSettings = defaultCachingSettings.lfuCacheSettings
+    .withInitialCapacity(100)
+    .withMaxCapacity(1000)
+    .withTimeToLive(61.seconds)
+    .withTimeToIdle(60.seconds)
+
+  val qrcodeCachingSettings =
+    defaultCachingSettings.withLfuCacheSettings(qrcodeLfuCacheSettings)
+  val qrcodeLfuCache: Cache[String, LocalDateTime] = LfuCache(
+    qrcodeCachingSettings
+  )
 
   val auth = TokenAuth()
 
@@ -298,6 +312,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 source =>
                   val result = source
                     .map(data => {
+                      qrcodeLfuCache.remove(data.order.openid)
                       logger.info(
                         Map(
                           "time" -> System.currentTimeMillis(),
@@ -329,155 +344,201 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                         {
                           val (province, city) =
                             IpUtils.convertIpToProvinceCity(ip.getIp())
-                          val result = source
-                            .map(_ -> session.openid)
-                            .map(i => {
-                              if (
-                                MD5Util.md5(
-                                  Array(
-                                    i._1.id,
-                                    i._1.money,
-                                    i._1.volumn,
-                                    session.openid
-                                  ).sorted.mkString("")
-                                ) != i._1.sign
-                              ) {
-                                logger.error(
-                                  Map(
-                                    "time" -> System.currentTimeMillis(),
-                                    "data" -> Map(
-                                      "event" -> LogEventKey.orderCreateSignError,
-                                      "openid" -> session.openid,
-                                      "payAccount" -> i._1.id,
-                                      "payMoney" -> i._1.money,
-                                      "payVolumn" -> i._1.volumn,
-                                      "sign" -> i._1.sign,
-                                      "ip" -> ip.getIp(),
-                                      "province" -> province,
-                                      "city" -> city
-                                    )
-                                  ).toJson
-                                )
-                                throw new Exception("创建定单验证不通过")
+                          val result =
+                            source
+                              .map(_ -> session.openid)
+                              .mapAsync(1) {
+                                tp2 =>
+                                  {
+                                    qrcodeLfuCache.get(tp2._2) match {
+                                      case Some(time) => {
+                                        time
+                                          .map(t => {
+                                            val nextSeconds = java.time.Duration
+                                              .between(t, LocalDateTime.now())
+                                              .getSeconds
+                                            if (nextSeconds <= 60) {
+                                              logger.error(
+                                                Map(
+                                                  "time" -> System
+                                                    .currentTimeMillis(),
+                                                  "data" -> Map(
+                                                    "event" -> LogEventKey.orderPayManay,
+                                                    "recharge" -> tp2._1,
+                                                    "openid" -> tp2._2,
+                                                    "ip" -> ip.toIP,
+                                                    "province" -> province,
+                                                    "city" -> city
+                                                  )
+                                                ).toJson
+                                              )
+                                              throw new PayManyException(
+                                                s"您上一笔定单未支付、请于 ${60 - nextSeconds} 秒后再操作"
+                                              )
+                                            }
+                                            tp2
+                                          })
+                                      }
+                                      case None => Future.successful(tp2)
+                                    }
+                                  }
                               }
-                              i
-                            })
-                            .via(WechatStream.userInfoQuery2())
-                            .map(tp2 => {
-                              val data = tp2._1
-                              val orderId = UUID
-                                .randomUUID()
-                                .toString
-                                .replaceAll("-", "")
-                              val money = data.money
-                                .replaceAll("¥", "")
-                                .replaceAll(",", "")
-                                .toDouble
-                                .toInt
-                              val userInfo = tp2._2
-                              val order = OrderModel.DbInfo(
-                                orderId = orderId,
-                                nickName = userInfo.nickname,
-                                pay = false,
-                                expire = false,
-                                openid = session.openid,
-                                id = data.id,
-                                money = data.money
-                                  .replaceAll("¥", "")
-                                  .replaceAll(",", "")
-                                  .toDouble
-                                  .toInt,
-                                volumn = data.money
-                                  .replaceAll("¥", "")
-                                  .replaceAll(",", "")
-                                  .toDouble
-                                  .toInt * 10,
-                                fee = BigDecimal("0.00"),
-                                platform = PayPlatform.douyin,
-                                createTime = LocalDateTime.now(),
-                                payCount = 0,
-                                payMoney = 0
-                              )
-                              logger.info(
-                                Map(
-                                  "time" -> System.currentTimeMillis(),
-                                  "data" -> Map(
-                                    "event" -> LogEventKey.orderCreateRequest,
-                                    "order" -> order,
-                                    "ip" -> ip.getIp(),
-                                    "province" -> province,
-                                    "city" -> city
+                              .map(i => {
+                                if (
+                                  MD5Util.md5(
+                                    Array(
+                                      i._1.id,
+                                      i._1.money,
+                                      i._1.volumn,
+                                      session.openid
+                                    ).sorted.mkString("")
+                                  ) != i._1.sign
+                                ) {
+                                  logger.error(
+                                    Map(
+                                      "time" -> System.currentTimeMillis(),
+                                      "data" -> Map(
+                                        "event" -> LogEventKey.orderCreateSignError,
+                                        "openid" -> session.openid,
+                                        "payAccount" -> i._1.id,
+                                        "payMoney" -> i._1.money,
+                                        "payVolumn" -> i._1.volumn,
+                                        "sign" -> i._1.sign,
+                                        "ip" -> ip.getIp(),
+                                        "province" -> province,
+                                        "city" -> city
+                                      )
+                                    ).toJson
                                   )
-                                ).toJson
-                              )
-                              order
-                            })
-                            .via(OrderStream.add())
-                            .map(_._1)
-                            .via(OrderStream.qrcodeCreate())
-                            .via(OrderStream.notifyOrderCreateStatus())
-                            .map(i => {
-                              if (i._2.qrcode.isEmpty) {
-                                logger.error(
-                                  Map(
-                                    "time" -> System.currentTimeMillis(),
-                                    "data" -> Map(
-                                      "event" -> LogEventKey.orderCreateFail,
-                                      "order" -> i._1,
-                                      "payQrcode" -> "",
-                                      "payMessage" -> i._2.message.getOrElse(
-                                        ""
-                                      ),
-                                      "paySetup" -> i._2.setup.getOrElse(""),
-                                      "ip" -> ip.getIp(),
-                                      "province" -> province,
-                                      "city" -> city
-                                    )
-                                  ).toJson
+                                  throw new Exception("创建定单验证不通过")
+                                }
+                                i
+                              })
+                              .via(WechatStream.userInfoQuery2())
+                              .map(tp2 => {
+                                val data = tp2._1
+                                val orderId = UUIDUtil.uuid()
+                                val userInfo = tp2._2
+                                val order = OrderModel.DbInfo(
+                                  orderId = orderId,
+                                  nickName = userInfo.nickname,
+                                  pay = false,
+                                  expire = false,
+                                  openid = session.openid,
+                                  id = data.id,
+                                  money = data.money
+                                    .replaceAll("¥", "")
+                                    .replaceAll(",", "")
+                                    .toDouble
+                                    .toInt,
+                                  volumn = data.money
+                                    .replaceAll("¥", "")
+                                    .replaceAll(",", "")
+                                    .toDouble
+                                    .toInt * 10,
+                                  fee = BigDecimal("0.00"),
+                                  platform = PayPlatform.douyin,
+                                  createTime = LocalDateTime.now(),
+                                  payCount = 0,
+                                  payMoney = 0
                                 )
-                                throw new Exception(
-                                  s"${i._1.orderId} qrcode is empty"
-                                )
-                              } else {
                                 logger.info(
                                   Map(
                                     "time" -> System.currentTimeMillis(),
                                     "data" -> Map(
-                                      "event" -> LogEventKey.orderCreateOk,
-                                      "order" -> i._1,
-                                      "payQrcode" -> i._2.qrcode.getOrElse(
-                                        ""
-                                      ),
+                                      "event" -> LogEventKey.orderCreateRequest,
+                                      "order" -> order,
                                       "ip" -> ip.getIp(),
                                       "province" -> province,
                                       "city" -> city
                                     )
                                   ).toJson
                                 )
+                                order
+                              })
+                              .via(OrderStream.add())
+                              .map(_._1)
+                              .via(OrderStream.qrcodeCreate())
+                              .mapAsync(1) { info =>
+                                info._2.qrcode match {
+                                  case Some(value) =>
+                                    qrcodeLfuCache
+                                      .put(
+                                        info._1.openid,
+                                        Future.successful(LocalDateTime.now())
+                                      )
+                                      .map(_ => info)
+                                  case None => {
+                                    qrcodeLfuCache.remove(info._1.openid)
+                                    Future.successful(info)
+                                  }
+                                }
                               }
-                              i
-                            })
-                            .map(t => (t._1, t._2.qrcode.get))
-                            .via(OrderStream.downloadQrocdeFile())
-                            .map((result: (OrderModel.DbInfo, String)) => {
-                              okData(
-                                Map(
-                                  "dbQuery" -> (config.getString(
-                                    "file.domain"
-                                  ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
-                                  "qrcode" -> (config.getString(
-                                    "file.domain"
-                                  ) + s"/${routerPrefix}/file/image?path=" + result._2)
+                              .via(OrderStream.notifyOrderCreateStatus())
+                              .map(i => {
+                                if (i._2.qrcode.isEmpty) {
+                                  logger.error(
+                                    Map(
+                                      "time" -> System.currentTimeMillis(),
+                                      "data" -> Map(
+                                        "event" -> LogEventKey.orderCreateFail,
+                                        "order" -> i._1,
+                                        "payQrcode" -> "",
+                                        "payMessage" -> i._2.message.getOrElse(
+                                          ""
+                                        ),
+                                        "paySetup" -> i._2.setup.getOrElse(""),
+                                        "ip" -> ip.getIp(),
+                                        "province" -> province,
+                                        "city" -> city
+                                      )
+                                    ).toJson
+                                  )
+                                  throw new Exception(
+                                    s"${i._1.orderId} qrcode is empty"
+                                  )
+                                } else {
+                                  logger.info(
+                                    Map(
+                                      "time" -> System.currentTimeMillis(),
+                                      "data" -> Map(
+                                        "event" -> LogEventKey.orderCreateOk,
+                                        "order" -> i._1,
+                                        "payQrcode" -> i._2.qrcode.getOrElse(
+                                          ""
+                                        ),
+                                        "ip" -> ip.getIp(),
+                                        "province" -> province,
+                                        "city" -> city
+                                      )
+                                    ).toJson
+                                  )
+                                }
+                                i
+                              })
+                              .map(t => (t._1, t._2.qrcode.get))
+                              .via(OrderStream.downloadQrocdeFile())
+                              .map((result: (OrderModel.DbInfo, String)) => {
+                                okData(
+                                  Map(
+                                    "dbQuery" -> (config.getString(
+                                      "file.domain"
+                                    ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
+                                    "qrcode" -> (config.getString(
+                                      "file.domain"
+                                    ) + s"/${routerPrefix}/file/image?path=" + result._2)
+                                  )
                                 )
-                              )
-                            })
-                            .recover { e =>
-                              {
-                                e.printStackTrace()
-                                failMsg("当前充值人数太多、请稍候再试")
+                              })
+                              .recover {
+                                case e: PayManyException =>
+                                  failMsg(e.getMessage)
+                                case ee => {
+                                  ee.printStackTrace()
+                                  failMsg("当前充值人数太多、请稍候再试")
+                                }
                               }
-                            }
-                            .idleTimeout(15.seconds)
+                              .idleTimeout(15.seconds)
 
                           complete(result)
                         }

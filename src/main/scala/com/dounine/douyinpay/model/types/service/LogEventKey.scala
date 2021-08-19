@@ -23,6 +23,7 @@ object LogEventKey extends Enumeration {
     "event_ip_range_locked_access"
   )
   val orderPayOk: LogEventKey.Value = Value("event_order_pay_ok")
+  val orderPayManay: LogEventKey.Value = Value("event_order_pay_many")
   val payMoneyMenu: LogEventKey.Value = Value("event_pay_money_menu")
   val orderPayFail: LogEventKey.Value = Value("event_order_pay_fail")
   val orderQuery: LogEventKey.Value = Value("event_order_query")
