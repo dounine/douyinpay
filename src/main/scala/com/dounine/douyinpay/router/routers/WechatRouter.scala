@@ -76,46 +76,16 @@ class WechatRouter()(implicit system: ActorSystem[_])
           get {
             path("redirect" / Segment) {
               card: String =>
-                val params: String = Map(
-                  "appid" -> appid,
-                  "redirect_uri" -> URLEncoder.encode(
-                    domain + "?card=" + card,
-                    "utf-8"
-                  ),
-                  "response_type" -> "code",
-                  "scope" -> "snsapi_base",
-                  "state" -> appid
-                ).map(i => s"${i._1}=${i._2}")
-                  .mkString("&")
-                redirect(
-                  s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-                  StatusCodes.PermanentRedirect
-                )
-            }
-          },
-          get {
-            path("into" / "from" / Segment) {
-              ccode: String =>
-                extractClientIP {
-                  ip =>
-                    val (province, city) =
-                      IpUtils.convertIpToProvinceCity(ip.getIp())
-                    logger.info(
-                      Map(
-                        "time" -> System.currentTimeMillis(),
-                        "data" -> Map(
-                          "event" -> LogEventKey.fromCcode,
-                          "ccode" -> ccode,
-                          "ip" -> ip.getIp(),
-                          "province" -> province,
-                          "city" -> city
-                        )
-                      ).toJson
-                    )
+                extractRequest {
+                  request =>
+                    val scheme: String = request.headers
+                      .map(i => i.name() -> i.value())
+                      .toMap
+                      .getOrElse("X-Scheme", request.uri.scheme)
                     val params: String = Map(
                       "appid" -> appid,
                       "redirect_uri" -> URLEncoder.encode(
-                        domain + "?ccode=" + ccode,
+                        (scheme + "://" + domain) + "?card=" + card,
                         "utf-8"
                       ),
                       "response_type" -> "code",
@@ -131,28 +101,46 @@ class WechatRouter()(implicit system: ActorSystem[_])
             }
           },
           get {
-            path("web" / "user" / "login" / Segment) {
-              code =>
-                parameters("ccode".optional, "sign") {
-                  (ccode: Option[String], sign: String) =>
-                    extractClientIP { ip =>
-                      optionalHeaderValueByName("token") {
-                        token: Option[String] =>
-                          {
-                            val result = Source
-                              .single(
-                                WechatModel.LoginParamers(
-                                  code = code,
-                                  ccode = ccode.getOrElse(""),
-                                  token = token,
-                                  sign = sign,
-                                  ip = ip.getIp()
-                                )
-                              )
-                              .via(WechatStream.webBaseUserInfo())
-                            complete(result)
-                          }
-                      }
+            path("into" / "from" / Segment) {
+              ccode: String =>
+                extractClientIP {
+                  ip =>
+                    extractRequest {
+                      request =>
+                        val scheme: String = request.headers
+                          .map(i => i.name() -> i.value())
+                          .toMap
+                          .getOrElse("X-Scheme", request.uri.scheme)
+
+                        val (province, city) =
+                          IpUtils.convertIpToProvinceCity(ip.getIp())
+                        logger.info(
+                          Map(
+                            "time" -> System.currentTimeMillis(),
+                            "data" -> Map(
+                              "event" -> LogEventKey.fromCcode,
+                              "ccode" -> ccode,
+                              "ip" -> ip.getIp(),
+                              "province" -> province,
+                              "city" -> city
+                            )
+                          ).toJson
+                        )
+                        val params: String = Map(
+                          "appid" -> appid,
+                          "redirect_uri" -> URLEncoder.encode(
+                            (scheme + "://" + domain) + "?ccode=" + ccode,
+                            "utf-8"
+                          ),
+                          "response_type" -> "code",
+                          "scope" -> "snsapi_base",
+                          "state" -> appid
+                        ).map(i => s"${i._1}=${i._2}")
+                          .mkString("&")
+                        redirect(
+                          s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+                          StatusCodes.PermanentRedirect
+                        )
                     }
                 }
             }

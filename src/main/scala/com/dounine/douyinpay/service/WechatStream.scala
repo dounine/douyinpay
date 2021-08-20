@@ -562,7 +562,7 @@ object WechatStream extends JsonParse with SuportRouter {
         if (result._1.errmsg.isDefined) {
           val paramers = result._2
           val domainEncode = URLEncoder.encode(
-            domain + s"?ccode=${paramers.ccode}",
+            (result._2.scheme + "://" + domain) + s"?ccode=${paramers.ccode}",
             "utf-8"
           )
           Source.single(
@@ -679,7 +679,7 @@ object WechatStream extends JsonParse with SuportRouter {
         if (result._1.errmsg.isDefined) {
           val paramers = result._2
           val domainEncode = URLEncoder.encode(
-            domain + s"?ccode=${paramers.ccode}",
+            (result._2.scheme + "://" + domain) + s"?ccode=${paramers.ccode}",
             "utf-8"
           )
           Source.single(

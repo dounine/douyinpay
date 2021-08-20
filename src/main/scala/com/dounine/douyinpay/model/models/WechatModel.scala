@@ -17,6 +17,7 @@ object WechatModel {
   )
 
   case class LoginParamers(
+      scheme: String,
       code: String,
       ccode: String,
       token: Option[String],

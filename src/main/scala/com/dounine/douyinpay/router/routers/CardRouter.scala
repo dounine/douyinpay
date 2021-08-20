@@ -93,21 +93,28 @@ class CardRouter()(implicit system: ActorSystem[_])
           get {
             path("card" / "active" / Segment) {
               card =>
-                val params: String = Map(
-                  "appid" -> appid,
-                  "redirect_uri" -> URLEncoder.encode(
-                    domain + s"?card=${card}",
-                    "utf-8"
-                  ),
-                  "response_type" -> "code",
-                  "scope" -> "snsapi_base",
-                  "state" -> appid
-                ).map(i => s"${i._1}=${i._2}")
-                  .mkString("&")
-                redirect(
-                  s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-                  StatusCodes.PermanentRedirect
-                )
+                extractRequest {
+                  request =>
+                    val scheme: String = request.headers
+                      .map(i => i.name() -> i.value())
+                      .toMap
+                      .getOrElse("X-Scheme", request.uri.scheme)
+                    val params: String = Map(
+                      "appid" -> appid,
+                      "redirect_uri" -> URLEncoder.encode(
+                        (scheme + "://" + domain) + s"?card=${card}",
+                        "utf-8"
+                      ),
+                      "response_type" -> "code",
+                      "scope" -> "snsapi_base",
+                      "state" -> appid
+                    ).map(i => s"${i._1}=${i._2}")
+                      .mkString("&")
+                    redirect(
+                      s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+                      StatusCodes.PermanentRedirect
+                    )
+                }
             }
           }
         )

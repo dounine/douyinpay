@@ -291,20 +291,21 @@ object OrderSchema extends JsonParse {
           val config = c.ctx.system.settings.config.getConfig("app")
           val routerPrefix = config.getString("routerPrefix")
           OrderModel.OrderCreateResponse(
-            queryUrl = (config.getString(
+            queryUrl = (c.value.scheme + "://" + config.getString(
               "file.domain"
             ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
-            qrcodeUrl = (config.getString(
+            qrcodeUrl = (c.value.scheme + "://" + config.getString(
               "file.domain"
             ) + s"/${routerPrefix}/file/image?path=" + result._2)
           )
         })
         .recover {
+          case e: PayManyException => throw e
           case ee => {
             throw new Exception("当前充值人数太多、请稍候再试")
           }
         }
-        .idleTimeout(15.seconds)
+        .idleTimeout(11.seconds)
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
     }
   )

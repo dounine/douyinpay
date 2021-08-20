@@ -47,6 +47,10 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
               extractRequest { request =>
                 prepareGraphQLRequest {
                   case Success(req) =>
+                    val scheme: String = request.headers
+                      .map(i => i.name() -> i.value())
+                      .toMap
+                      .getOrElse("X-Scheme", request.uri.scheme)
                     val slowLog = SlowLog(logger, threshold = 1.seconds)
                     val middleware = tracing match {
                       case Some(value) =>
@@ -82,6 +86,7 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
 
                     val requestInfo = SchemaDef.RequestInfo(
                       url = request.uri.toString(),
+                      scheme = scheme,
                       parameters = parameters,
                       headers = request.headers
                         .map(h => h.name() -> h.value())

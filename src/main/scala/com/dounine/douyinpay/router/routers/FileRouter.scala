@@ -55,15 +55,22 @@ class FileRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
       concat(
         post {
           path("image") {
-            storeUploadedFile("file", tempDestination) {
-              case (metadata, file) => {
-                ok(
-                  Map(
-                    "domain" -> (domain + s"/${routerPrefix}/file/image?path="),
-                    "url" -> file.getAbsolutePath
-                  )
-                )
-              }
+            extractRequest {
+              request =>
+                storeUploadedFile("file", tempDestination) {
+                  case (metadata, file) => {
+                    val scheme: String = request.headers
+                      .map(i => i.name() -> i.value())
+                      .toMap
+                      .getOrElse("X-Scheme", request.uri.scheme)
+                    ok(
+                      Map(
+                        "domain" -> ((scheme + "://" + domain) + s"/${routerPrefix}/file/image?path="),
+                        "url" -> file.getAbsolutePath
+                      )
+                    )
+                  }
+                }
             }
           }
         },

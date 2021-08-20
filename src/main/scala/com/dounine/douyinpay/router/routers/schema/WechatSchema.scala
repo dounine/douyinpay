@@ -83,7 +83,8 @@ object WechatSchema extends JsonParse {
             ccode = c.arg[String]("ccode"),
             token = c.value.headers.get("token"),
             sign = c.arg[String]("sign"),
-            ip = c.value.addressInfo.ip
+            ip = c.value.addressInfo.ip,
+            scheme = c.value.scheme
           )
         )
         .map(i => {
