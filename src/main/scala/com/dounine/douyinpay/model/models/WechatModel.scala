@@ -10,6 +10,12 @@ object WechatModel {
       exp: Option[Long] = None //expire time seconds
   ) extends BaseSerializer
 
+  case class SignatureResponse(
+      noncestr: String,
+      timestamp: Long,
+      signature: String
+  )
+
   case class LoginParamers(
       code: String,
       ccode: String,

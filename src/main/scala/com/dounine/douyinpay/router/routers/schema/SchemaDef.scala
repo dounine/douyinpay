@@ -1,10 +1,13 @@
-package com.dounine.douyinpay.router.routers
+package com.dounine.douyinpay.router.routers.schema
 
 import akka.actor.typed.ActorSystem
 import akka.stream.SystemMaterializer
 import akka.stream.scaladsl.Sink
 import com.dounine.douyinpay.model.models.UserModel
+import com.dounine.douyinpay.router.routers.{GraphStream, SecureContext}
 import com.dounine.douyinpay.service.UserService
+import com.dounine.douyinpay.tools.akka.cache.CacheSource
+import com.dounine.douyinpay.tools.json.JsonParse
 import sangria.execution.deferred.Fetcher
 import sangria.schema._
 import sangria.macros.derive._
@@ -12,8 +15,9 @@ import sangria.macros.derive._
 import java.time.LocalDateTime
 import sangria.streaming.ValidOutStreamType
 
+import scala.concurrent.duration._
 import scala.concurrent.Future
-object SchemaDef {
+object SchemaDef extends JsonParse {
 
   implicit val UserTable = ObjectType(
     name = "User",
@@ -70,27 +74,47 @@ object SchemaDef {
       addressInfo: AddressInfo
   )
 
+//  val query = ObjectType(
+//    name = "Query",
+//    description = "用户信息",
+//    fields = fields[SecureContext, RequestInfo](
+//      Field(
+//        name = "login",
+////        tags = Authorised :: Nil,
+//        fieldType = OptionType(StringType),
+//        description = Some("单个用户信息查询"),
+//        resolve = c =>
+//          GraphStream
+//            .sourceSingle()(c.ctx.system)
+//            .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
+//      ),
+//      Field(
+//        name = "list",
+//        tags = Authorised :: Nil,
+//        fieldType = OptionType(StringType),
+//        description = Some("单个用户信息查询"),
+//        deprecationReason = Some("已过期"),
+//        resolve = c =>
+//          GraphStream
+//            .sourceSingle()(c.ctx.system)
+//            .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
+//      )
+//    )
+//  )
+
   val query = ObjectType(
     name = "Query",
-    description = "用户信息",
-    fields = fields[ActorSystem[_], RequestInfo](
-      Field(
-        name = "info",
-        fieldType = OptionType(StringType),
-        description = Some("单个用户信息查询"),
-        resolve = c =>
-          GraphStream
-            .sourceSingle()(c.ctx)
-            .runWith(Sink.head)(SystemMaterializer(c.ctx).materializer)
-      )
+    description = "查询",
+    fields = fields[SecureContext, RequestInfo](
+      OrderSchema.query: _*
     )
   )
 
   val mutation = ObjectType(
     name = "Mutation",
     description = "修改",
-    fields = fields[ActorSystem[_], RequestInfo](
-      WechatSchema.mutation: _*
+    fields = fields[SecureContext, RequestInfo](
+      (WechatSchema.mutation ++ OrderSchema.mutation): _*
     )
   )
 

@@ -20,57 +20,48 @@ object CardStream {
 
   def createCard()(implicit
       system: ActorSystem[_]
-  ): Flow[BigDecimal, String, NotUsed] = {
+  ): Flow[CardModel.CardInfo, CardModel.CardInfo, NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
     val cardTable = TableQuery[CardTable]
-    implicit val materializer = SystemMaterializer(system).materializer
 
     val insertCard: CardModel.CardInfo => DBIO[Int] =
       (card: CardModel.CardInfo) => cardTable += card
 
-    Flow[BigDecimal]
-      .map(money => (money, UUID.randomUUID().toString.replaceAll("-", "")))
+    Flow[CardModel.CardInfo]
       .via(
         Slick
-          .flowWithPassThrough { tp2 =>
+          .flowWithPassThrough { info =>
             (for {
               card: Int <- insertCard(
-                CardModel.CardInfo(
-                  id = tp2._2,
-                  money = tp2._1,
-                  openid = None,
-                  activeTime = LocalDateTime.now(),
-                  createTime = LocalDateTime.now()
-                )
+                info
               )
-            } yield tp2._2).transactionally
+            } yield info).transactionally
           }
       )
   }
 
-  def updateCard()(implicit
+  def cardPayed()(implicit
       system: ActorSystem[_]
-  ): Flow[CardModel.UpdateCard, Boolean, NotUsed] = {
+  ): Flow[CardModel.UpdateCard, (CardModel.UpdateCard, Int), NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
     val cardTable = TableQuery[CardTable]
-    implicit val materializer = SystemMaterializer(system).materializer
 
     Slick.flowWithPassThrough { card =>
       (for {
         result <-
           cardTable
             .filter(_.id === card.id)
-            .map(i => (i.openid, i.activeTime))
-            .update((Some(card.openid), LocalDateTime.now()))
-      } yield result == 1).transactionally
+            .map(_.pay)
+            .update(card.pay)
+      } yield (card, result)).transactionally
     }
   }
 

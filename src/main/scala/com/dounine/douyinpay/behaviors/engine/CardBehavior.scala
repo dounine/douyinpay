@@ -16,16 +16,17 @@ object CardBehavior extends JsonParse {
   private val logger = LoggerFactory.getLogger(CardBehavior.getClass)
   sealed trait Event extends BaseSerializer
 
-  case class BindCardRequest(openid: String, money: Int)(
+  type MoneyEnum = Int
+  type Money = BigDecimal
+  type Openid = String
+  case class BindCardRequest(openid: Openid, money: MoneyEnum)(
       val replyTo: ActorRef[Event]
   ) extends Event
-  case class BindCardOk(request: BindCardRequest, qrcodeUrl: String)
-      extends Event
+  case class BindCardOk(request: BindCardRequest, money: Money) extends Event
   case class BindCardFail(request: BindCardRequest, msg: String) extends Event
-  case class BindCardTimeout(request: BindCardRequest, money: Double)
+  case class BindCardTimeout(request: BindCardRequest, money: Money)
       extends Event
-  case class PhonePaySuccess(money: Double) extends Event
-
+  case class PhonePaySuccess(money: Money) extends Event
   def apply(): Behavior[Event] =
     Behaviors.setup { context =>
       {
@@ -33,63 +34,64 @@ object CardBehavior extends JsonParse {
           SystemMaterializer(context.system).materializer
         implicit val ec = context.executionContext
 
-        var cards = Map[Int, Map[Double, (String, Option[String])]]()
+        var cards = Map[MoneyEnum, Map[Money, Option[Openid]]]()
         Behaviors.withTimers { timers: TimerScheduler[Event] =>
           {
             Behaviors.receiveMessage {
               case e @ PhonePaySuccess(money) => {
                 logger.info("充值成功 -> {}", e.toJson)
                 val exits = cards.find(_._2.contains(money))
-                if (exits.isDefined) {
-                  exits.head._2(money)._2 match {
-                    case Some(openid) => {
-                      DingDing.sendMessage(
-                        DingDing.MessageType.phonePaySuccess,
-                        data = DingDing.MessageData(
-                          markdown = DingDing.Markdown(
-                            title = "支付成功",
-                            text = s"""
-                                      |# 支付成功
-                                      | - openid: ${openid}
-                                      | - money: ${money}
-                                      | - time: ${LocalDateTime.now()}
-                                      |""".stripMargin
-                          )
-                        ),
-                        context.system
-                      )
+                exits match {
+                  case Some(value) =>
+                    value._2(money) match {
+                      case Some(openid) => {
+                        DingDing.sendMessage(
+                          DingDing.MessageType.phonePaySuccess,
+                          data = DingDing.MessageData(
+                            markdown = DingDing.Markdown(
+                              title = "支付成功",
+                              text = s"""
+                                        |# 支付成功
+                                        | - openid: ${openid}
+                                        | - money: ${money}
+                                        | - time: ${LocalDateTime.now()}
+                                        |""".stripMargin
+                            )
+                          ),
+                          context.system
+                        )
+                      }
+                      case None =>
+                        DingDing.sendMessage(
+                          DingDing.MessageType.phonePayFail,
+                          data = DingDing.MessageData(
+                            markdown = DingDing.Markdown(
+                              title = "支付的金额用户没绑定",
+                              text = s"""
+                                        |# 支付的金额用户没绑定
+                                        | - money: ${money}
+                                        | - time: ${LocalDateTime.now()}
+                                        |""".stripMargin
+                            )
+                          ),
+                          context.system
+                        )
                     }
-                    case None =>
-                      DingDing.sendMessage(
-                        DingDing.MessageType.phonePayFail,
-                        data = DingDing.MessageData(
-                          markdown = DingDing.Markdown(
-                            title = "支付的金额用户没绑定",
-                            text = s"""
-                                    |# 支付的金额用户没绑定
+                  case None =>
+                    DingDing.sendMessage(
+                      DingDing.MessageType.phonePayFail,
+                      data = DingDing.MessageData(
+                        markdown = DingDing.Markdown(
+                          title = "支付了不存在的金额",
+                          text = s"""
+                                    |# 支付了不存在的金额
                                     | - money: ${money}
                                     | - time: ${LocalDateTime.now()}
                                     |""".stripMargin
-                          )
-                        ),
-                        context.system
-                      )
-                  }
-                } else {
-                  DingDing.sendMessage(
-                    DingDing.MessageType.phonePayFail,
-                    data = DingDing.MessageData(
-                      markdown = DingDing.Markdown(
-                        title = "支付了不存在的金额",
-                        text = s"""
-                                  |# 支付了不存在的金额
-                                  | - money: ${money}
-                                  | - time: ${LocalDateTime.now()}
-                                  |""".stripMargin
-                      )
-                    ),
-                    context.system
-                  )
+                        )
+                      ),
+                      context.system
+                    )
                 }
                 Behaviors.same
               }
@@ -110,29 +112,63 @@ object CardBehavior extends JsonParse {
                   ),
                   context.system
                 )
+                cards = cards + (request.money -> (cards(
+                  request.money
+                ) + (money -> None)))
                 Behaviors.same
               }
-              case e @ BindCardRequest(openid, money) => {
-                val notUsedCards = cards(money).filter(_._2._2.isEmpty)
-                if (notUsedCards.nonEmpty) {
-                  val max = notUsedCards.toSeq.maxBy(_._1)
-//                  cards = cards + (cards(money) + Map(
-//                    max._1 -> (max._2._1, Some(openid))
-//                  ))
-
-                  timers.startSingleTimer(
-                    openid + money,
-                    BindCardTimeout(e, max._1),
-                    60.seconds
-                  )
-                  e.replyTo.tell(
-                    BindCardOk(
-                      e,
-                      max._2._1
+              case e @ BindCardRequest(openid, money: MoneyEnum) => {
+                val exitBind =
+                  cards.find(_._2.values.exists(p => p.contains(openid)))
+                exitBind match {
+                  case Some(binded) =>
+                    timers.startSingleTimer(
+                      openid + money,
+                      BindCardTimeout(e, money),
+                      60.seconds
                     )
-                  )
-                } else {
-                  e.replyTo.tell(BindCardFail(e, "当前充值人数过多、请稍微再试"))
+                    binded._2.find(_._2.contains(openid)) match {
+                      case Some(exitBind) =>
+                        e.replyTo.tell(
+                          BindCardOk(
+                            e,
+                            exitBind._1
+                          )
+                        )
+                    }
+                  case None =>
+                    val notUsedCards = cards(money).filter(_._2.isEmpty)
+                    if (notUsedCards.nonEmpty) {
+                      val max = notUsedCards.toSeq.maxBy(_._1)
+                      timers.startSingleTimer(
+                        openid + money,
+                        BindCardTimeout(e, max._1),
+                        60.seconds
+                      )
+                      DingDing.sendMessage(
+                        DingDing.MessageType.phonePayBind,
+                        data = DingDing.MessageData(
+                          markdown = DingDing.Markdown(
+                            title = "绑定金额成功",
+                            text = s"""
+                                      |# 绑定金额成功
+                                      | - openid: ${openid}
+                                      | - money: ${money}
+                                      | - time: ${LocalDateTime.now()}
+                                      |""".stripMargin
+                          )
+                        ),
+                        context.system
+                      )
+                      e.replyTo.tell(
+                        BindCardOk(
+                          e,
+                          max._1
+                        )
+                      )
+                    } else {
+                      e.replyTo.tell(BindCardFail(e, "当前充值人数过多、请稍微再试"))
+                    }
                 }
                 Behaviors.same
               }

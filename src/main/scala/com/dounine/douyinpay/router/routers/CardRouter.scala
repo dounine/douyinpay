@@ -70,26 +70,26 @@ class CardRouter()(implicit system: ActorSystem[_])
     cors() {
       pathPrefix("card") {
         concat(
-          get {
-            path("add" / IntNumber) { money =>
-              {
-                complete(
-                  Source
-                    .single(BigDecimal(money))
-                    .via(CardStream.createCard())
-                    .map(cardId => {
-                      RouterModel.Data(
-                        Option(
-                          Map(
-                            "card" -> cardId
-                          )
-                        )
-                      )
-                    })
-                )
-              }
-            }
-          },
+//          get {
+//            path("add" / IntNumber) { money =>
+//              {
+//                complete(
+//                  Source
+//                    .single(BigDecimal(money))
+//                    .via(CardStream.createCard())
+//                    .map(cardId => {
+//                      RouterModel.Data(
+//                        Option(
+//                          Map(
+//                            "card" -> cardId
+//                          )
+//                        )
+//                      )
+//                    })
+//                )
+//              }
+//            }
+//          },
           get {
             path("card" / "active" / Segment) {
               card =>

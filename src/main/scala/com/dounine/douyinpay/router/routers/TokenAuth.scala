@@ -67,7 +67,7 @@ object TokenAuth extends JsonParse {
             val ipHost = ip
               .getAddress()
               .orElse(
-                InetAddress.getByName("localhost")
+                InetAddress.getByName("127.0.0.1")
               )
               .getHostAddress
             val (province, city) =

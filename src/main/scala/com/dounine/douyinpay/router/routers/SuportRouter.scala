@@ -128,7 +128,7 @@ trait SuportRouter extends JsonParse {
       remoteAdress
         .getAddress()
         .orElse(
-          InetAddress.getByName("localhost")
+          InetAddress.getByName("127.0.0.1")
         )
         .getHostAddress
     }

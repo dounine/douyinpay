@@ -15,7 +15,8 @@ class CardTable(tag: Tag)
       id,
       money,
       openid,
-      activeTime,
+      pay,
+      payTime,
       createTime
     ).mapTo[CardModel.CardInfo]
 
@@ -27,9 +28,12 @@ class CardTable(tag: Tag)
   def openid: Rep[Option[String]] =
     column[Option[String]]("openid", O.Length(100))
 
-  def activeTime: Rep[LocalDateTime] =
+  def pay: Rep[Boolean] =
+    column[Boolean]("pay")
+
+  def payTime: Rep[LocalDateTime] =
     column[LocalDateTime](
-      "activeTime",
+      "payTime",
       O.SqlType(timestampOnUpdate)
     )(
       localDateTime2timestamp

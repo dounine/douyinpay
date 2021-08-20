@@ -98,8 +98,8 @@ object WechatStream extends JsonParse with SuportRouter {
       RestartSettings(
         minBackoff = 1.seconds,
         maxBackoff = 3.seconds,
-        randomFactor = 0.2
-      ).withMaxRestarts(3, 3.seconds)
+        randomFactor = 0.5
+      ).withMaxRestarts(3, 10.seconds)
     )(() => {
       Source.future(
         sharding

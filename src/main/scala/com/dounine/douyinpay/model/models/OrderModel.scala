@@ -37,10 +37,14 @@ object OrderModel {
     }
   }
 
+  case class OrderCreateResponse(
+      queryUrl: String,
+      qrcodeUrl: String
+  )
+
   final case class QrcodeResponse(
       message: Option[String],
       qrcode: Option[String],
-      qrcodeBase64: Option[String],
       setup: Option[String]
   ) extends BaseSerializer
 
@@ -130,4 +134,9 @@ object OrderModel {
       margin: String
   ) extends BaseSerializer
 
+  final case class MoneyMenuResponse(
+      money: String,
+      volumn: String,
+      enought: Boolean
+  )
 }

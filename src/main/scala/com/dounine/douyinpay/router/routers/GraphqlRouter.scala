@@ -5,6 +5,11 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives.cors
+import com.dounine.douyinpay.router.routers.errors.{
+  AuthException,
+  LockedException
+}
+import com.dounine.douyinpay.router.routers.schema.{SchemaDef, SecurityEnforcer}
 import com.dounine.douyinpay.tools.util.IpUtils
 import io.circe.Json
 import org.slf4j.LoggerFactory
@@ -13,6 +18,7 @@ import sangria.execution.{
   ExceptionHandler,
   ExecutionError,
   Executor,
+  HandledException,
   QueryAnalysisError,
   ResultResolver
 }
@@ -43,8 +49,19 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
                   case Success(req) =>
                     val slowLog = SlowLog(logger, threshold = 1.seconds)
                     val middleware = tracing match {
-                      case Some(value) => slowLog :: SlowLog.extension :: Nil
-                      case None        => Nil
+                      case Some(value) =>
+                        slowLog :: SlowLog.extension :: SecurityEnforcer :: Nil
+                      case None => SecurityEnforcer :: Nil
+                    }
+                    val exceptionHandler = ExceptionHandler {
+                      case (m, e: AuthException) =>
+                        HandledException(e.getMessage)
+                      case (m, e: LockedException) =>
+                        HandledException("Internal server error")
+                      case (m, e: IllegalStateException) =>
+                        HandledException(e.getMessage)
+                      case (m, e: Exception) =>
+                        HandledException(e.getMessage)
                     }
                     val ip: String = Seq(
                       "X-Forwarded-For",
@@ -58,31 +75,33 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
                       )
                       .find(_.isDefined)
                       .flatMap(_.map(i => i.split(",").head))
-                      .getOrElse("localhost")
+                      .getOrElse("127.0.0.1")
 
                     val (province, city) =
                       IpUtils.convertIpToProvinceCity(ip)
 
+                    val requestInfo = SchemaDef.RequestInfo(
+                      url = request.uri.toString(),
+                      parameters = parameters,
+                      headers = request.headers
+                        .map(h => h.name() -> h.value())
+                        .toMap,
+                      addressInfo = SchemaDef.AddressInfo(
+                        ip = ip,
+                        province = province,
+                        city = city
+                      )
+                    )
                     val graphQLResponse = Executor
                       .execute(
                         schema = SchemaDef.UserSchema,
                         queryAst = req.query,
-                        userContext = system,
-                        root = SchemaDef.RequestInfo(
-                          url = request.uri.toString(),
-                          parameters = parameters,
-                          headers = request.headers
-                            .map(h => h.name() -> h.value())
-                            .toMap,
-                          addressInfo = SchemaDef.AddressInfo(
-                            ip = ip,
-                            province = province,
-                            city = city
-                          )
-                        ),
+                        userContext = new SecureContext(system, requestInfo),
+                        root = requestInfo,
                         variables = req.variables,
                         operationName = req.operationName,
-                        middleware = middleware
+                        middleware = middleware,
+                        exceptionHandler = exceptionHandler
                       )
                       .map(OK -> (_: Json))
                       .recover {

@@ -9,12 +9,13 @@ object CardModel {
       id: String,
       money: BigDecimal,
       openid: Option[String],
-      activeTime: LocalDateTime,
+      pay: Boolean,
+      payTime: LocalDateTime,
       createTime: LocalDateTime
   ) extends BaseSerializer
 
   case class UpdateCard(
       id: String,
-      openid: String
+      pay: Boolean
   ) extends BaseSerializer
 }
