@@ -39,6 +39,7 @@ lazy val app = (project in file("."))
       "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % elastic4sVersion,
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "com.github.pureconfig" %% "pureconfig" % "0.12.3",
+      "net.coobird" % "thumbnailator" % "0.4.14",
       "eu.timepit" %% "refined" % "0.9.24",
       "eu.timepit" %% "refined-cats" % "0.9.24",
       "eu.timepit" %% "refined-eval" % "0.9.24",
