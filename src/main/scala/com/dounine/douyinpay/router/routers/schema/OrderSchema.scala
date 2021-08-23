@@ -291,12 +291,10 @@ object OrderSchema extends JsonParse {
           val config = c.ctx.system.settings.config.getConfig("app")
           val routerPrefix = config.getString("routerPrefix")
           OrderModel.OrderCreateResponse(
-            queryUrl = (c.value.scheme + "://" + config.getString(
-              "file.domain"
-            ) + s"/${routerPrefix}/order/info/" + result._1.orderId),
-            qrcodeUrl = (c.value.scheme + "://" + config.getString(
-              "file.domain"
-            ) + s"/${routerPrefix}/file/image?path=" + result._2)
+            queryUrl =
+              (c.value.scheme + "://douyinapi.61week.com" + s"/${routerPrefix}/order/info/" + result._1.orderId),
+            qrcodeUrl =
+              (c.value.scheme + "://douyinapi.61week.com" + s"/${routerPrefix}/file/image?path=" + result._2)
           )
         })
         .recover {
