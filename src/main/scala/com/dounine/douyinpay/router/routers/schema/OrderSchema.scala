@@ -10,10 +10,20 @@ import com.dounine.douyinpay.router.routers.errors.{
   PayManyException
 }
 import com.dounine.douyinpay.router.routers.schema.SchemaDef.RequestInfo
-import com.dounine.douyinpay.service.{OpenidStream, OrderStream, WechatStream}
+import com.dounine.douyinpay.service.{
+  OpenidStream,
+  OrderService,
+  OrderStream,
+  WechatStream
+}
 import com.dounine.douyinpay.tools.akka.cache.CacheSource
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.{MD5Util, OpenidPaySuccess, UUIDUtil}
+import com.dounine.douyinpay.tools.util.{
+  MD5Util,
+  OpenidPaySuccess,
+  ServiceSingleton,
+  UUIDUtil
+}
 import org.slf4j.LoggerFactory
 import sangria.macros.derive.{
   DocumentField,
@@ -75,6 +85,27 @@ object OrderSchema extends JsonParse {
           }
         }
         .runWith(Sink.seq)(SystemMaterializer(c.ctx.system).materializer)
+  )
+
+  val orderStatus = Field[
+    SecureContext,
+    RequestInfo,
+    String,
+    String
+  ](
+    name = "orderStatus",
+    fieldType = StringType,
+    tags = Authorised :: Nil,
+    description = Some("定单支付状态"),
+    arguments = Argument(
+      name = "orderId",
+      argumentType = StringType,
+      description = "定单ID"
+    ) :: Nil,
+    resolve = (c: Context[SecureContext, RequestInfo]) =>
+      ServiceSingleton
+        .get(classOf[OrderService])
+        .queryOrderStatus(c.arg[String]("orderId"))
   )
 
   val OrderCreateResponse =
@@ -309,7 +340,8 @@ object OrderSchema extends JsonParse {
   )
 
   val query = fields[SecureContext, RequestInfo](
-    moneyMenu
+    moneyMenu,
+    orderStatus
   )
   val mutation = fields[SecureContext, RequestInfo](
     orderCreate

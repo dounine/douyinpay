@@ -74,33 +74,6 @@ class WechatRouter()(implicit system: ActorSystem[_])
       pathPrefix("wechat") {
         concat(
           get {
-            path("redirect" / Segment) {
-              card: String =>
-                extractRequest {
-                  request =>
-                    val scheme: String = request.headers
-                      .map(i => i.name() -> i.value())
-                      .toMap
-                      .getOrElse("X-Scheme", request.uri.scheme)
-                    val params: String = Map(
-                      "appid" -> appid,
-                      "redirect_uri" -> URLEncoder.encode(
-                        (scheme + "://" + domain) + "?card=" + card,
-                        "utf-8"
-                      ),
-                      "response_type" -> "code",
-                      "scope" -> "snsapi_base",
-                      "state" -> appid
-                    ).map(i => s"${i._1}=${i._2}")
-                      .mkString("&")
-                    redirect(
-                      s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
-                      StatusCodes.PermanentRedirect
-                    )
-                }
-            }
-          },
-          get {
             path("into" / "from" / Segment) {
               ccode: String =>
                 extractClientIP {
@@ -143,62 +116,6 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         )
                     }
                 }
-            }
-          },
-          get {
-            path("jsapi" / "signature") {
-              extractClientIP {
-                ip =>
-                  parameters("url".as[String]) {
-                    url =>
-                      {
-                        val info = Map(
-                          "noncestr" -> UUID
-                            .randomUUID()
-                            .toString
-                            .replaceAll("-", ""),
-                          "timestamp" -> System.currentTimeMillis() / 1000,
-                          "url" -> url
-                        )
-                        val (province, city) =
-                          IpUtils.convertIpToProvinceCity(ip.getIp())
-                        logger.info(
-                          Map(
-                            "time" -> System.currentTimeMillis(),
-                            "data" -> Map(
-                              "event" -> LogEventKey.wechatSignature,
-                              "url" -> url,
-                              "ip" -> ip.getIp(),
-                              "province" -> province,
-                              "city" -> city
-                            )
-                          ).toJson
-                        )
-                        val result = WechatStream
-                          .jsapiQuery()
-                          .map(ticket => {
-                            info ++ Map(
-                              "jsapi_ticket" -> ticket
-                            )
-                          })
-                          .map(result => {
-                            result
-                              .map(i => s"${i._1}=${i._2}")
-                              .toSeq
-                              .sorted
-                              .mkString("&")
-                          })
-                          .map(DigestUtils.sha1Hex)
-                          .map(signature => {
-                            info.filterNot(_._1 == "url") ++ Map(
-                              "signature" -> signature
-                            )
-                          })
-                          .map(okData)
-                        complete(result)
-                      }
-                  }
-              }
             }
           },
           post {

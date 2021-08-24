@@ -107,7 +107,7 @@ object SchemaDef extends JsonParse {
     name = "Query",
     description = "查询",
     fields = fields[SecureContext, RequestInfo](
-      OrderSchema.query: _*
+      (OrderSchema.query ++ DouyinSchema.query): _*
     )
   )
 

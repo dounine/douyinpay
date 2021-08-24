@@ -65,10 +65,10 @@ class OrderService(implicit system: ActorSystem[_]) extends EnumMappers {
     db.run(dict.filter(_.orderId === orderId).result.headOption)
       .map(item => {
         if (item.isDefined) {
-          if (item.get.expire) {
-            "expire"
-          } else if (item.get.pay) {
+          if (item.get.pay) {
             "pay"
+          } else if (item.get.expire) {
+            "expire"
           } else {
             "nopay"
           }
