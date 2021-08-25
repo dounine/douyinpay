@@ -1,3 +1,3 @@
 package com.dounine.douyinpay.router.routers.errors
 
-class LockedException(msg: String) extends Exception(msg)
+case class LockedException(msg: String) extends Exception(msg)

@@ -30,9 +30,10 @@ object JSApiTicketBehavior extends JsonParse {
 
   sealed trait Event extends BaseSerializer
   type Ticket = String
-  case class InitTicket() extends Event
-  case class InitTicketOk(ticket: Ticket, expire: Int) extends Event
-  case class InitTicketFail(code: Int, msg: String) extends Event
+  case class InitTicket(appid: String) extends Event
+  case class InitTicketOk(appid: String, ticket: Ticket, expire: Int)
+      extends Event
+  case class InitTicketFail(appid: String, code: Int, msg: String) extends Event
   case class GetTicket()(val replyTo: ActorRef[Event]) extends Event
   case class GetTicketOk(ticket: Ticket) extends Event
   case class GetTicketFail(msg: String) extends Event
@@ -51,7 +52,6 @@ object JSApiTicketBehavior extends JsonParse {
         implicit val materializer = SystemMaterializer(system).materializer
         implicit val ec = context.executionContext
         val config = system.settings.config.getConfig("app")
-        val appid = config.getString("wechat.appid")
         val pro = config.getBoolean("pro")
 
         var ticket: Option[String] = None
@@ -65,19 +65,19 @@ object JSApiTicketBehavior extends JsonParse {
                 })
                 Behaviors.same
               }
-              case InitTicketOk(to, expire) => {
-                logger.info("ticket refresh -> {} {}", to, expire)
+              case InitTicketOk(appid: String, to, expire) => {
+                logger.info("ticket refresh -> {} {} {}", appid, to, expire)
                 ticket = Some(to)
                 if (pro) {
-                  timers.startSingleTimer(InitTicket(), expire.seconds)
+                  timers.startSingleTimer(InitTicket(appid), expire.seconds)
                 }
                 Behaviors.same
               }
-              case InitTicketFail(code, msg) => {
-                logger.error("ticket query fail -> {} {}", code, msg)
+              case InitTicketFail(appid, code, msg) => {
+                logger.error("ticket query fail -> {} {} {}", appid, code, msg)
                 Behaviors.same
               }
-              case InitTicket() => {
+              case InitTicket(appid) => {
                 import better.files._
                 val path = System.getProperty("user.home")
                 val ticketFile = s"${path}/.douyin_ticket_${appid}".toFile
@@ -103,6 +103,7 @@ object JSApiTicketBehavior extends JsonParse {
                   case Some((ticket, time, expire)) =>
                     context.self.tell(
                       InitTicketOk(
+                        appid,
                         ticket,
                         expire - java.time.Duration
                           .between(time, LocalDateTime.now())
@@ -122,7 +123,7 @@ object JSApiTicketBehavior extends JsonParse {
                             ).withMaxRestarts(3, 10.seconds)
                           )(() => {
                             WechatStream
-                              .accessToken()
+                              .accessToken(appid)
                               .mapAsync(1) { token =>
                                 {
                                   Request
@@ -144,12 +145,13 @@ object JSApiTicketBehavior extends JsonParse {
                           .runWith(Sink.head)
                       ) {
                         case Failure(exception) =>
-                          InitTicketFail(-1, exception.getMessage)
+                          InitTicketFail(appid, -1, exception.getMessage)
                         case Success(value) =>
                           if (value.errcode != 0) {
-                            InitTicketFail(value.errcode, value.errmsg)
+                            InitTicketFail(appid, value.errcode, value.errmsg)
                           } else {
                             InitTicketOk(
+                              appid,
                               value.ticket.get,
                               value.expires_in.get
                             )
@@ -158,10 +160,8 @@ object JSApiTicketBehavior extends JsonParse {
                       }
                     }
                 }
-
                 Behaviors.same
               }
-
             }
           }
         }

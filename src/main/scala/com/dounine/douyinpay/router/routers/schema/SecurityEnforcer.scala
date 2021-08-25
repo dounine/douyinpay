@@ -40,9 +40,10 @@ object SecurityEnforcer
         Await.result(mctx.ctx.auth(), 3.seconds)
       }
       if (openInfo.locked) {
-        throw new LockedException("user locked -> " + openInfo.openid)
+        throw LockedException("user locked -> " + openInfo.openid)
       }
       mctx.ctx.openid = Some(openInfo.openid)
+      mctx.ctx.appid = Some(openInfo.appid)
     }
     continue
   }

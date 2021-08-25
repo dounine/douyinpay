@@ -6,7 +6,10 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.dounine.douyinpay.model.models.{UserModel, WechatModel}
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.SecureContext
-import com.dounine.douyinpay.router.routers.errors.LockedException
+import com.dounine.douyinpay.router.routers.errors.{
+  LockedException,
+  ReLoginException
+}
 import com.dounine.douyinpay.router.routers.schema.SchemaDef.RequestInfo
 import com.dounine.douyinpay.service.{AccountStream, OpenidStream, WechatStream}
 import com.dounine.douyinpay.tools.json.JsonParse
@@ -27,8 +30,9 @@ import sangria.macros.derive.{
   RenameField,
   deriveObjectType
 }
-import sangria.schema._
+import sangria.schema.{Argument, _}
 
+import java.net.URLEncoder
 import java.util.UUID
 import scala.concurrent.Future
 
@@ -63,6 +67,10 @@ object WechatSchema extends JsonParse {
     fieldType = WechatLoginResponse,
     description = Some("微信登录"),
     arguments = Argument(
+      name = "appid",
+      argumentType = StringType,
+      description = "appid"
+    ) :: Argument(
       name = "code",
       argumentType = StringType,
       description = "登录code"
@@ -80,6 +88,7 @@ object WechatSchema extends JsonParse {
         .single(
           WechatModel.LoginParamers(
             code = c.arg[String]("code"),
+            appid = c.arg[String]("appid"),
             ccode = c.arg[String]("ccode"),
             token = c.value.headers.get("token"),
             sign = c.arg[String]("sign"),
@@ -88,9 +97,29 @@ object WechatSchema extends JsonParse {
           )
         )
         .map(i => {
+          if (i.appid.trim == "") {
+            throw ReLoginException(
+              "appid is null set default",
+              Some("wx7b168b095eb4090e")
+            )
+          } else if (
+            !c.ctx.system.settings.config
+              .getConfig("app.wechat")
+              .hasPath(i.appid.trim)
+          ) {
+            throw ReLoginException(
+              "appid not exit set default",
+              Some("wx7b168b095eb4090e")
+            )
+          }
           if (
             MD5Util.md5(
-              Array(i.ccode, i.code, i.token.getOrElse("")).sorted
+              Array(
+                i.appid,
+                i.ccode,
+                i.code,
+                i.token.getOrElse("")
+              ).sorted
                 .mkString("")
             ) != i.sign
           ) {
@@ -99,6 +128,7 @@ object WechatSchema extends JsonParse {
                 "time" -> System.currentTimeMillis(),
                 "data" -> Map(
                   "event" -> LogEventKey.wechatLoginSignError,
+                  "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
                   "token" -> i.token.getOrElse(""),
@@ -109,12 +139,14 @@ object WechatSchema extends JsonParse {
                 )
               ).toJson
             )
+            throw ReLoginException("sign error")
           } else {
             logger.info(
               Map(
                 "time" -> System.currentTimeMillis(),
                 "data" -> Map(
                   "event" -> LogEventKey.wechatLogin,
+                  "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "token" -> i.token.getOrElse(""),
                   "ip" -> c.value.addressInfo.ip,
@@ -131,6 +163,9 @@ object WechatSchema extends JsonParse {
             case Some(token) =>
               WechatStream.jwtDecode(token)(c.ctx.system) match {
                 case Some(session) =>
+                  if (session.appid != i.appid) {
+                    throw ReLoginException("appid not equals session appid")
+                  }
                   Source
                     .single(session.openid)
                     .via(OpenidStream.query()(c.ctx.system))
@@ -141,6 +176,7 @@ object WechatSchema extends JsonParse {
                             "time" -> System.currentTimeMillis(),
                             "data" -> Map(
                               "event" -> LogEventKey.userLockedAccess,
+                              "appid" -> i.appid,
                               "openid" -> result.get.openid,
                               "ip" -> c.value.addressInfo.ip,
                               "province" -> c.value.addressInfo.province,
@@ -148,7 +184,7 @@ object WechatSchema extends JsonParse {
                             )
                           ).toJson
                         )
-                        throw new LockedException(
+                        throw LockedException(
                           "user locked -> " + result.get.openid
                         )
                       } else if (c.value.addressInfo.city == "济南") {
@@ -158,6 +194,7 @@ object WechatSchema extends JsonParse {
                               "time" -> System.currentTimeMillis(),
                               "data" -> Map(
                                 "event" -> LogEventKey.ipRangeLockedAccess,
+                                "appid" -> i.appid,
                                 "openid" -> result.get.openid,
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -165,7 +202,7 @@ object WechatSchema extends JsonParse {
                               )
                             ).toJson
                           )
-                          throw new LockedException(
+                          throw LockedException(
                             "ip locked -> " + result.get.openid
                           )
                         }
@@ -175,6 +212,7 @@ object WechatSchema extends JsonParse {
                             "time" -> System.currentTimeMillis(),
                             "data" -> Map(
                               "event" -> LogEventKey.wechatLogin,
+                              "appid" -> i.appid,
                               "openid" -> session.openid,
                               "ccode" -> i.ccode,
                               "token" -> i.token.getOrElse(""),
@@ -196,6 +234,7 @@ object WechatSchema extends JsonParse {
                           "time" -> System.currentTimeMillis(),
                           "data" -> Map(
                             "event" -> LogEventKey.wechatLogin,
+                            "appid" -> i.appid,
                             "ccode" -> i.ccode,
                             "token" -> i.token.getOrElse(""),
                             "ip" -> c.value.addressInfo.ip,
@@ -216,6 +255,7 @@ object WechatSchema extends JsonParse {
                       "time" -> System.currentTimeMillis(),
                       "data" -> Map(
                         "event" -> LogEventKey.wechatLogin,
+                        "appid" -> i.appid,
                         "ccode" -> i.ccode,
                         "token" -> i.token.getOrElse(""),
                         "ip" -> c.value.addressInfo.ip,
@@ -228,7 +268,24 @@ object WechatSchema extends JsonParse {
                 })
           }
         }
-        .via(WechatStream.webBaseUserInfo2()(c.ctx.system))
+        .via(WechatStream.webBaseUserInfo()(c.ctx.system))
+        .recover {
+          case e: ReLoginException =>
+            logger.error(e.getMessage)
+            val appid = e.appid.getOrElse(c.arg[String]("appid"))
+            val domain =
+              c.ctx.system.settings.config.getString("app.file.domain")
+            val domainEncode = URLEncoder.encode(
+              (c.value.scheme + "://" + domain) + s"?ccode=${c
+                .arg[String]("ccode")}&appid=${appid}",
+              "utf-8"
+            )
+            WechatModel.WechatLoginResponse(
+              redirect = Some(
+                s"https://open.weixin.qq.com/connect/oauth2/authorize?appid=${appid}&redirect_uri=${domainEncode}&response_type=code&scope=snsapi_base&state=${appid}#wechat_redirect"
+              )
+            )
+        }
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
   )
 
@@ -250,6 +307,7 @@ object WechatSchema extends JsonParse {
     name = "signature",
     fieldType = SignatureResponse,
     description = Some("签名"),
+    tags = Authorised :: Nil,
     arguments = Argument(
       name = "url",
       argumentType = StringType,
@@ -274,7 +332,7 @@ object WechatSchema extends JsonParse {
         "url" -> c.arg[String]("url")
       )
       WechatStream
-        .jsapiQuery()(c.ctx.system)
+        .jsapiQuery(c.ctx.appid.get)(c.ctx.system)
         .map(ticket => {
           info ++ Map(
             "jsapi_ticket" -> ticket

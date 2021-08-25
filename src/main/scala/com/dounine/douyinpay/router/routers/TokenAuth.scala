@@ -86,7 +86,7 @@ object TokenAuth extends JsonParse {
                   )
                 ).toJson
               )
-              throw new LockedException(s"user locked -> ${info.openid} ")
+              throw LockedException(s"user locked -> ${info.openid} ")
             } else if (city == "济南") {
               if (OpenidPaySuccess.query(session.openid) <= 2) {
                 logger.error(
@@ -102,7 +102,7 @@ object TokenAuth extends JsonParse {
                     )
                   ).toJson
                 )
-                throw new LockedException(
+                throw LockedException(
                   s"ip locked -> ${info.openid}"
                 )
               }

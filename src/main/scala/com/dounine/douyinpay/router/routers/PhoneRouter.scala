@@ -57,9 +57,7 @@ class PhoneRouter()(implicit system: ActorSystem[_])
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
 
-  val appid = config.getString("wechat.appid")
   val domain = config.getString("file.domain")
-  val routerProfix = config.getString("routerPrefix")
   val http = Http(system)
 
   val route: Route =

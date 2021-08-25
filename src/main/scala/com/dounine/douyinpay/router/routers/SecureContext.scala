@@ -18,6 +18,7 @@ class SecureContext(val system: ActorSystem[_], val requestInfo: RequestInfo) {
   implicit val ec = system.executionContext
   implicit val materializer = SystemMaterializer(system).materializer
   var openid: Option[String] = None
+  var appid: Option[String] = None
   def auth(): Future[OpenidModel.OpenidInfo] = {
     requestInfo.headers
       .get("token")
@@ -29,16 +30,16 @@ class SecureContext(val system: ActorSystem[_], val requestInfo: RequestInfo) {
           )
           .collect {
             case Some(session) => session
-            case None          => throw new AuthException("token invalid")
+            case None          => throw AuthException("token invalid")
           }
           .map(_.openid)
           .via(OpenidStream.query())
           .runWith(Sink.head)
           .collect {
             case Some(value) => value
-            case None        => throw new AuthException("user not found")
+            case None        => throw AuthException("user not found")
           }
-      case None => throw new AuthException("token required")
+      case None => throw AuthException("token required")
     }
   }
 }

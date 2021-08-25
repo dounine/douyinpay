@@ -178,7 +178,7 @@ object OrderSchema extends JsonParse {
                       )
                     ).toJson
                   )
-                  throw new PayManyException(
+                  throw PayManyException(
                     s"您上一笔定单未支付、请于 ${60 - nextSeconds} 秒后再操作"
                   )
                 }
@@ -218,7 +218,7 @@ object OrderSchema extends JsonParse {
           }
           i
         })
-        .via(WechatStream.userInfoQuery2()(c.ctx.system))
+        .via(WechatStream.userInfoQuery(c.ctx.appid.get)(c.ctx.system))
         .map(tp2 => {
           val data = tp2._1
           val orderId = UUIDUtil.uuid()

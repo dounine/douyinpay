@@ -4,6 +4,7 @@ import scala.xml.NodeSeq
 
 object WechatModel {
   final case class Session(
+      appid: String,
       openid: String,
       data: Option[Map[String, String]] = None,
       iat: Option[Long] = None, //issued time seconds
@@ -18,6 +19,7 @@ object WechatModel {
 
   case class LoginParamers(
       scheme: String,
+      appid: String,
       code: String,
       ccode: String,
       token: Option[String],
@@ -80,9 +82,10 @@ object WechatModel {
   ) extends BaseSerializer
 
   object WechatMessage {
-    def fromXml(data: NodeSeq): WechatMessage = {
+    def fromXml(appid: String, data: NodeSeq): WechatMessage = {
       val nodes = data \ "_"
       WechatMessage(
+        appid = appid,
         toUserName = (data \ "ToUserName").text,
         fromUserName = (data \ "FromUserName").text,
         createTime = (data \ "CreateTime").text.toLong,
@@ -110,6 +113,7 @@ object WechatModel {
     }
   }
   case class WechatMessage(
+      appid: String,
       toUserName: String,
       fromUserName: String,
       createTime: Long,

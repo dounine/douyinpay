@@ -12,12 +12,16 @@ class OpenidTable(tag: Tag)
 
   override def * : ProvenShape[OpenidModel.OpenidInfo] =
     (
+      appid,
       openid,
       ccode,
       ip,
       locked,
       createTime
     ).mapTo[OpenidModel.OpenidInfo]
+
+  def appid: Rep[String] =
+    column[String]("appid")
 
   def openid: Rep[String] =
     column[String]("openid", O.PrimaryKey, O.Length(100))

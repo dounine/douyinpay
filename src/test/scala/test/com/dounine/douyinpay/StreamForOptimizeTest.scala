@@ -1,58 +1,16 @@
 package test.com.dounine.douyinpay
 
 import akka.{Done, NotUsed}
-import akka.actor.testkit.typed.scaladsl.{
-  LogCapturing,
-  ScalaTestWithActorTestKit
-}
+import akka.actor.testkit.typed.scaladsl.{LogCapturing, ScalaTestWithActorTestKit}
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.event.LogMarker
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
-import akka.http.scaladsl.model.{
-  HttpEntity,
-  MediaTypes,
-  StatusCode,
-  StatusCodes,
-  Uri
-}
+import akka.http.scaladsl.model.{HttpEntity, MediaTypes, StatusCode, StatusCodes, Uri}
 import akka.http.scaladsl.server.{RequestContext, RouteResult}
-import akka.stream.{
-  Attributes,
-  ClosedShape,
-  DelayOverflowStrategy,
-  FlowShape,
-  Materializer,
-  OverflowStrategy,
-  QueueCompletionResult,
-  QueueOfferResult,
-  RestartSettings,
-  SinkShape,
-  SourceShape,
-  SystemMaterializer,
-  ThrottleMode
-}
-import akka.stream.scaladsl.{
-  Broadcast,
-  Concat,
-  DelayStrategy,
-  Flow,
-  GraphDSL,
-  Keep,
-  Merge,
-  MergePreferred,
-  OrElse,
-  Partition,
-  RestartSource,
-  RunnableGraph,
-  Sink,
-  Source,
-  SourceQueueWithComplete,
-  Unzip,
-  Zip,
-  ZipWith
-}
+import akka.stream.{Attributes, ClosedShape, DelayOverflowStrategy, FlowShape, Materializer, OverflowStrategy, QueueCompletionResult, QueueOfferResult, RestartSettings, SinkShape, SourceShape, SystemMaterializer, ThrottleMode}
+import akka.stream.scaladsl.{Broadcast, Concat, DelayStrategy, Flow, GraphDSL, Keep, Merge, MergePreferred, OrElse, Partition, RestartSource, RunnableGraph, Sink, Source, SourceQueueWithComplete, Unzip, Zip, ZipWith}
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.typed.scaladsl.ActorSource
 import akka.util.ByteString
@@ -60,16 +18,22 @@ import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior.logger
 import com.dounine.douyinpay.model.models.{BaseSerializer, WechatModel}
 import com.dounine.douyinpay.router.routers.errors.DataException
 import com.dounine.douyinpay.store.EnumMappers
+import com.dounine.douyinpay.tools.akka.cache.CacheSource
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.DingDing
+import com.dounine.douyinpay.tools.util.{DingDing, IpUtils, MD5Util}
 import com.typesafe.config.ConfigFactory
+import org.apache.commons.codec.binary.Base64
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.mockito.MockitoSugar
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 
+import java.io.File
+import java.text.DecimalFormat
+import java.time.format.DateTimeFormatter
 import java.time.{Clock, LocalDateTime}
 import java.util.concurrent.TimeUnit
+import scala.collection.mutable
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
@@ -144,7 +108,7 @@ class StreamForOptimizeTest
     extends ScalaTestWithActorTestKit(
       ConfigFactory
         .parseString(s"""
-                      |akka.remote.artery.canonical.port = 25520
+                      |akka.remote.artery.canonical.port = 25521
                       |akka.persistence.journal.leveldb.dir = "/tmp/journal_${classOf[
           StreamForOptimizeTest
         ].getSimpleName}"
@@ -184,7 +148,131 @@ class StreamForOptimizeTest
 
   "stream optimize" should {
 
-    "hello tt" in {
+    "config get" in {
+      import scala.jdk.CollectionConverters._
+      val config = system.settings.config.getConfig("app.wechat")
+      val appids = config.entrySet().asScala.map(_.getKey.split("\\.").head).toSet
+      println(appids)
+    }
+
+    "hi" ignore {
+      val moneyFormat = new DecimalFormat("###,###.00")
+      val volumnFormat = new DecimalFormat("###,###")
+      info(moneyFormat.parse("1000,1000.00").toString)
+    }
+
+    "cache abc" ignore {
+      val cache = CacheSource(system).cache()
+      cache.orElse(
+        key = "abc",
+        value = () => Future.successful("hello"),
+        ttl = 3.seconds
+      ).futureValue shouldBe "hello"
+
+      cache.orElse(
+        key = "abc",
+        value = () => Future.successful("hello2"),
+        ttl = 3.seconds
+      ).futureValue shouldBe "hello"
+
+      cache.put(
+        key = "abc",
+        value = () => Future.successful("hello2"),
+        ttl = 3.seconds
+      ).futureValue shouldBe "hello2"
+
+      cache.remove(
+        key = "abc"
+      ).futureValue shouldBe true
+
+      cache.remove(
+        key = "abc"
+      ).futureValue shouldBe true
+    }
+
+    "optime test" ignore {
+      val a = Option.empty
+      val b = Option("b")
+
+      println(a.orElse(b))
+    }
+
+    "cache tt" ignore {
+      val defaultCachingSettings = CachingSettings(system)
+      val qrcodeLfuCacheSettings = defaultCachingSettings.lfuCacheSettings
+        .withInitialCapacity(100)
+        .withMaxCapacity(1000)
+        .withTimeToLive(65.seconds)
+        .withTimeToIdle(60.seconds)
+
+      val qrcodeCachingSettings =
+        defaultCachingSettings.withLfuCacheSettings(qrcodeLfuCacheSettings)
+      val qrcodeLfuCache: Cache[String, Boolean] =
+        LfuCache(qrcodeCachingSettings)
+
+      info(
+        qrcodeLfuCache
+          .getOrLoad("abc", k => Future.successful(true))
+          .futureValue.toString
+      )
+      println(qrcodeLfuCache.get("123").isEmpty)
+      info(qrcodeLfuCache.get("abc").get.futureValue.toString)
+    }
+
+    "file to base64" ignore {
+      var a = mutable.Map[String, Int]()
+      a ++= Map("a" -> 1, "b" -> 2)
+      println(a)
+//      val file = new File("/Users/lake/Downloads/click.png")
+//      Base64.encodeBase64(FileUtils)
+//      info(IpUtils.convertIpToProvinceCity("127.0.0.1").toString())
+    }
+
+    "time format" ignore {
+      println(0 % 2)
+      println(1 % 2)
+      println(2 % 2)
+      println(3 % 2)
+//      Array("12341", "60", "oNsB15rtku56Zz_tv_W0NlgDIF1o", "600").sorted.foreach(println)
+//      println(MD5Util.md5(Array("12341", "60", "oNsB15rtku56Zz_tv_W0NlgDIF1o", "¥6.00").sorted.mkString("")))
+//      val mm = MD5Util.md5(Array("12341", "60", "oNsB15rtku56Zz_tv_W0NlgDIF1o", "600").sorted.mkString(""))
+//      println(mm)
+
+//      val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS")
+//      println(LocalDateTime.parse("2021-08-14T17:22:50.620"))
+    }
+
+    "optione map and flatmap" ignore {
+      val a1 = Option.empty[String]
+      val a2 = Some("hello")
+      val a3 = Some("hi")
+      val cc = Seq(a1, a2, a3).find(_.isDefined).getOrElse("")
+    }
+
+    "stream log" ignore {
+      Source(1 to 3)
+        .logWithMarker(
+          s"StreamForOptimizeTest",
+          (e: Int) =>
+            LogMarker(
+              name = s"StreamForOptimizeTest"
+            ),
+          (e: Int) => e.toString
+        )
+        .withAttributes(
+          Attributes.logLevels(
+            onElement = Attributes.LogLevels.Info
+          )
+        )
+        .runForeach(println)
+    }
+
+    "config list" ignore {
+      val infos = system.settings.config.getStringList("app.admins")
+      infos.forEach(println)
+    }
+
+    "hello tt" ignore {
       val code = StatusCode.int2StatusCode(300)
       println(code.isSuccess())
     }
@@ -198,6 +286,7 @@ class StreamForOptimizeTest
         JwtClaim(
           WechatModel
             .Session(
+              appid = "",
               openid = text
             )
             .toJson
@@ -632,7 +721,7 @@ class StreamForOptimizeTest
       val validingFlow: Flow[Int, Int, NotUsed] = Flow[Int]
         .map(i => {
           if (i == 1) {
-            throw new DataException("hello")
+            throw DataException("hello")
           } else Right(i)
         })
         .collect {

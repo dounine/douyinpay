@@ -65,7 +65,6 @@ class WechatRouter()(implicit system: ActorSystem[_])
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
 
-  val appid = config.getString("wechat.appid")
   val domain = config.getString("file.domain")
   val http = Http(system)
 
@@ -100,9 +99,55 @@ class WechatRouter()(implicit system: ActorSystem[_])
                           ).toJson
                         )
                         val params: String = Map(
+                          "appid" -> "wx7b168b095eb4090e",
+                          "redirect_uri" -> URLEncoder.encode(
+                            (scheme + "://" + domain) + s"?ccode=${ccode}&appid=wx7b168b095eb4090e",
+                            "utf-8"
+                          ),
+                          "response_type" -> "code",
+                          "scope" -> "snsapi_base",
+                          "state" -> "wx7b168b095eb4090e"
+                        ).map(i => s"${i._1}=${i._2}")
+                          .mkString("&")
+                        redirect(
+                          s"https://open.weixin.qq.com/connect/oauth2/authorize?${params}#wechat_redirect",
+                          StatusCodes.PermanentRedirect
+                        )
+                    }
+                }
+            }
+          },
+          get {
+            path("into" / "from" / Segment / Segment) {
+              (appid: String, ccode: String) =>
+                extractClientIP {
+                  ip =>
+                    extractRequest {
+                      request =>
+                        val scheme: String = request.headers
+                          .map(i => i.name() -> i.value())
+                          .toMap
+                          .getOrElse("X-Scheme", request.uri.scheme)
+
+                        val (province, city) =
+                          IpUtils.convertIpToProvinceCity(ip.getIp())
+                        logger.info(
+                          Map(
+                            "time" -> System.currentTimeMillis(),
+                            "data" -> Map(
+                              "event" -> LogEventKey.fromCcode,
+                              "appid" -> appid,
+                              "ccode" -> ccode,
+                              "ip" -> ip.getIp(),
+                              "province" -> province,
+                              "city" -> city
+                            )
+                          ).toJson
+                        )
+                        val params: String = Map(
                           "appid" -> appid,
                           "redirect_uri" -> URLEncoder.encode(
-                            (scheme + "://" + domain) + "?ccode=" + ccode,
+                            (scheme + "://" + domain) + s"?ccode=${ccode}&appid=${appid}",
                             "utf-8"
                           ),
                           "response_type" -> "code",
@@ -119,60 +164,64 @@ class WechatRouter()(implicit system: ActorSystem[_])
             }
           },
           post {
-            path("auth") {
-              entity(as[NodeSeq]) {
-                data =>
-                  val message = WechatModel.WechatMessage.fromXml(data)
-                  logger.info(
-                    Map(
-                      "time" -> System.currentTimeMillis(),
-                      "data" -> Map(
-                        "event" -> LogEventKey.wechatMessage,
-                        "message" -> message
-                      )
-                    ).toJson
-                  )
-                  val result = Source
-                    .single(message)
-                    .via(WechatStream.notifyMessage())
-                    .runWith(Sink.head)
-                  complete(result)
-              }
+            path("auth" / Segment) {
+              appid =>
+                entity(as[NodeSeq]) {
+                  data =>
+                    val message = WechatModel.WechatMessage.fromXml(appid, data)
+                    logger.info(
+                      Map(
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.wechatMessage,
+                          "appid" -> appid,
+                          "message" -> message
+                        )
+                      ).toJson
+                    )
+                    val result = Source
+                      .single(message)
+                      .via(WechatStream.notifyMessage())
+                      .runWith(Sink.head)
+                    complete(result)
+                }
             }
           },
           get {
-            path("auth") {
-              parameters("signature", "timestamp", "nonce", "echostr") {
-                (
-                    signature: String,
-                    timestamp: String,
-                    nonce: String,
-                    echostr: String
-                ) =>
-                  {
-                    val sortArray: String =
-                      Array(
-                        config.getString("wechat.auth"),
-                        timestamp,
-                        nonce
-                      ).sorted.mkString("")
-                    if (
-                      signature == DigestUtils.sha1Hex(sortArray.mkString(""))
-                    ) {
-                      complete(
-                        HttpResponse(
-                          StatusCodes.OK,
-                          entity = HttpEntity(
-                            ContentTypes.`text/plain(UTF-8)`,
-                            echostr
+            path("auth" / Segment) {
+              appid =>
+                parameters("signature", "timestamp", "nonce", "echostr") {
+                  (
+                      signature: String,
+                      timestamp: String,
+                      nonce: String,
+                      echostr: String
+                  ) =>
+                    {
+                      val auth = config.getString(s"wechat.${appid}.auth")
+                      val sortArray: String =
+                        Array(
+                          auth,
+                          timestamp,
+                          nonce
+                        ).sorted.mkString("")
+                      if (
+                        signature == DigestUtils.sha1Hex(sortArray.mkString(""))
+                      ) {
+                        complete(
+                          HttpResponse(
+                            StatusCodes.OK,
+                            entity = HttpEntity(
+                              ContentTypes.`text/plain(UTF-8)`,
+                              echostr
+                            )
                           )
                         )
-                      )
-                    } else {
-                      fail("fail")
+                      } else {
+                        fail("fail")
+                      }
                     }
-                  }
-              }
+                }
             }
           }
         )

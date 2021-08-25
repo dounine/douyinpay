@@ -5,6 +5,7 @@ import java.time.LocalDateTime
 object OpenidModel {
 
   case class OpenidInfo(
+      appid: String,
       openid: String,
       ccode: String,
       ip: String,

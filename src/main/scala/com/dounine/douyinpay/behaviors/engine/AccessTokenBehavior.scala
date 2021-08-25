@@ -3,22 +3,16 @@ package com.dounine.douyinpay.behaviors.engine
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
-import akka.stream.{RestartSettings, SystemMaterializer}
 import akka.stream.scaladsl.{RestartSource, Sink, Source}
-import akka.util.ByteString
+import akka.stream.{RestartSettings, SystemMaterializer}
 import com.dounine.douyinpay.model.models.BaseSerializer
-import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
 import com.dounine.douyinpay.tools.util.Request
 import org.slf4j.LoggerFactory
 
-import java.io.{File, FileReader}
 import java.time.LocalDateTime
-import scala.concurrent.Future
-import scala.util.{Failure, Success}
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 object AccessTokenBehavior extends JsonParse {
 
   private val logger = LoggerFactory.getLogger(AccessTokenBehavior.getClass)
@@ -28,9 +22,19 @@ object AccessTokenBehavior extends JsonParse {
 
   sealed trait Event extends BaseSerializer
   type Token = String
-  case class InitToken() extends Event
-  case class InitTokenOk(token: Token, expire: Int) extends Event
-  case class InitTokenFail(code: Int, msg: String) extends Event
+  case class InitToken(appid: String, secret: String) extends Event
+  case class InitTokenOk(
+      appid: String,
+      secret: String,
+      token: Token,
+      expire: Int
+  ) extends Event
+  case class InitTokenFail(
+      appid: String,
+      secret: String,
+      code: Int,
+      msg: String
+  ) extends Event
   case class GetToken()(val replyTo: ActorRef[Event]) extends Event
   case class GetTokenOk(token: Token) extends Event
   case class GetTokenFail(msg: String) extends Event
@@ -49,8 +53,6 @@ object AccessTokenBehavior extends JsonParse {
         implicit val materializer = SystemMaterializer(system).materializer
         implicit val ec = context.executionContext
         val config = system.settings.config.getConfig("app")
-        val appid = config.getString("wechat.appid")
-        val secret = config.getString("wechat.secret")
         val pro = config.getBoolean("pro")
 
         var token: Option[String] = None
@@ -64,19 +66,23 @@ object AccessTokenBehavior extends JsonParse {
                 })
                 Behaviors.same
               }
-              case InitTokenOk(to, expire) => {
-                logger.info("token refresh -> {} {}", to, expire)
+              case InitTokenOk(appid, secret, to, expire) => {
+                logger.info("token refresh -> {} {} {}", appid, to, expire)
                 token = Some(to)
                 if (pro) {
-                  timers.startSingleTimer(InitToken(), expire.seconds)
+                  timers.startSingleTimer(
+                    InitToken(appid, secret),
+                    expire.seconds
+                  )
                 }
                 Behaviors.same
               }
-              case InitTokenFail(code, msg) => {
-                logger.error("token query fail -> {} {}", code, msg)
+              case InitTokenFail(appid, secret, code, msg) => {
+                logger.error("token query fail -> {} {} {}", appid, code, msg)
                 Behaviors.same
               }
-              case InitToken() => {
+              case InitToken(appid, secret) => {
+                val secret = config.getString(s"wechat.${appid}.secret")
                 import better.files._
                 val path = System.getProperty("user.home")
                 val tokenFile = s"${path}/.douyin_token_${appid}".toFile
@@ -102,6 +108,8 @@ object AccessTokenBehavior extends JsonParse {
                   case Some((token, time, expire)) =>
                     context.self.tell(
                       InitTokenOk(
+                        appid,
+                        secret,
                         token,
                         expire - java.time.Duration
                           .between(time, LocalDateTime.now())
@@ -141,13 +149,20 @@ object AccessTokenBehavior extends JsonParse {
                           .runWith(Sink.head)
                       ) {
                         case Failure(exception) =>
-                          InitTokenFail(-1, exception.getMessage)
+                          InitTokenFail(appid, secret, -1, exception.getMessage)
                         case Success(value) =>
                           value.errcode match {
                             case Some(err) =>
-                              InitTokenFail(err, value.errmsg.getOrElse(""))
+                              InitTokenFail(
+                                appid,
+                                secret,
+                                err,
+                                value.errmsg.getOrElse("")
+                              )
                             case None =>
                               InitTokenOk(
+                                appid,
+                                secret,
                                 value.access_token.get,
                                 value.expires_in.get
                               )
@@ -156,10 +171,8 @@ object AccessTokenBehavior extends JsonParse {
                       }
                     }
                 }
-
                 Behaviors.same
               }
-
             }
           }
         }

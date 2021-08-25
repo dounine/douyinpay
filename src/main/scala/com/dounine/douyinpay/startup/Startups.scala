@@ -65,20 +65,25 @@ class Startups(implicit system: ActorSystem[_]) {
           )
       )
     )
-    sharding
-      .init(
-        Entity(
-          typeKey = AccessTokenBehavior.typeKey
-        )(
-          createBehavior = entityContext => AccessTokenBehavior()
+    import scala.jdk.CollectionConverters._
+    val wechat = system.settings.config.getConfig("app.wechat")
+    val appids = wechat.entrySet().asScala.map(_.getKey.split("\\.").head).toSet
+    appids.foreach(appid => {
+      sharding
+        .init(
+          Entity(
+            typeKey = AccessTokenBehavior.typeKey
+          )(
+            createBehavior = entityContext => AccessTokenBehavior()
+          )
         )
-      )
-      .tell(
-        ShardingEnvelope(
-          AccessTokenBehavior.typeKey.name,
-          AccessTokenBehavior.InitToken()
+        .tell(
+          ShardingEnvelope(
+            appid,
+            AccessTokenBehavior
+              .InitToken(appid, wechat.getConfig(appid).getString("secret"))
+          )
         )
-      )
 
     sharding
       .init(
