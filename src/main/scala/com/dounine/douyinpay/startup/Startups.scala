@@ -85,20 +85,21 @@ class Startups(implicit system: ActorSystem[_]) {
           )
         )
 
-    sharding
-      .init(
-        Entity(
-          typeKey = JSApiTicketBehavior.typeKey
-        )(
-          createBehavior = entityContext => JSApiTicketBehavior()
+      sharding
+        .init(
+          Entity(
+            typeKey = JSApiTicketBehavior.typeKey
+          )(
+            createBehavior = entityContext => JSApiTicketBehavior()
+          )
         )
-      )
-      .tell(
-        ShardingEnvelope(
-          JSApiTicketBehavior.typeKey.name,
-          JSApiTicketBehavior.InitTicket()
+        .tell(
+          ShardingEnvelope(
+            appid,
+            JSApiTicketBehavior.InitTicket(appid)
+          )
         )
-      )
+    })
 
     ServiceSingleton.put(classOf[OrderService], new OrderService())
     ServiceSingleton.put(classOf[UserService], new UserService())
