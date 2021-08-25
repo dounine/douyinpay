@@ -32,7 +32,7 @@ import sangria.macros.derive.{
 }
 import sangria.schema.{Argument, _}
 
-import java.net.URLEncoder
+import java.net.{URLDecoder, URLEncoder}
 import java.util.UUID
 import scala.concurrent.Future
 
@@ -293,7 +293,8 @@ object WechatSchema extends JsonParse {
     deriveObjectType[Unit, WechatModel.SignatureResponse](
       ObjectTypeName("SignatureResponse"),
       ObjectTypeDescription("授权"),
-      DocumentField("noncestr", "随机字符串"),
+      DocumentField("appid", "公众号id"),
+      DocumentField("nonceStr", "随机字符串"),
       DocumentField("timestamp", "时间"),
       DocumentField("signature", "签名")
     )
@@ -319,6 +320,8 @@ object WechatSchema extends JsonParse {
           "time" -> System.currentTimeMillis(),
           "data" -> Map(
             "event" -> LogEventKey.wechatSignature,
+            "appid" -> c.ctx.appid.get,
+            "openid" -> c.ctx.openid.get,
             "url" -> c.arg[String]("url"),
             "ip" -> c.value.addressInfo.ip,
             "province" -> c.value.addressInfo.province,
@@ -329,7 +332,7 @@ object WechatSchema extends JsonParse {
       val info = Map(
         "noncestr" -> UUIDUtil.uuid(),
         "timestamp" -> System.currentTimeMillis() / 1000,
-        "url" -> c.arg[String]("url")
+        "url" -> URLDecoder.decode(c.arg[String]("url"), "utf-8")
       )
       WechatStream
         .jsapiQuery(c.ctx.appid.get)(c.ctx.system)
@@ -345,7 +348,8 @@ object WechatSchema extends JsonParse {
         .map(DigestUtils.sha1Hex)
         .map((signature: String) => {
           WechatModel.SignatureResponse(
-            noncestr = info("noncestr").asInstanceOf[String],
+            appid = c.ctx.appid.get,
+            nonceStr = info("noncestr").asInstanceOf[String],
             timestamp = info("timestamp").asInstanceOf[Long],
             signature = signature
           )

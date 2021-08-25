@@ -12,7 +12,8 @@ object WechatModel {
   ) extends BaseSerializer
 
   case class SignatureResponse(
-      noncestr: String,
+      appid: String,
+      nonceStr: String,
       timestamp: Long,
       signature: String
   )
