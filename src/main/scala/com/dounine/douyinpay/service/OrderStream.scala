@@ -171,6 +171,7 @@ object OrderStream {
   ): Flow[OrderModel.DbInfo, OrderModel.DbInfo, NotUsed] = {
     implicit val ec = system.executionContext
     val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
+    val wechat = system.settings.config.getConfig("app.wechat")
     val notify = (
         typ: DingDing.MessageType.MessageType,
         order: OrderModel.DbInfo,
@@ -183,28 +184,33 @@ object OrderStream {
             markdown = DingDing.Markdown(
               title = "定单通知",
               text = s"""
-                      |## ${title}
-                      | - nickName: ${order.nickName.getOrElse("")}
-                      | - id: ${order.id}
-                      | - money: ${order.money}
-                      | - payCount: ${order.payCount}
-                      | - payMoney: ${order.payMoney}
-                      | - duration: ${java.time.Duration
+                        |## ${title}
+                        | - appname: ${wechat.getString(s"${order.appid}.name")}
+                        | - appid: ${order.appid}
+                        | - 微信昵称: ${order.nickName.getOrElse("")}
+                        | - 充值帐号: ${order.id}
+                        | - 本次金额: ${order.money}
+                        | - 今日充值次数: ${order.todayPayCount}
+                        | - 今日充值金额: ${order.todayPayMoney}
+                        | - 全部充值次数: ${order.payCount}
+                        | - 全部充值金额: ${order.payMoney}
+                        | - 耗时: ${java.time.Duration
                 .between(order.createTime, LocalDateTime.now())
                 .getSeconds}s
-                      | - createTime: ${order.createTime.format(
+                        | - 创建时间: ${order.createTime.format(
                 timeFormatter
               )}
-                      | - notifyTime: ${LocalDateTime
+                        | - 通知时间: ${LocalDateTime
                 .now()
                 .format(timeFormatter)}
-                      |""".stripMargin
+                        |""".stripMargin
             )
           )
         )
         .map(_ => order)
     }
     Flow[OrderModel.DbInfo]
+      .via(aggregation())
       .mapAsync(1) { order =>
         if (order.pay) {
           notify(DingDing.MessageType.payed, order, "充值成功")
