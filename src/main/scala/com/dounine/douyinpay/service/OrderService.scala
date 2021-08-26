@@ -90,12 +90,10 @@ class OrderService(implicit system: ActorSystem[_]) extends EnumMappers {
         .map(item =>
           (
             item.pay,
-            item.expire,
-            item.payCount,
-            item.payMoney
+            item.expire
           )
         )
-        .update((info.pay, info.expire, info.payCount, info.payMoney))
+        .update((info.pay, info.expire))
     )
 
   def userInfo(

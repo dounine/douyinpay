@@ -255,6 +255,7 @@ object OrderSchema extends JsonParse {
         })
         .via(OrderStream.add()(c.ctx.system))
         .map(_._1)
+        .via(OrderStream.aggregation()(c.ctx.system))
         .via(OrderStream.qrcodeCreate()(c.ctx.system))
         .mapAsync(1) { info =>
           info._2.qrcode match {

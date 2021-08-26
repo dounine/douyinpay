@@ -126,18 +126,20 @@ object OrderStream {
                         |## ${title}
                         | - appname: ${wechat.getString(s"${order.appid}.name")}
                         | - appid: ${order.appid}
-                        | - nickName: ${order.nickName.getOrElse("")}
-                        | - id: ${order.id}
-                        | - money: ${order.money}
-                        | - payCount: ${order.payCount}
-                        | - payMoney: ${order.payMoney}
-                        | - duration: ${java.time.Duration
+                        | - 微信昵称: ${order.nickName.getOrElse("")}
+                        | - 充值帐号: ${order.id}
+                        | - 本次金额: ${order.money}
+                        | - 今日充值次数: ${order.todayPayCount}
+                        | - 今日充值金额: ${order.todayPayMoney}
+                        | - 全部充值次数: ${order.payCount}
+                        | - 全部充值金额: ${order.payMoney}
+                        | - 耗时: ${java.time.Duration
                 .between(order.createTime, LocalDateTime.now())
                 .getSeconds}s
-                        | - createTime: ${order.createTime.format(
+                        | - 创建时间: ${order.createTime.format(
                 timeFormatter
               )}
-                        | - notifyTime: ${LocalDateTime
+                        | - 通知时间: ${LocalDateTime
                 .now()
                 .format(timeFormatter)}
                         |""".stripMargin
@@ -277,6 +279,43 @@ object OrderStream {
     Flow[OrderModel.DbInfo]
       .mapAsync(1) { order: OrderModel.DbInfo =>
         db.run(orderTable += order).map(order -> _)
+      }
+  }
+
+  def aggregation()(implicit
+      system: ActorSystem[_]
+  ): Flow[OrderModel.DbInfo, OrderModel.DbInfo, NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    val orderTable = TableQuery[OrderTable]
+    implicit val materializer = SystemMaterializer(system).materializer
+    Flow[OrderModel.DbInfo]
+      .mapAsync(1) { order: OrderModel.DbInfo =>
+        db.run(
+            orderTable
+              .filter(i => i.openid === order.openid && i.pay === true)
+              .result
+          )
+          .map { list =>
+            order.copy(
+              payCount = list.size,
+              payMoney = list.map(_.money).sum,
+              todayPayCount = list
+                .filterNot(
+                  _.createTime.isBefore(LocalDate.now().atStartOfDay())
+                )
+                .size,
+              todayPayMoney = list
+                .filterNot(
+                  _.createTime.isBefore(LocalDate.now().atStartOfDay())
+                )
+                .map(_.money)
+                .sum
+            )
+          }
       }
   }
 

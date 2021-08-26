@@ -24,8 +24,10 @@ object OrderModel {
       fee: BigDecimal,
       platform: PayPlatform,
       createTime: LocalDateTime,
-      payCount: Int,
-      payMoney: Int
+      payCount: Int = 0,
+      payMoney: Int = 0,
+      todayPayCount: Int = 0,
+      todayPayMoney: Int = 0
   ) extends BaseSerializer {
     override def hashCode(): Int = orderId.hashCode()
 

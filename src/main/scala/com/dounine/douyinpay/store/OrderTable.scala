@@ -28,8 +28,10 @@ class OrderTable(tag: Tag)
       fee,
       platform,
       createTime,
-      payCount,
-      payMoney
+      0,
+      0,
+      0,
+      0
     ).mapTo[OrderModel.DbInfo]
 
   def appid: Rep[String] = column[String]("appid", O.Length(18))
@@ -50,10 +52,6 @@ class OrderTable(tag: Tag)
 
   def fee: Rep[BigDecimal] =
     column[BigDecimal]("fee", O.SqlType("decimal(10, 2)"))
-
-  def payCount: Rep[Int] = column[Int]("payCount", O.Length(11))
-
-  def payMoney: Rep[Int] = column[Int]("payMoney", O.Length(11))
 
   def platform: Rep[PayPlatform] =
     column[PayPlatform]("platform", O.Length(PayPlatform.dbLength))
