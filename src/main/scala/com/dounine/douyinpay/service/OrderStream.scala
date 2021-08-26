@@ -113,6 +113,7 @@ object OrderStream {
     NotUsed
   ] = {
     implicit val ec = system.executionContext
+    val wechat = system.settings.config.getConfig("app.wechat")
     val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
     val notify = (order: OrderModel.DbInfo, title: String) => {
       DingDing
@@ -123,6 +124,8 @@ object OrderStream {
               title = "定单通知",
               text = s"""
                         |## ${title}
+                        | - appname: ${wechat.getString(s"${order.appid}.name")}
+                        | - appid: ${order.appid}
                         | - nickName: ${order.nickName.getOrElse("")}
                         | - id: ${order.id}
                         | - money: ${order.money}
