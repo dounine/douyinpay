@@ -37,11 +37,10 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
 
     Source.future(
       db.run(
-        orderTable
+        OrderTable()
           .filter(_.pay === true)
           .groupBy(_.openid)
           .map {
@@ -238,10 +237,9 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
     Flow[String]
       .mapAsync(1) { orderId =>
-        db.run(orderTable.filter(_.orderId === orderId).result.head)
+        db.run(OrderTable().filter(_.orderId === orderId).result.head)
       }
   }
 
@@ -253,11 +251,10 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
     Flow[OrderModel.UpdateStatus]
       .mapAsync(1) { info =>
         db.run(
-            orderTable
+            OrderTable()
               .filter(_.orderId === info.order.orderId)
               .result
               .headOption
@@ -265,7 +262,7 @@ object OrderStream {
           .flatMap {
             case Some(value) =>
               db.run(
-                  orderTable
+                  OrderTable()
                     .filter(_.orderId === value.orderId)
                     .map(i => (i.pay, i.expire))
                     .update((info.pay, true))
@@ -284,11 +281,10 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
     implicit val materializer = SystemMaterializer(system).materializer
     Flow[OrderModel.DbInfo]
       .mapAsync(1) { order: OrderModel.DbInfo =>
-        db.run(orderTable += order).map(order -> _)
+        db.run(OrderTable() += order).map(order -> _)
       }
   }
 
@@ -300,12 +296,11 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
     implicit val materializer = SystemMaterializer(system).materializer
     Flow[OrderModel.DbInfo]
       .mapAsync(1) { order: OrderModel.DbInfo =>
         db.run(
-            orderTable
+            OrderTable()
               .filter(i => i.openid === order.openid && i.pay === true)
               .result
           )
@@ -337,13 +332,12 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
     implicit val materializer = SystemMaterializer(system).materializer
 
     Flow[String]
       .mapAsync(1) { openid =>
         db.run(
-          orderTable
+          OrderTable()
             .filter(i =>
               i.openid === openid && i.pay === true && i.createTime >= LocalDate
                 .now()
@@ -364,13 +358,12 @@ object OrderStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val orderTable = TableQuery[OrderTable]
     implicit val materializer = SystemMaterializer(system).materializer
 
     Source
       .future(
         db.run(
-          orderTable
+          OrderTable()
             .filter(i =>
               i.pay === true && i.createTime >= LocalDate
                 .now()
@@ -387,7 +380,7 @@ object OrderStream {
       .zip(
         Source.future(
           db.run(
-            orderTable
+            OrderTable()
               .filter(i =>
                 i.pay === true && i.createTime >= LocalDate
                   .now()

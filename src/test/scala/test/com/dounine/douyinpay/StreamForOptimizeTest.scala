@@ -22,6 +22,7 @@ import com.dounine.douyinpay.tools.json.JsonParse
 import com.dounine.douyinpay.tools.util.{DingDing, IpUtils, MD5Util}
 import com.typesafe.config.ConfigFactory
 import org.apache.commons.codec.binary.Base64
+import org.apache.commons.codec.digest.DigestUtils
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatestplus.mockito.MockitoSugar
@@ -147,7 +148,11 @@ class StreamForOptimizeTest
 
   "stream optimize" should {
 
-    "config get" in {
+    "hash" in {
+      info(DigestUtils.sha1Hex("jsapi_ticket=LIKLckvwlJT9cWIhEQTwfI2T0p5z6H7ojimL6kFjYs2faMmlEhC81SoPo0okdrGHMXhqO9IpCACh23iTxuHCrQ&nonceStr=e691fce5d2d34f0fae91c62dfa7b4389&timestamp=1629892971&url=https://douyin.61week.com/?ccode=&appid=wx7b168b095eb4090e&code=091FQ60w3DPgYW2H223w3c6cJh4FQ60U&state=wx7b168b095eb4090e".trim))
+      info(DigestUtils.sha1Hex("jsapi_ticket=LIKLckvwlJT9cWIhEQTwfI2T0p5z6H7ojimL6kFjYs2faMmlEhC81SoPo0okdrGHMXhqO9IpCACh23iTxuHCrQ&noncestr=e691fce5d2d34f0fae91c62dfa7b4389&timestamp=1629892971&url=https://douyin.61week.com/?ccode=&appid=wx7b168b095eb4090e&code=091FQ60w3DPgYW2H223w3c6cJh4FQ60U&state=wx7b168b095eb4090e".trim))
+    }
+    "config get" ignore {
       import scala.jdk.CollectionConverters._
       val config = system.settings.config.getConfig("app.wechat")
       val appids = config.entrySet().asScala.map(_.getKey.split("\\.").head).toSet

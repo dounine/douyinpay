@@ -23,7 +23,7 @@ class DictionaryService(implicit system: ActorSystem[_]) extends EnumMappers {
   ).materializer
   implicit val ec: ExecutionContextExecutor = materializer.executionContext
   private val db = DataSource(system).source().db
-  private val dict = TableQuery[DictionaryTable]
+  private val dict = DictionaryTable()
 
   def upsert(key: String, value: String): Future[Int] =
     db.run(

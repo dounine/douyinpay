@@ -10,6 +10,9 @@ import slick.lifted.{PrimaryKey, ProvenShape}
 
 import java.time.LocalDateTime
 
+object OrderTable {
+  def apply(): TableQuery[OrderTable] = TableQuery[OrderTable]
+}
 class OrderTable(tag: Tag)
     extends Table[OrderModel.DbInfo](tag, _tableName = "douyinpay_order")
     with EnumMappers {

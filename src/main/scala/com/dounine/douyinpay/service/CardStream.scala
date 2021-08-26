@@ -26,7 +26,7 @@ object CardStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val cardTable = TableQuery[CardTable]
+    val cardTable = CardTable()
 
     val insertCard: CardModel.CardInfo => DBIO[Int] =
       (card: CardModel.CardInfo) => cardTable += card
@@ -52,7 +52,7 @@ object CardStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val cardTable = TableQuery[CardTable]
+    val cardTable = CardTable()
 
     Slick.flowWithPassThrough { card =>
       (for {

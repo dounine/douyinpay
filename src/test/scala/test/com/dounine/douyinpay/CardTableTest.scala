@@ -47,7 +47,7 @@ class CardTableTest
   val sharding = ClusterSharding(system)
 
   val db = DataSource(system).source().db
-  val dict = TableQuery[CardTable]
+  val dict = CardTable()
 
   def beforeFun(): Unit = {
     try {
@@ -68,7 +68,7 @@ class CardTableTest
   val userService = new UserService()
   "card table test" should {
     "table create" in {
-      beforeFun()
+//      beforeFun()
 
 //      afterFun()
     }

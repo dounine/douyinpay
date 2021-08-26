@@ -474,7 +474,6 @@ object WechatStream extends JsonParse with SuportRouter {
     implicit val ec = system.executionContext
     implicit val materializer = SystemMaterializer(system).materializer
     val config = system.settings.config.getConfig("app")
-    val domain = config.getString("file.domain")
     val limitMoney = config.getInt("limitMoney")
     val admins = config.getStringList("admins")
     Flow[LoginParamers]

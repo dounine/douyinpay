@@ -4,6 +4,9 @@ import com.dounine.douyinpay.model.models.{AccountModel, CardModel}
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.ProvenShape
 
+object AccountTable {
+  def apply(): TableQuery[AccountTable] = TableQuery[AccountTable]
+}
 class AccountTable(tag: Tag)
     extends Table[AccountModel.AccountInfo](
       tag,

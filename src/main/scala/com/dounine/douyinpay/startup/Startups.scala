@@ -99,14 +99,14 @@ class Startups(implicit system: ActorSystem[_]) {
     import slick.jdbc.MySQLProfile.api._
     val db = DataSource(system).source().db
     val schemas = Seq(
-      lifted.TableQuery[UserTable].schema,
-      lifted.TableQuery[OrderTable].schema,
-      lifted.TableQuery[DictionaryTable].schema,
-      lifted.TableQuery[CardTable].schema,
-      lifted.TableQuery[AccountTable].schema,
-      lifted.TableQuery[OpenidTable].schema,
-      lifted.TableQuery[AkkaPersistenerJournalTable].schema,
-      lifted.TableQuery[AkkaPersistenerSnapshotTable].schema
+      UserTable().schema,
+      OrderTable().schema,
+      DictionaryTable().schema,
+      CardTable().schema,
+      AccountTable().schema,
+      OpenidTable().schema,
+      AkkaPersistenerJournalTable().schema,
+      AkkaPersistenerSnapshotTable().schema
     )
     schemas.foreach(schema => {
       try {

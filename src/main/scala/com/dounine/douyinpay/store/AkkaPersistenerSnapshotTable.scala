@@ -4,6 +4,10 @@ import com.dounine.douyinpay.model.models.AkkaPersistenerModel
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.{PrimaryKey, ProvenShape}
 
+object AkkaPersistenerSnapshotTable {
+  def apply(): TableQuery[AkkaPersistenerSnapshotTable] =
+    TableQuery[AkkaPersistenerSnapshotTable]
+}
 class AkkaPersistenerSnapshotTable(tag: Tag)
     extends Table[AkkaPersistenerModel.Snapshot](
       tag,
@@ -28,6 +32,9 @@ class AkkaPersistenerSnapshotTable(tag: Tag)
   def snapshot: Rep[Array[Byte]] = column[Array[Byte]]("snapshot")
 
   def pk: PrimaryKey =
-    primaryKey("ecdouyin_snapshot_primaryKey", (persistence_id, sequence_number))
+    primaryKey(
+      "ecdouyin_snapshot_primaryKey",
+      (persistence_id, sequence_number)
+    )
 
 }

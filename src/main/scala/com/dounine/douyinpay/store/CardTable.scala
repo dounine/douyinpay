@@ -6,6 +6,9 @@ import slick.lifted.ProvenShape
 
 import java.time.LocalDateTime
 
+object CardTable {
+  def apply(): TableQuery[CardTable] = TableQuery[CardTable]
+}
 class CardTable(tag: Tag)
     extends Table[CardModel.CardInfo](tag, _tableName = "douyinpay_card")
     with EnumMappers {

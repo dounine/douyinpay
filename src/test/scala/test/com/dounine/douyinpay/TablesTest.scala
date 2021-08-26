@@ -44,9 +44,9 @@ class TablesTest
   val sharding = ClusterSharding(system)
 
   val db = DataSource(system).source().db
-  val userTableDict = TableQuery[UserTable]
-  val orderTableDict = TableQuery[OrderTable]
-  val dictionaryTableDict = TableQuery[DictionaryTable]
+  val userTableDict = UserTable()
+  val orderTableDict = OrderTable()
+  val dictionaryTableDict = DictionaryTable()
 
   def beforeFun(): Unit = {
     try {

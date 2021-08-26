@@ -21,10 +21,9 @@ object UserStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val userTable = TableQuery[UserTable]
 
     Slick.source(
-      userTable.filter(_.apiKey === apiKey).result
+      UserTable().filter(_.apiKey === apiKey).result
     )
   }
 

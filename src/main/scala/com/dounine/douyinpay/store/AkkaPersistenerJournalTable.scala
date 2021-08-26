@@ -4,6 +4,10 @@ import com.dounine.douyinpay.model.models.AkkaPersistenerModel
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.{PrimaryKey, ProvenShape}
 
+object AkkaPersistenerJournalTable {
+  def apply(): TableQuery[AkkaPersistenerJournalTable] =
+    TableQuery[AkkaPersistenerJournalTable]
+}
 class AkkaPersistenerJournalTable(tag: Tag)
     extends Table[AkkaPersistenerModel.Journal](
       tag,

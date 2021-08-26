@@ -10,7 +10,6 @@ import akka.persistence.typed.PersistenceId
 import akka.stream.alpakka.udp.Datagram
 import akka.stream.alpakka.udp.scaladsl.Udp
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import com.dounine.douyinpay.model.models.{StockTimeSerieModel, UserModel}
 import com.dounine.douyinpay.model.types.service.IntervalStatus
 import com.dounine.douyinpay.service.UserService
 import com.dounine.douyinpay.store.{EnumMappers, UserTable}
@@ -59,7 +58,7 @@ class UserTableTest
   val sharding = ClusterSharding(system)
 
   val db = DataSource(system).source().db
-  val dict = TableQuery[UserTable]
+  val dict = UserTable()
 
   def beforeFun(): Unit = {
     try {

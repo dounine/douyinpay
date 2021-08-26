@@ -6,6 +6,9 @@ import slick.lifted.{PrimaryKey, ProvenShape}
 
 import java.time.LocalDateTime
 
+object DictionaryTable {
+  def apply(): TableQuery[DictionaryTable] = TableQuery[DictionaryTable]
+}
 class DictionaryTable(tag: Tag)
     extends Table[DictionaryModel.DbInfo](
       tag,

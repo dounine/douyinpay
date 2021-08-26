@@ -20,7 +20,7 @@ object AccountStream {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val accountTable = TableQuery[AccountTable]
+    val accountTable = AccountTable()
     Flow[String]
       .mapAsync(1) { openid =>
         db.run(accountTable.filter(_.openid === openid).result.headOption)

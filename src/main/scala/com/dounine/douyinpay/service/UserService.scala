@@ -11,8 +11,7 @@ import scala.concurrent.Future
 
 class UserService(implicit system: ActorSystem[_]) extends EnumMappers {
   private val db = DataSource(system).source().db
-  private val dict: TableQuery[UserTable] =
-    TableQuery[UserTable]
+  private val dict: TableQuery[UserTable] = UserTable()
   private val tableName = dict.baseTableRow.tableName
 
   def info(apiKey: String): Future[Option[UserModel.DbInfo]] =

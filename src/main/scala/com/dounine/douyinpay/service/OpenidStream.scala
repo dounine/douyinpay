@@ -20,6 +20,7 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 object OpenidStream extends JsonParse {
 
   private val logger = LoggerFactory.getLogger(OpenidStream.getClass)
+
   def autoCreateOpenidInfo()(implicit
       system: ActorSystem[_]
   ): Flow[OpenidModel.OpenidInfo, Boolean, NotUsed] = {
@@ -28,17 +29,16 @@ object OpenidStream extends JsonParse {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val openidTable = TableQuery[OpenidTable]
     implicit val materializer = SystemMaterializer(system).materializer
 
     Flow[OpenidModel.OpenidInfo]
       .mapAsync(1) { info =>
-        db.run(openidTable.filter(_.openid === info.openid).result.headOption)
+        db.run(OpenidTable().filter(_.openid === info.openid).result.headOption)
           .map(info -> _)
       }
       .mapAsync(1) { tp2 =>
         if (tp2._2.isEmpty) {
-          db.run(openidTable += tp2._1)
+          db.run(OpenidTable() += tp2._1)
             .map(_ == 1)
         } else {
           Future.successful(false)
@@ -54,12 +54,11 @@ object OpenidStream extends JsonParse {
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
-    val openidTable = TableQuery[OpenidTable]
     implicit val materializer = SystemMaterializer(system).materializer
 
     Flow[String]
       .mapAsync(1) { openid =>
-        db.run(openidTable.filter(_.openid === openid).result.headOption)
+        db.run(OpenidTable().filter(_.openid === openid).result.headOption)
       }
   }
 

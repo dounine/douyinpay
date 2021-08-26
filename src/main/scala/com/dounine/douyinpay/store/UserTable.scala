@@ -6,6 +6,9 @@ import slick.lifted.ProvenShape
 
 import java.time.LocalDateTime
 
+object UserTable {
+  def apply(): TableQuery[UserTable] = TableQuery[UserTable]
+}
 class UserTable(tag: Tag)
     extends Table[UserModel.DbInfo](tag, _tableName = "douyinpay_user")
     with EnumMappers {

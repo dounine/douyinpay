@@ -6,6 +6,9 @@ import slick.lifted.ProvenShape
 
 import java.time.LocalDateTime
 
+object OpenidTable {
+  def apply(): TableQuery[OpenidTable] = TableQuery[OpenidTable]
+}
 class OpenidTable(tag: Tag)
     extends Table[OpenidModel.OpenidInfo](tag, _tableName = "douyinpay_openid")
     with EnumMappers {

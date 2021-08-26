@@ -23,6 +23,7 @@ import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.util.{MD5Util, Request}
 import org.slf4j.LoggerFactory
+import slick.jdbc.MySQLProfile
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.TableQuery
 
@@ -30,8 +31,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 class OrderService(implicit system: ActorSystem[_]) extends EnumMappers {
   private val db = DataSource(system).source().db
-  private val dict: TableQuery[OrderTable] =
-    TableQuery[OrderTable]
+  private val dict: TableQuery[OrderTable] = OrderTable()
 
   implicit val ec = system.executionContext
   implicit val materializer = SystemMaterializer(system).materializer
