@@ -10,8 +10,7 @@ import akka.stream.scaladsl.Sink
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.InitToken
 import com.dounine.douyinpay.behaviors.engine.{
   AccessTokenBehavior,
-  JSApiTicketBehavior,
-  QrcodeBehavior
+  JSApiTicketBehavior
 }
 import com.dounine.douyinpay.model.models.UserModel
 import com.dounine.douyinpay.service.{
@@ -52,19 +51,6 @@ class Startups(implicit system: ActorSystem[_]) {
   val pro = system.settings.config.getBoolean("app.pro")
 
   def start(): Unit = {
-    sharding.init(
-      Entity(
-        typeKey = QrcodeBehavior.typeKey
-      )(
-        createBehavior = entityContext =>
-          QrcodeBehavior(
-            PersistenceId.of(
-              QrcodeBehavior.typeKey.name,
-              entityContext.entityId
-            )
-          )
-      )
-    )
     import scala.jdk.CollectionConverters._
     val wechat = system.settings.config.getConfig("app.wechat")
     val appids = wechat.entrySet().asScala.map(_.getKey.split("\\.").head).toSet

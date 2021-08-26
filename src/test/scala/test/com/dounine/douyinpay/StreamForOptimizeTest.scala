@@ -14,7 +14,6 @@ import akka.stream.scaladsl.{Broadcast, Concat, DelayStrategy, Flow, GraphDSL, K
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.typed.scaladsl.ActorSource
 import akka.util.ByteString
-import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior.logger
 import com.dounine.douyinpay.model.models.{BaseSerializer, WechatModel}
 import com.dounine.douyinpay.router.routers.errors.DataException
 import com.dounine.douyinpay.store.EnumMappers

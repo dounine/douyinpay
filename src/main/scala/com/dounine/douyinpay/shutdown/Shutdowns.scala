@@ -4,7 +4,6 @@ import akka.Done
 import akka.actor.CoordinatedShutdown
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import com.dounine.douyinpay.behaviors.engine.QrcodeBehavior
 import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.util.DingDing
@@ -20,20 +19,6 @@ class Shutdowns(system: ActorSystem[_]) {
   val pro = system.settings.config.getBoolean("app.pro")
 
   def listener(): Unit = {
-    CoordinatedShutdown(system)
-      .addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "closeOrder") {
-        () =>
-          {
-            logger.info("orderClose")
-            sharding
-              .entityRefFor(
-                QrcodeBehavior.typeKey,
-                QrcodeBehavior.typeKey.name
-              )
-              .ask(QrcodeBehavior.Shutdown())(3.seconds)
-          }
-      }
-
     CoordinatedShutdown(system)
       .addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "closeDb") { () =>
         {

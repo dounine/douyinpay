@@ -38,10 +38,6 @@ import akka.stream.scaladsl.{
 }
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
-import com.dounine.douyinpay.behaviors.engine.{
-  LoginScanBehavior,
-  QrcodeBehavior
-}
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
 import com.dounine.douyinpay.model.models.{
