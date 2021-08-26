@@ -8,6 +8,7 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
 import akka.stream.{RestartSettings, SystemMaterializer}
 import akka.stream.scaladsl.{RestartSource, Sink, Source}
 import akka.util.ByteString
+import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.logger
 import com.dounine.douyinpay.model.models.{BaseSerializer, TokenModel}
 import com.dounine.douyinpay.service.WechatStream
 import com.dounine.douyinpay.tools.akka.ConnectSettings
@@ -124,8 +125,9 @@ object JSApiTicketBehavior extends JsonParse {
                     )
                   case None =>
                     if (config.getBoolean(s"wechat.${appid}.proxy")) {
-                      val accessUrl =
+                      val tickUrl =
                         config.getString(s"wechat.${appid}.tickUrl")
+                      logger.info("{} tick proxy get -> {}", appid, tickUrl)
                       context.pipeToSelf(
                         RestartSource
                           .onFailuresWithBackoff(
@@ -138,7 +140,7 @@ object JSApiTicketBehavior extends JsonParse {
                             Source
                               .future(
                                 Request.get[TokenModel.TickResponse](
-                                  s"${accessUrl}/${appid}/${secret}"
+                                  s"${tickUrl}/${appid}/${secret}"
                                 )
                               )
                           })

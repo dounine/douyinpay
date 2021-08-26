@@ -125,6 +125,7 @@ object AccessTokenBehavior extends JsonParse {
                     if (config.getBoolean(s"wechat.${appid}.proxy")) {
                       val accessUrl =
                         config.getString(s"wechat.${appid}.accessUrl")
+                      logger.info("{} token proxy get -> {}", appid, accessUrl)
                       context.pipeToSelf(
                         RestartSource
                           .onFailuresWithBackoff(
