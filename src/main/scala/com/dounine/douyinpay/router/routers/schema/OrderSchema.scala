@@ -139,6 +139,10 @@ object OrderSchema extends JsonParse {
       argumentType = StringType,
       description = "充值抖币"
     ) :: Argument(
+      name = "ccode",
+      argumentType = StringType,
+      description = "渠道"
+    ) :: Argument(
       name = "sign",
       argumentType = StringType,
       description = "签名md5((id,money,volumn,openid).sort.join(''))"
@@ -150,6 +154,7 @@ object OrderSchema extends JsonParse {
             id = c.arg[String]("id"),
             money = c.arg[String]("money"),
             volumn = c.arg[String]("volumn"),
+            ccode = c.arg[String]("ccode"),
             sign = c.arg[String]("sign")
           )
         )
@@ -194,6 +199,7 @@ object OrderSchema extends JsonParse {
                 i._1.id,
                 i._1.money,
                 i._1.volumn,
+                i._1.ccode,
                 c.ctx.openid.get
               ).sorted.mkString("")
             ) != i._1.sign
@@ -207,6 +213,7 @@ object OrderSchema extends JsonParse {
                   "payAccount" -> i._1.id,
                   "payMoney" -> i._1.money,
                   "payVolumn" -> i._1.volumn,
+                  "payCcode" -> i._1.ccode,
                   "sign" -> i._1.sign,
                   "ip" -> c.value.addressInfo.ip,
                   "province" -> c.value.addressInfo.province,
@@ -225,6 +232,7 @@ object OrderSchema extends JsonParse {
           val userInfo = tp2._2
           val order = OrderModel.DbInfo(
             appid = c.ctx.appid.get,
+            ccode = data.ccode,
             orderId = orderId,
             nickName = userInfo.nickname,
             pay = false,

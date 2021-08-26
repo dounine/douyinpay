@@ -13,6 +13,7 @@ object OrderModel {
 
   final case class DbInfo(
       appid: String,
+      ccode: String,
       openid: String,
       nickName: Option[String],
       pay: Boolean,
@@ -65,6 +66,7 @@ object OrderModel {
       id: String,
       money: String,
       volumn: String,
+      ccode: String,
       sign: String
   ) extends BaseSerializer
 

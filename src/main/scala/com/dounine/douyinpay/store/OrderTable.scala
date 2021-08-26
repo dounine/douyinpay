@@ -17,6 +17,7 @@ class OrderTable(tag: Tag)
   override def * : ProvenShape[OrderModel.DbInfo] =
     (
       appid,
+      ccode,
       openid,
       nickName,
       pay,
@@ -37,6 +38,8 @@ class OrderTable(tag: Tag)
   def appid: Rep[String] = column[String]("appid", O.Length(18))
 
   def openid: Rep[String] = column[String]("openid", O.Length(50))
+
+  def ccode: Rep[String] = column[String]("ccode", O.Length(100))
 
   def nickName: Rep[Option[String]] =
     column[Option[String]]("nickName", O.Length(30))

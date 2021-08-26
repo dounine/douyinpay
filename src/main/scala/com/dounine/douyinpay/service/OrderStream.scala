@@ -124,8 +124,9 @@ object OrderStream {
               title = "定单通知",
               text = s"""
                         |## ${title}
-                        | - appname: ${wechat.getString(s"${order.appid}.name")}
-                        | - appid: ${order.appid}
+                        | - 公众号: ${wechat.getString(s"${order.appid}.name")}
+                        | - 公众号ID: ${order.appid}
+                        | - 当前渠道: ${order.ccode}
                         | - 微信昵称: ${order.nickName.getOrElse("")}
                         | - 充值帐号: ${order.id}
                         | - 本次金额: ${order.money}
@@ -185,8 +186,9 @@ object OrderStream {
               title = "定单通知",
               text = s"""
                         |## ${title}
-                        | - appname: ${wechat.getString(s"${order.appid}.name")}
-                        | - appid: ${order.appid}
+                        | - 公众号: ${wechat.getString(s"${order.appid}.name")}
+                        | - 公众号ID: ${order.appid}
+                        | - 当前渠道: ${order.ccode}
                         | - 微信昵称: ${order.nickName.getOrElse("")}
                         | - 充值帐号: ${order.id}
                         | - 本次金额: ${order.money}
