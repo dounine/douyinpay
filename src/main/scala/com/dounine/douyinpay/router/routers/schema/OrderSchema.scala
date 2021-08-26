@@ -243,9 +243,7 @@ object OrderSchema extends JsonParse {
             volumn = volumnFormat.parse(data.money).intValue() * 10,
             fee = BigDecimal("0.00"),
             platform = PayPlatform.douyin,
-            createTime = LocalDateTime.now(),
-            payCount = 0,
-            payMoney = 0
+            createTime = LocalDateTime.now()
           )
           logger.info(
             Map(
