@@ -42,7 +42,8 @@ object App {
       new OrderRouter().route,
       new WechatRouter().route,
       new GraphqlRouter().route,
-      new PhoneRouter().route
+      new PhoneRouter().route,
+      new TokenRouter().route
     )
 
     Http(system)

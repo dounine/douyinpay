@@ -61,7 +61,7 @@ object JSApiTicketBehavior extends JsonParse {
               case r @ GetTicket() => {
                 r.replyTo.tell(ticket match {
                   case Some(value) => GetTicketOk(value)
-                  case None        => GetTicketFail("not found")
+                  case None        => GetTicketFail("tick not found")
                 })
                 Behaviors.same
               }

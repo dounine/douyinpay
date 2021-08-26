@@ -62,7 +62,7 @@ object AccessTokenBehavior extends JsonParse {
               case r @ GetToken() => {
                 r.replyTo.tell(token match {
                   case Some(value) => GetTokenOk(value)
-                  case None        => GetTokenFail("not found")
+                  case None        => GetTokenFail("token not found")
                 })
                 Behaviors.same
               }
