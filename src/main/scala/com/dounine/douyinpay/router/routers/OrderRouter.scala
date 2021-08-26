@@ -6,72 +6,25 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{
-  ContentType,
-  HttpEntity,
-  HttpMethods,
-  HttpRequest,
-  HttpResponse,
-  MediaTypes,
-  RemoteAddress,
-  Uri
-}
+import akka.http.scaladsl.model.{ContentType, HttpEntity, HttpMethods, HttpRequest, HttpResponse, MediaTypes, RemoteAddress, Uri}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.directives.CachingDirectives.cache
-import akka.http.scaladsl.server.{
-  Directive1,
-  RequestContext,
-  Route,
-  RouteResult,
-  ValidationRejection
-}
+import akka.http.scaladsl.server.{Directive1, RequestContext, Route, RouteResult, ValidationRejection}
 import akka.stream._
-import akka.stream.scaladsl.{
-  Concat,
-  Flow,
-  GraphDSL,
-  Keep,
-  Merge,
-  Partition,
-  Sink,
-  Source
-}
+import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{
-  BaseSerializer,
-  OrderModel,
-  PayUserInfoModel,
-  RouterModel,
-  UserModel
-}
-import com.dounine.douyinpay.model.types.service.{
-  LogEventKey,
-  MechinePayStatus,
-  PayPlatform,
-  PayStatus
-}
-import com.dounine.douyinpay.service.{
-  OrderService,
-  OrderStream,
-  UserService,
-  UserStream,
-  WechatStream
-}
+import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel, PayUserInfoModel, RouterModel, UserModel}
+import com.dounine.douyinpay.model.types.service.{LogEventKey, MechinePayStatus, PayPlatform, PayStatus}
+import com.dounine.douyinpay.service.{OrderService, OrderStream, UserService, UserStream, WechatStream}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.{
-  IpUtils,
-  MD5Util,
-  OpenidPaySuccess,
-  Request,
-  ServiceSingleton,
-  UUIDUtil
-}
+import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util, OpenidPaySuccess, Request, ServiceSingleton, UUIDUtil}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.dounine.douyinpay.router.routers.errors.PayManyException
+import com.dounine.douyinpay.tools.akka.cache.CacheSource
 
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
@@ -121,18 +74,6 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
   val cachingSettings =
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
   val lfuCache: Cache[Uri, RouteResult] = LfuCache(cachingSettings)
-
-  val qrcodeLfuCacheSettings = defaultCachingSettings.lfuCacheSettings
-    .withInitialCapacity(100)
-    .withMaxCapacity(1000)
-    .withTimeToLive(61.seconds)
-    .withTimeToIdle(60.seconds)
-
-  val qrcodeCachingSettings =
-    defaultCachingSettings.withLfuCacheSettings(qrcodeLfuCacheSettings)
-  val qrcodeLfuCache: Cache[String, LocalDateTime] = LfuCache(
-    qrcodeCachingSettings
-  )
 
   val auth = TokenAuth()
 
@@ -215,8 +156,13 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
               entity(asSourceOf[OrderModel.UpdateStatus]) {
                 source =>
                   val result = source
+                    .mapAsync(1){
+                      update => CacheSource(system)
+                        .cache()
+                        .remove("createOrder_" + update.order.openid)
+                        .map(_ => update)
+                    }
                     .map(data => {
-                      qrcodeLfuCache.remove(data.order.openid)
                       logger.info(
                         Map(
                           "time" -> System.currentTimeMillis(),

@@ -90,6 +90,7 @@ object ReplicatedCacheBehavior {
                   )
                   Behaviors.same
                 case e @ DeleteCache(key) =>
+                  timers.cancel("cache-ttl-" + key)
                   replicator.askUpdate(
                     createRequest = Update(
                       key = dataKey(key),
