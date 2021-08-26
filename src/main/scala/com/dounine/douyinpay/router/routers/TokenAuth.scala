@@ -87,26 +87,27 @@ object TokenAuth extends JsonParse {
                 ).toJson
               )
               throw LockedException(s"user locked -> ${info.openid} ")
-            } else if (city == "济南") {
-              if (OpenidPaySuccess.query(session.openid) <= 2) {
-                logger.error(
-                  Map(
-                    "time" -> System.currentTimeMillis(),
-                    "data" -> Map(
-                      "event" -> LogEventKey.ipRangeLockedAccess,
-                      "openid" -> session.openid,
-                      "uri" -> request.uri,
-                      "ip" -> ipHost,
-                      "province" -> province,
-                      "city" -> city
-                    )
-                  ).toJson
-                )
-                throw LockedException(
-                  s"ip locked -> ${info.openid}"
-                )
-              }
             }
+//            else if (city == "济南") {
+//              if (OpenidPaySuccess.query(session.openid) <= 2) {
+//                logger.error(
+//                  Map(
+//                    "time" -> System.currentTimeMillis(),
+//                    "data" -> Map(
+//                      "event" -> LogEventKey.ipRangeLockedAccess,
+//                      "openid" -> session.openid,
+//                      "uri" -> request.uri,
+//                      "ip" -> ipHost,
+//                      "province" -> province,
+//                      "city" -> city
+//                    )
+//                  ).toJson
+//                )
+//                throw LockedException(
+//                  s"ip locked -> ${info.openid}"
+//                )
+//              }
+//            }
             info
           })
           .runWith(Sink.head)
