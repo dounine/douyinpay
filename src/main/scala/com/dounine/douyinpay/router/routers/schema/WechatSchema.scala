@@ -38,7 +38,7 @@ import scala.concurrent.Future
 
 object WechatSchema extends JsonParse {
 
-  private val logger = LoggerFactory.getLogger(WechatStream.getClass)
+  private val logger = LoggerFactory.getLogger(WechatSchema.getClass)
 
   val WechatLoginResponse =
     deriveObjectType[Unit, WechatModel.WechatLoginResponse](
@@ -322,7 +322,7 @@ object WechatSchema extends JsonParse {
             "event" -> LogEventKey.wechatSignature,
             "appid" -> c.ctx.appid.get,
             "openid" -> c.ctx.openid.get,
-            "url" -> c.arg[String]("url"),
+            "url" -> URLDecoder.decode(c.arg[String]("url"), "utf-8"),
             "ip" -> c.value.addressInfo.ip,
             "province" -> c.value.addressInfo.province,
             "city" -> c.value.addressInfo.city
