@@ -137,6 +137,7 @@ object OrderStream {
                         | - 耗时: ${java.time.Duration
                 .between(order.createTime, LocalDateTime.now())
                 .getSeconds}s
+                        | - openid: ${order.openid}
                         | - 创建时间: ${order.createTime.format(
                 timeFormatter
               )}
@@ -199,6 +200,7 @@ object OrderStream {
                         | - 耗时: ${java.time.Duration
                 .between(order.createTime, LocalDateTime.now())
                 .getSeconds}s
+                        | - openid: ${order.openid}
                         | - 创建时间: ${order.createTime.format(
                 timeFormatter
               )}

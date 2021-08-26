@@ -8,20 +8,15 @@ import akka.stream.scaladsl.Flow
 import com.dounine.douyinpay.model.models.AccountModel
 import com.dounine.douyinpay.store.AccountTable
 import com.dounine.douyinpay.tools.akka.db.DataSource
-import org.slf4j.LoggerFactory
 import slick.jdbc.JdbcBackend
 
-import scala.concurrent.ExecutionContextExecutor
-
 object AccountStream {
-
-  private val logger = LoggerFactory.getLogger(AccountStream.getClass)
 
   def queryAccount()(implicit
       system: ActorSystem[_]
   ): Flow[String, Option[AccountModel.AccountInfo], NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
-    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val ec = system.executionContext
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
@@ -36,7 +31,7 @@ object AccountStream {
       system: ActorSystem[_]
   ): Flow[AccountModel.AccountInfo, Boolean, NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
-    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val ec = system.executionContext
     implicit val slickSession: SlickSession =
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
