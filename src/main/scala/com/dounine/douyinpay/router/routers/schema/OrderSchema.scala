@@ -333,6 +333,7 @@ object OrderSchema extends JsonParse {
         .recover {
           case e: PayManyException => throw e
           case ee => {
+            ee.printStackTrace()
             throw new Exception("当前充值人数太多、请稍候再试")
           }
         }

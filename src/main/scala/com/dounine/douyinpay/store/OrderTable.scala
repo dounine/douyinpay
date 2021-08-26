@@ -28,10 +28,10 @@ class OrderTable(tag: Tag)
       fee,
       platform,
       createTime,
-      0,
-      0,
-      0,
-      0
+      payCount,
+      payMoney,
+      todayPayCount,
+      todayPayMoney
     ).mapTo[OrderModel.DbInfo]
 
   def appid: Rep[String] = column[String]("appid", O.Length(18))
@@ -47,6 +47,14 @@ class OrderTable(tag: Tag)
   def id: Rep[String] = column[String]("id", O.Length(50))
 
   def money: Rep[Int] = column[Int]("money", O.Length(11))
+
+  def payCount: Rep[Int] = column[Int]("payCount", O.Length(11))
+
+  def payMoney: Rep[Int] = column[Int]("payMoney", O.Length(11))
+
+  def todayPayCount: Rep[Int] = column[Int]("todayPayCount", O.Length(11))
+
+  def todayPayMoney: Rep[Int] = column[Int]("todayPayMoney", O.Length(11))
 
   def volumn: Rep[Int] = column[Int]("volumn", O.Length(11))
 
