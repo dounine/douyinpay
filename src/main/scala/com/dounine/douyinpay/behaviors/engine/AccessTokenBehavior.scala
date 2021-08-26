@@ -5,7 +5,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.stream.scaladsl.{RestartSource, Sink, Source}
 import akka.stream.{RestartSettings, SystemMaterializer}
-import com.dounine.douyinpay.model.models.BaseSerializer
+import com.dounine.douyinpay.model.models.{BaseSerializer, TokenModel}
 import com.dounine.douyinpay.tools.json.JsonParse
 import com.dounine.douyinpay.tools.util.Request
 import org.slf4j.LoggerFactory
@@ -27,7 +27,7 @@ object AccessTokenBehavior extends JsonParse {
       appid: String,
       secret: String,
       token: Token,
-      expire: Int
+      expireTime: LocalDateTime
   ) extends Event
   case class InitTokenFail(
       appid: String,
@@ -36,7 +36,7 @@ object AccessTokenBehavior extends JsonParse {
       msg: String
   ) extends Event
   case class GetToken()(val replyTo: ActorRef[Event]) extends Event
-  case class GetTokenOk(token: Token) extends Event
+  case class GetTokenOk(token: Token, expireTime: LocalDateTime) extends Event
   case class GetTokenFail(msg: String) extends Event
 
   case class TokenResponse(
@@ -56,25 +56,28 @@ object AccessTokenBehavior extends JsonParse {
         val pro = config.getBoolean("pro")
 
         var token: Option[String] = None
+        var expire: Option[LocalDateTime] = None
         Behaviors.withTimers[Event] { timers =>
           {
             Behaviors.receiveMessage {
               case r @ GetToken() => {
                 r.replyTo.tell(token match {
-                  case Some(value) => GetTokenOk(value)
+                  case Some(value) => GetTokenOk(value, expire.get)
                   case None        => GetTokenFail("token not found")
                 })
                 Behaviors.same
               }
-              case InitTokenOk(appid, secret, to, expire) => {
-                logger.info("token refresh -> {} {} {}", appid, to, expire)
+              case InitTokenOk(appid, secret, to, expireTime) => {
+                logger.info("token refresh -> {} {} {}", appid, to, expireTime)
                 token = Some(to)
-                if (pro) {
-                  timers.startSingleTimer(
-                    InitToken(appid, secret),
-                    expire.seconds
-                  )
-                }
+                expire = Some(expireTime)
+                timers.startSingleTimer(
+                  InitToken(appid, secret),
+                  java.time.Duration
+                    .between(LocalDateTime.now(), expireTime)
+                    .getSeconds
+                    .seconds
+                )
                 Behaviors.same
               }
               case InitTokenFail(appid, secret, code, msg) => {
@@ -82,7 +85,6 @@ object AccessTokenBehavior extends JsonParse {
                 Behaviors.same
               }
               case InitToken(appid, secret) => {
-                val secret = config.getString(s"wechat.${appid}.secret")
                 import better.files._
                 val path = System.getProperty("user.home")
                 val tokenFile = s"${path}/.douyin_token_${appid}".toFile
@@ -95,30 +97,63 @@ object AccessTokenBehavior extends JsonParse {
                 val token = tokenOpt match {
                   case Some(token) => {
                     val ts = token.split(" ")
-                    val time = LocalDateTime.parse(ts(1))
-                    val expire = ts(2).toInt
-                    if (time.plusSeconds(expire).isAfter(LocalDateTime.now())) {
-                      Some((ts.head, time, expire))
-                    } else None
+                    val expireTime = LocalDateTime.parse(ts(1))
+                    val expire = java.time.Duration
+                      .between(LocalDateTime.now(), expireTime)
+                      .getSeconds
+                    if (expire > 0) {
+                      Some((ts.head, expireTime))
+                    } else {
+                      logger.info("token 过期")
+                      None
+                    }
                   }
                   case None => None
                 }
 
                 token match {
-                  case Some((token, time, expire)) =>
+                  case Some((token, expireTime)) =>
                     context.self.tell(
                       InitTokenOk(
                         appid,
                         secret,
                         token,
-                        expire - java.time.Duration
-                          .between(time, LocalDateTime.now())
-                          .getSeconds
-                          .toInt
+                        expireTime
                       )
                     )
                   case None =>
-                    if (pro) {
+                    if (config.getBoolean(s"wechat.${appid}.proxy")) {
+                      val accessUrl =
+                        config.getString(s"wechat.${appid}.accessUrl")
+                      context.pipeToSelf(
+                        RestartSource
+                          .onFailuresWithBackoff(
+                            RestartSettings(
+                              minBackoff = 1.seconds,
+                              maxBackoff = 3.seconds,
+                              randomFactor = 0.2
+                            ).withMaxRestarts(3, 10.seconds)
+                          )(() => {
+                            Source
+                              .future(
+                                Request.get[TokenModel.TokenResponse](
+                                  s"${accessUrl}/${appid}/${secret}"
+                                )
+                              )
+                          })
+                          .runWith(Sink.head)
+                      ) {
+                        case Failure(exception) =>
+                          InitTokenFail(appid, secret, -1, exception.getMessage)
+                        case Success(value) =>
+                          InitTokenOk(
+                            appid,
+                            secret,
+                            value.data.token,
+                            value.data.expire
+                          )
+                      }
+                    } else if (pro) {
                       context.pipeToSelf(
                         RestartSource
                           .onFailuresWithBackoff(
@@ -140,7 +175,8 @@ object AccessTokenBehavior extends JsonParse {
                                 ) {
                                   tokenFile.write(
                                     s"${result.access_token.get} ${LocalDateTime
-                                      .now()} ${result.expires_in.get}"
+                                      .now()
+                                      .plusSeconds(result.expires_in.get)}"
                                   )
                                 }
                                 result
@@ -164,7 +200,9 @@ object AccessTokenBehavior extends JsonParse {
                                 appid,
                                 secret,
                                 value.access_token.get,
-                                value.expires_in.get
+                                LocalDateTime
+                                  .now()
+                                  .plusSeconds(value.expires_in.get)
                               )
                           }
 

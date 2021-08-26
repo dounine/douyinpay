@@ -7,10 +7,12 @@ import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.Route
 import akka.stream._
 import akka.stream.scaladsl.Source
+import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.TokenResponse
 import com.dounine.douyinpay.behaviors.engine.{
   AccessTokenBehavior,
   JSApiTicketBehavior
 }
+import com.dounine.douyinpay.model.models.TokenModel
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.ExecutionContextExecutor
@@ -44,9 +46,12 @@ class TokenRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                   AccessTokenBehavior.GetToken()
                 )(3.seconds)
                 .map {
-                  case AccessTokenBehavior.GetTokenOk(token) => {
+                  case AccessTokenBehavior.GetTokenOk(token, expire) => {
                     if (wechat.getString(s"${appid}.secret") == secret) {
-                      token
+                      TokenModel.TokenResult(
+                        token = token,
+                        expire = expire
+                      )
                     } else throw new Exception("secret invalid")
                   }
                   case AccessTokenBehavior.GetTokenFail(msg) =>
@@ -73,9 +78,12 @@ class TokenRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                   JSApiTicketBehavior.GetTicket()
                 )(3.seconds)
                 .map {
-                  case JSApiTicketBehavior.GetTicketOk(token) => {
+                  case JSApiTicketBehavior.GetTicketOk(tick, expire) => {
                     if (wechat.getString(s"${appid}.secret") == secret) {
-                      token
+                      TokenModel.TickResult(
+                        tick = tick,
+                        expire = expire
+                      )
                     } else throw new Exception("secret invalid")
                   }
                   case JSApiTicketBehavior.GetTicketFail(msg) =>

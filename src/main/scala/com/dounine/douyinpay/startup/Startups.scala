@@ -82,7 +82,8 @@ class Startups(implicit system: ActorSystem[_]) {
         .tell(
           ShardingEnvelope(
             appid,
-            JSApiTicketBehavior.InitTicket(appid)
+            JSApiTicketBehavior
+              .InitTicket(appid, wechat.getConfig(appid).getString("secret"))
           )
         )
     })

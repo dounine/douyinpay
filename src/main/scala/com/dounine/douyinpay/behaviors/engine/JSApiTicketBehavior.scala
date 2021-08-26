@@ -8,7 +8,7 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, HttpResponse}
 import akka.stream.{RestartSettings, SystemMaterializer}
 import akka.stream.scaladsl.{RestartSource, Sink, Source}
 import akka.util.ByteString
-import com.dounine.douyinpay.model.models.BaseSerializer
+import com.dounine.douyinpay.model.models.{BaseSerializer, TokenModel}
 import com.dounine.douyinpay.service.WechatStream
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
@@ -30,12 +30,17 @@ object JSApiTicketBehavior extends JsonParse {
 
   sealed trait Event extends BaseSerializer
   type Ticket = String
-  case class InitTicket(appid: String) extends Event
-  case class InitTicketOk(appid: String, ticket: Ticket, expire: Int)
-      extends Event
+  case class InitTicket(appid: String, secret: String) extends Event
+  case class InitTicketOk(
+      appid: String,
+      secret: String,
+      ticket: Ticket,
+      expireTime: LocalDateTime
+  ) extends Event
   case class InitTicketFail(appid: String, code: Int, msg: String) extends Event
   case class GetTicket()(val replyTo: ActorRef[Event]) extends Event
-  case class GetTicketOk(ticket: Ticket) extends Event
+  case class GetTicketOk(ticket: Ticket, expireTime: LocalDateTime)
+      extends Event
   case class GetTicketFail(msg: String) extends Event
 
   case class TicketResponse(
@@ -55,29 +60,35 @@ object JSApiTicketBehavior extends JsonParse {
         val pro = config.getBoolean("pro")
 
         var ticket: Option[String] = None
+        var expire: Option[LocalDateTime] = None
         Behaviors.withTimers[Event] { timers =>
           {
             Behaviors.receiveMessage {
               case r @ GetTicket() => {
                 r.replyTo.tell(ticket match {
-                  case Some(value) => GetTicketOk(value)
+                  case Some(value) => GetTicketOk(value, expire.get)
                   case None        => GetTicketFail("tick not found")
                 })
                 Behaviors.same
               }
-              case InitTicketOk(appid: String, to, expire) => {
-                logger.info("ticket refresh -> {} {} {}", appid, to, expire)
+              case InitTicketOk(appid, secret, to, expireTime) => {
+                logger.info("ticket refresh -> {} {} {}", appid, to, expireTime)
                 ticket = Some(to)
-                if (pro) {
-                  timers.startSingleTimer(InitTicket(appid), expire.seconds)
-                }
+                expire = Some(expireTime)
+                timers.startSingleTimer(
+                  InitTicket(appid, secret),
+                  java.time.Duration
+                    .between(LocalDateTime.now(), expireTime)
+                    .getSeconds
+                    .seconds
+                )
                 Behaviors.same
               }
               case InitTicketFail(appid, code, msg) => {
                 logger.error("ticket query fail -> {} {} {}", appid, code, msg)
                 Behaviors.same
               }
-              case InitTicket(appid) => {
+              case InitTicket(appid, secret) => {
                 import better.files._
                 val path = System.getProperty("user.home")
                 val ticketFile = s"${path}/.douyin_ticket_${appid}".toFile
@@ -90,29 +101,60 @@ object JSApiTicketBehavior extends JsonParse {
                 val ticket = ticketOpt match {
                   case Some(ticket) => {
                     val ts = ticket.split(" ")
-                    val time = LocalDateTime.parse(ts(1))
-                    val expire = ts(2).toInt
-                    if (time.plusSeconds(expire).isAfter(LocalDateTime.now())) {
-                      Some((ts.head, time, expire))
+                    val expireTime = LocalDateTime.parse(ts(1))
+                    val expire = java.time.Duration
+                      .between(LocalDateTime.now(), expireTime)
+                      .getSeconds
+                    if (expire > 0) {
+                      Some((ts.head, expireTime))
                     } else None
                   }
                   case None => None
                 }
 
                 ticket match {
-                  case Some((ticket, time, expire)) =>
+                  case Some((ticket, expireTime)) =>
                     context.self.tell(
                       InitTicketOk(
                         appid,
+                        secret,
                         ticket,
-                        expire - java.time.Duration
-                          .between(time, LocalDateTime.now())
-                          .getSeconds
-                          .toInt
+                        expireTime
                       )
                     )
                   case None =>
-                    if (pro) {
+                    if (config.getBoolean(s"wechat.${appid}.proxy")) {
+                      val accessUrl =
+                        config.getString(s"wechat.${appid}.tickUrl")
+                      context.pipeToSelf(
+                        RestartSource
+                          .onFailuresWithBackoff(
+                            RestartSettings(
+                              minBackoff = 1.seconds,
+                              maxBackoff = 3.seconds,
+                              randomFactor = 0.2
+                            ).withMaxRestarts(3, 10.seconds)
+                          )(() => {
+                            Source
+                              .future(
+                                Request.get[TokenModel.TickResponse](
+                                  s"${accessUrl}/${appid}/${secret}"
+                                )
+                              )
+                          })
+                          .runWith(Sink.head)
+                      ) {
+                        case Failure(exception) =>
+                          InitTicketFail(appid, -1, exception.getMessage)
+                        case Success(value) =>
+                          InitTicketOk(
+                            appid,
+                            secret,
+                            value.data.tick,
+                            value.data.expire
+                          )
+                      }
+                    } else if (pro) {
                       context.pipeToSelf(
                         RestartSource
                           .onFailuresWithBackoff(
@@ -133,8 +175,7 @@ object JSApiTicketBehavior extends JsonParse {
                                     .map(result => {
                                       if (result.ticket.isDefined) {
                                         ticketFile.write(
-                                          s"${result.ticket.get} ${LocalDateTime
-                                            .now()} ${result.expires_in.get}"
+                                          s"${result.ticket.get} ${LocalDateTime.now().plusSeconds(result.expires_in.get)}"
                                         )
                                       }
                                       result
@@ -152,11 +193,13 @@ object JSApiTicketBehavior extends JsonParse {
                           } else {
                             InitTicketOk(
                               appid,
+                              secret,
                               value.ticket.get,
-                              value.expires_in.get
+                              LocalDateTime
+                                .now()
+                                .plusSeconds(value.expires_in.get)
                             )
                           }
-
                       }
                     }
                 }
