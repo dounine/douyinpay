@@ -10,7 +10,7 @@ object TokenModel {
   )
   case class TokenResponse(
       data: TokenResult,
-      code: String
+      status: String
   ) extends BaseSerializer
 
   case class TickResult(
@@ -19,7 +19,7 @@ object TokenModel {
   )
   case class TickResponse(
       data: TickResult,
-      code: String
+      status: String
   ) extends BaseSerializer
 
 }
