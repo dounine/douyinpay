@@ -12,6 +12,7 @@ import scala.concurrent.Promise
 object OrderModel {
 
   final case class DbInfo(
+      appid: String,
       openid: String,
       nickName: Option[String],
       pay: Boolean,

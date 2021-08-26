@@ -175,6 +175,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         "data" -> Map(
                           "event" -> LogEventKey.wechatMessage,
                           "appid" -> appid,
+                          "appname" -> config.getString(s"wechat.${appid}.name"),
                           "message" -> message
                         )
                       ).toJson

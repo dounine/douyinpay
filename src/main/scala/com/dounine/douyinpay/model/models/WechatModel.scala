@@ -1,5 +1,6 @@
 package com.dounine.douyinpay.model.models
 
+import java.net.URLDecoder
 import scala.xml.NodeSeq
 
 object WechatModel {
@@ -107,7 +108,10 @@ object WechatModel {
         locationY = nodes.find(_.label == "Location_Y").map(_.text),
         scale = nodes.find(_.label == "Scale").map(_.text),
         label = nodes.find(_.label == "Label").map(_.text),
-        url = nodes.find(_.label == "Url").map(_.text),
+        url = nodes
+          .find(_.label == "Url")
+          .map(_.text)
+          .map(URLDecoder.decode(_, "utf-8")),
         title = nodes.find(_.label == "Title").map(_.text),
         description = nodes.find(_.label == "Description").map(_.text)
       )

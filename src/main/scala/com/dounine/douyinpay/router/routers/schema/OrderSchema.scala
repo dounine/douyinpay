@@ -224,6 +224,7 @@ object OrderSchema extends JsonParse {
           val orderId = UUIDUtil.uuid()
           val userInfo = tp2._2
           val order = OrderModel.DbInfo(
+            appid = c.ctx.appid.get,
             orderId = orderId,
             nickName = userInfo.nickname,
             pay = false,

@@ -154,6 +154,8 @@ object QrcodeBehavior extends ActorSerializerSuport {
                 title = "定单通知",
                 text = s"""
                           |## ${title}
+                          | - appname: ${config.getString(s"wechat.${order.appid}.name")}
+                          | - appid: ${order.appid}
                           | - nickName: ${order.nickName.getOrElse("")}
                           | - id: ${order.id}
                           | - money: ${order.money}
@@ -319,7 +321,7 @@ object QrcodeBehavior extends ActorSerializerSuport {
               .via(notifyBeforeFlow)
               .via(coreFlow)
               .via(notifyAfterFlow)
-//              .via(AccountStream.decreaseVolumn()(context.system))
+              //              .via(AccountStream.decreaseVolumn()(context.system))
               .via(updateOrderFlow)
               .recover {
                 case e => {

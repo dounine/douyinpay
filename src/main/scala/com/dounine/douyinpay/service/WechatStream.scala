@@ -161,6 +161,7 @@ object WechatStream extends JsonParse with SuportRouter {
   ): Flow[WechatModel.WechatMessage, HttpResponse, NotUsed] = {
     implicit val materializer = SystemMaterializer(system).materializer
     implicit val ec = system.executionContext
+    val wechat = system.settings.config.getConfig("app.wechat")
     val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
 
     Flow[WechatModel.WechatMessage]
@@ -176,6 +177,7 @@ object WechatStream extends JsonParse with SuportRouter {
                     text = s"""
                               |## ${message.fromUserName}
                               | - appid: ${message.appid}
+                              | - appname: ${wechat.getString(s"${message.appid}.name")}
                               | - 消息：${message.content.getOrElse("")}
                               | - id：${message.msgId.getOrElse(0)}
                               | - time: ${LocalDateTime
@@ -237,6 +239,7 @@ object WechatStream extends JsonParse with SuportRouter {
                     title = s"有新的未知消息",
                     text = s"""
                               |## ${message.fromUserName}
+                              | - appname: ${wechat.getString(s"${message.appid}.name")}
                               |${message.toJson
                       .jsonTo[Map[String, Any]]
                       .map(i => s" - ${i._1}：${i._2}")
@@ -272,6 +275,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 text = s"""
                           |## ${message.fromUserName}
                           | - appid: ${message.appid}
+                          | - appname: ${wechat.getString(s"${message.appid}.name")}
                           | - 场景值: ${message.eventKey.getOrElse("")}
                           | - time: ${LocalDateTime
                   .now()
@@ -310,6 +314,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 text = s"""
                           |## ${message.fromUserName}
                           | - appid: ${message.appid}
+                          | - appname: ${wechat.getString(s"${message.appid}.name")}
                           | - url：${message.eventKey.getOrElse("")}
                           | - time: ${LocalDateTime
                   .now()
@@ -338,7 +343,9 @@ object WechatStream extends JsonParse with SuportRouter {
                     title = s"新增关注",
                     text = s"""
                               |## ${message.fromUserName}
+                              | - event: 新增关注
                               | - appid: ${message.appid}
+                              | - appname: ${wechat.getString(s"${message.appid}.name")}
                               | - 场景值：${message.eventKey.getOrElse("")}
                               | - time: ${LocalDateTime
                       .now()
@@ -359,7 +366,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> System.currentTimeMillis() / 1000,
                   "MsgType" -> "text",
-                  "Content" -> "\uD83C\uDF89欢迎使用抖音充值、点击左下角菜单抖币充值快速充值\uD83C\uDF89"
+                  "Content" -> "\uD83C\uDF89欢迎关注抖音充值官方渠道、充值请点击左下角菜单\uD83C\uDF89"
                 )
               )
             case "unsubscribe" =>
@@ -370,7 +377,9 @@ object WechatStream extends JsonParse with SuportRouter {
                     title = s"取消关注",
                     text = s"""
                               |## ${message.fromUserName}
+                              | - event: 取消关注
                               | - appid: ${message.appid}
+                              | - appname: ${wechat.getString(s"${message.appid}.name")}
                               | - time: ${LocalDateTime
                       .now()
                       .format(
@@ -394,6 +403,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 title = s"未知事件",
                 text = s"""
                           |## ${message.fromUserName}
+                          | - appname: ${wechat.getString(s"${message.appid}.name")}
                           |${message.toJson
                   .jsonTo[Map[String, Any]]
                   .map(i => s" - ${i._1}：${i._2}")
