@@ -26,8 +26,11 @@ import com.dounine.douyinpay.tools.util.{
 import org.slf4j.LoggerFactory
 import sangria.macros.derive.{
   DocumentField,
+  EnumTypeDescription,
+  EnumTypeName,
   ObjectTypeDescription,
   ObjectTypeName,
+  deriveEnumType,
   deriveObjectType
 }
 import sangria.schema._
@@ -50,6 +53,40 @@ object DouyinSchema extends JsonParse {
       DocumentField("avatar", "头像地扯")
     )
 
+  val PayPlatformType = EnumType[PayPlatform.PayPlatform](
+    "Platform",
+    Some("充值平台"),
+    values = List(
+      EnumValue(
+        "douyin",
+        value = PayPlatform.douyin,
+        description = Some("抖音")
+      ),
+      EnumValue(
+        "kuaishou",
+        value = PayPlatform.kuaishou,
+        description = Some("快手")
+      ),
+      EnumValue(
+        "huoshan",
+        value = PayPlatform.huoshan,
+        description = Some("抖音火山视频")
+      )
+    )
+  )
+
+  val IdArg = Argument(
+    name = "id",
+    argumentType = StringType,
+    description = "用户id"
+  )
+
+  val PlatformArg = Argument(
+    name = "platform",
+    argumentType = PayPlatformType,
+    description = "充值平台"
+  )
+
   val userInfo = Field[
     SecureContext,
     RequestInfo,
@@ -60,19 +97,18 @@ object DouyinSchema extends JsonParse {
     fieldType = OptionType(UserInfoResponse),
     tags = Authorised :: Nil,
     description = Some("查询用户信息"),
-    arguments = Argument(
-      name = "id",
-      argumentType = StringType,
-      description = "用户id"
-    ) :: Nil,
+    arguments = IdArg :: PlatformArg :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val s = c.ctx.system
+      val id = c.arg(IdArg)
+      val platform = c.arg(PlatformArg)
+
       logger.info(
         Map(
           "time" -> System.currentTimeMillis(),
           "data" -> Map(
             "event" -> LogEventKey.userInfoQuery,
-            "userAccount" -> c.arg[String]("id"),
+            "userAccount" -> id,
             "openid" -> c.ctx.openid.get,
             "ip" -> c.value.addressInfo.ip,
             "province" -> c.value.addressInfo.province,
@@ -83,28 +119,37 @@ object DouyinSchema extends JsonParse {
       CacheSource(c.ctx.system)
         .cache()
         .orElse[Option[PayUserInfoModel.Info]](
-          key = "userInfo_" + c.arg[String]("id"),
+          key = "userInfo_" + platform + id,
           ttl = 3.days,
           value = () =>
-            Request
-              .get[PayUserInfoModel.DouYinSearchResponse](
-                s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${c
-                  .arg[String]("id")}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
-                  .currentTimeMillis()}"
-              )
-              .map(item => {
-                if (item.data.open_info.nonEmpty) {
-                  val data: PayUserInfoModel.DouYinSearchOpenInfo =
-                    item.data.open_info.head
-                  Some(
-                    PayUserInfoModel.Info(
-                      nickName = data.nick_name,
-                      id = data.search_id,
-                      avatar = data.avatar_thumb.url_list.head
-                    )
+            platform match {
+              case PayPlatform.douyin | PayPlatform.huoshan =>
+                val url = platform match {
+                  case PayPlatform.douyin =>
+                    s"https://webcast.amemv.com/webcast/user/open_info/?search_ids=${id}&aid=1128&source=1a0deeb4c56147d0f844d473b325a28b&fp=verify_khq5h2bx_oY8iEaW1_b0Yt_4Hvt_9PRa_3U70XFUYPgzI&t=${System
+                      .currentTimeMillis()}"
+                  case PayPlatform.huoshan =>
+                    s"https://webcast.huoshan.com/webcast/user/open_info/?search_ids=${id}&aid=1112&source=15002a5b3205f64e6d8749b4343a8c12&fp=verify_kstrxrvd_bUQj6dLx_j37A_4Xpb_BY2Q_ICBYpTpshQ0s&t=${System.currentTimeMillis()}"
+                }
+                Request
+                  .get[PayUserInfoModel.DouYinSearchResponse](
+                    url
                   )
-                } else None
-              })(c.ctx.system.executionContext)
+                  .map(item => {
+                    if (item.data.open_info.nonEmpty) {
+                      val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                        item.data.open_info.head
+                      Some(
+                        PayUserInfoModel.Info(
+                          nickName = data.nick_name,
+                          id = data.search_id,
+                          avatar = data.avatar_thumb.url_list.head
+                        )
+                      )
+                    } else None
+                  })(c.ctx.system.executionContext)
+              case PayPlatform.huoshan => Future.successful(None)
+            }
         )
     }
   )

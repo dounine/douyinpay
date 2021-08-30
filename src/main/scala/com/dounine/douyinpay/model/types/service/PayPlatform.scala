@@ -5,6 +5,7 @@ object PayPlatform extends Enumeration {
   val dbLength: Int = 8
   val douyin: PayPlatform.Value = Value("douyin")
   val kuaishou: PayPlatform.Value = Value("kuaishou")
+  val huoshan: PayPlatform.Value = Value("huoshan")
 
-  val list: Seq[PayPlatform.Value] = Seq(douyin, kuaishou)
+  val list: Seq[PayPlatform.Value] = Seq(douyin, kuaishou, huoshan)
 }

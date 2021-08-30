@@ -271,6 +271,7 @@ object WechatSchema extends JsonParse {
         .via(WechatStream.webBaseUserInfo()(c.ctx.system))
         .recover {
           case e: ReLoginException =>
+            e.printStackTrace()
             logger.error(e.getMessage)
             val appid = e.appid.getOrElse(c.arg[String]("appid"))
             val domain =

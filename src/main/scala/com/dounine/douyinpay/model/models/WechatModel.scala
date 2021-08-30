@@ -71,6 +71,8 @@ object WechatModel {
       country: Option[String],
       headimgurl: Option[Long],
       remark: Option[String],
+      subscribe_time: Option[Long],
+      unionid: Option[String],
       subscribe_scene: Option[String],
       qr_scene: Option[Long],
       qr_scene_str: Option[String]
