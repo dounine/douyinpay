@@ -101,7 +101,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         val params: String = Map(
                           "appid" -> "wx7b168b095eb4090e",
                           "redirect_uri" -> URLEncoder.encode(
-                            (scheme + "://" + domain) + s"?ccode=${ccode}&appid=wx7b168b095eb4090e",
+                            (scheme + "://" + domain) + s"/pages/douyin/index?ccode=${ccode}&platform=douyin&appid=wx7b168b095eb4090e",
                             "utf-8"
                           ),
                           "response_type" -> "code",
@@ -160,6 +160,31 @@ class WechatRouter()(implicit system: ActorSystem[_])
                           StatusCodes.PermanentRedirect
                         )
                     }
+                }
+            }
+          },
+          post {
+            path("pay" / Segment / Segment) {
+              (appid,orderId) =>
+                entity(as[NodeSeq]) {
+                  data =>
+                    val message = WechatModel.WechatMessage.fromXml(appid, data)
+                    logger.info(
+                      Map(
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.wechatMessage,
+                          "appid" -> appid,
+                          "appname" -> config.getString(s"wechat.${appid}.name"),
+                          "message" -> message
+                        )
+                      ).toJson
+                    )
+                    val result = Source
+                      .single(message)
+                      .via(WechatStream.notifyMessage())
+                      .runWith(Sink.head)
+                    complete(result)
                 }
             }
           },

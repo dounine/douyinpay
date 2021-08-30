@@ -71,6 +71,10 @@ object WechatSchema extends JsonParse {
       argumentType = StringType,
       description = "appid"
     ) :: Argument(
+      name = "platform",
+      argumentType = StringType,
+      description = "platform"
+    ) :: Argument(
       name = "code",
       argumentType = StringType,
       description = "登录code"
@@ -274,11 +278,12 @@ object WechatSchema extends JsonParse {
             e.printStackTrace()
             logger.error(e.getMessage)
             val appid = e.appid.getOrElse(c.arg[String]("appid"))
+            val platform = c.arg[String]("platform")
             val domain =
               c.ctx.system.settings.config.getString("app.file.domain")
             val domainEncode = URLEncoder.encode(
-              (c.value.scheme + "://" + domain) + s"?ccode=${c
-                .arg[String]("ccode")}&appid=${appid}",
+              (c.value.scheme + "://" + domain) + s"/pages/${platform}/index?ccode=${c
+                .arg[String]("ccode")}&appid=${appid}&platform=${platform}",
               "utf-8"
             )
             WechatModel.WechatLoginResponse(
