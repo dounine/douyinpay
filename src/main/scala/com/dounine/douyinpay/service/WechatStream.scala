@@ -615,7 +615,9 @@ object WechatStream extends JsonParse with SuportRouter {
                     if (wechatUserInfo.nickname.isEmpty) Some(true)
                     else Some(false),
                   subUrl =
-                    Some(config.getString(s"wechat.${paramers.appid}.subUrl"))
+                    if (wechatUserInfo.nickname.isEmpty)
+                      Some(config.getString(s"wechat.${paramers.appid}.subUrl"))
+                    else None
                 )
               }
             }
