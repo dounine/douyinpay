@@ -192,24 +192,24 @@ object WechatSchema extends JsonParse {
                           "user locked -> " + result.get.openid
                         )
                       } else if (c.value.addressInfo.city == "济南") {
-//                        if (OpenidPaySuccess.query(session.openid) <= 2) {
-//                          logger.error(
-//                            Map(
-//                              "time" -> System.currentTimeMillis(),
-//                              "data" -> Map(
-//                                "event" -> LogEventKey.ipRangeLockedAccess,
-//                                "appid" -> i.appid,
-//                                "openid" -> result.get.openid,
-//                                "ip" -> c.value.addressInfo.ip,
-//                                "province" -> c.value.addressInfo.province,
-//                                "city" -> c.value.addressInfo.city
-//                              )
-//                            ).toJson
-//                          )
-//                          throw LockedException(
-//                            "ip locked -> " + result.get.openid
-//                          )
-//                        }
+                        if (OpenidPaySuccess.query(session.openid) <= 2) {
+                          logger.error(
+                            Map(
+                              "time" -> System.currentTimeMillis(),
+                              "data" -> Map(
+                                "event" -> LogEventKey.ipRangeLockedAccess,
+                                "appid" -> i.appid,
+                                "openid" -> result.get.openid,
+                                "ip" -> c.value.addressInfo.ip,
+                                "province" -> c.value.addressInfo.province,
+                                "city" -> c.value.addressInfo.city
+                              )
+                            ).toJson
+                          )
+                          throw LockedException(
+                            "ip locked -> " + result.get.openid
+                          )
+                        }
                       } else {
                         logger.info(
                           Map(
