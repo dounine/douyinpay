@@ -37,7 +37,7 @@ import com.dounine.douyinpay.router.routers.errors.{
 }
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.{DingDing, Request}
+import com.dounine.douyinpay.tools.util.{DingDing, OpenidPaySuccess, Request}
 import org.slf4j.LoggerFactory
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 
@@ -612,10 +612,16 @@ object WechatStream extends JsonParse with SuportRouter {
                   enought = Some(true), //enought,
                   admin = Some(admins.contains(openid)),
                   sub =
-                    if (wechatUserInfo.nickname.isEmpty) Some(true)
+                    if (
+                      wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
+                        .query(openid) > 1
+                    ) Some(true)
                     else Some(false),
                   subUrl =
-                    if (wechatUserInfo.nickname.isEmpty)
+                    if (
+                      wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
+                        .query(openid) > 1
+                    )
                       Some(config.getString(s"wechat.${paramers.appid}.subUrl"))
                     else None
                 )
