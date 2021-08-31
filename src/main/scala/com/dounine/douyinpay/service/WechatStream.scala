@@ -75,6 +75,28 @@ object WechatStream extends JsonParse with SuportRouter {
       }
   }
 
+  def userInfoQuery2(appid: String)(implicit
+      system: ActorSystem[_]
+  ): Flow[
+    String,
+    WechatModel.WechatUserInfo,
+    NotUsed
+  ] = {
+    implicit val ec = system.executionContext
+    Flow[String]
+      .flatMapConcat { openid =>
+        accessToken(appid).map(openid -> _)
+      }
+      .mapAsync(1) { tp2 =>
+        val token = tp2._2
+        val openid = tp2._1
+        Request
+          .get[WechatModel.WechatUserInfo](
+            s"https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN"
+          )
+      }
+  }
+
   def accessToken(appid: String)(implicit
       system: ActorSystem[_]
   ): Source[AccessTokenBehavior.Token, NotUsed] = {
@@ -550,10 +572,18 @@ object WechatStream extends JsonParse with SuportRouter {
                     .via(OpenidStream.autoCreateOpenidInfo())
                 ) { (sum, _) => sum }
             )
+            .zipWith(
+              Source
+                .single(openid)
+                .via(WechatStream.userInfoQuery2(paramers.appid))
+            ) { (s, i) =>
+              (s._1, s._2, i)
+            }
             .map {
               case (
                     accountInfo: Option[AccountModel.AccountInfo],
-                    paySum: Option[Int]
+                    paySum: Option[Int],
+                    wechatUserInfo: WechatModel.WechatUserInfo
                   ) => {
                 val (token, expire) = paramers.token match {
                   case Some(token) =>
@@ -580,7 +610,12 @@ object WechatStream extends JsonParse with SuportRouter {
                   expire = Some(expire),
                   //                          "volumn" -> accountInfo,
                   enought = Some(true), //enought,
-                  admin = Some(admins.contains(openid))
+                  admin = Some(admins.contains(openid)),
+                  sub =
+                    if (wechatUserInfo.nickname.isEmpty) Some(true)
+                    else Some(false),
+                  subUrl =
+                    Some(config.getString(s"wechat.${paramers.appid}.subUrl"))
                 )
               }
             }

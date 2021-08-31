@@ -35,7 +35,9 @@ object WechatModel {
       token: Option[String] = None,
       expire: Option[Long] = None,
       enought: Option[Boolean] = None,
-      admin: Option[Boolean] = None
+      admin: Option[Boolean] = None,
+      sub: Option[Boolean] = None,
+      subUrl: Option[String] = None,
   ) extends BaseSerializer
 
   case class AccessTokenBase(

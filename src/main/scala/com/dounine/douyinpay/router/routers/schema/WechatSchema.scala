@@ -51,7 +51,9 @@ object WechatSchema extends JsonParse {
       DocumentField("token", "登录token"),
       DocumentField("enought", "余额是否足够"),
       DocumentField("expire", "token过期时间"),
-      DocumentField("admin", "是否是管理员")
+      DocumentField("admin", "是否是管理员"),
+      DocumentField("sub", "是否显示定阅图标"),
+      DocumentField("subUrl", "定阅跳转地扯")
 //      AddFields(
 //        Field("reverse_name", OptionType(StringType), resolve = _.value.token)
 //      )
