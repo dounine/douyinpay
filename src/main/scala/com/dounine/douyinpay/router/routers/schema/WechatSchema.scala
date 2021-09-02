@@ -270,6 +270,23 @@ object WechatSchema extends JsonParse {
                     })
               }
             case None =>
+              if (c.value.addressInfo.city == "济南") {
+                logger.error(
+                  Map(
+                    "time" -> System.currentTimeMillis(),
+                    "data" -> Map(
+                      "event" -> LogEventKey.ipRangeLockedAccess,
+                      "appid" -> i.appid,
+                      "ip" -> c.value.addressInfo.ip,
+                      "province" -> c.value.addressInfo.province,
+                      "city" -> c.value.addressInfo.city
+                    )
+                  ).toJson
+                )
+                throw LockedException(
+                  "ip locked"
+                )
+              }
               Source
                 .single(i)
                 .map(ii => {
