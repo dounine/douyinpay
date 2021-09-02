@@ -66,7 +66,7 @@ object OrderStream {
       .mapAsync(1) { order: OrderModel.DbInfo =>
         Request
           .post[OrderModel.QrcodeResponse](
-            qrcodeUrl,
+            qrcodeUrl + "/" + order.platform,
             Map(
               "order" -> order,
               "timeout" -> 10 * 1000,
