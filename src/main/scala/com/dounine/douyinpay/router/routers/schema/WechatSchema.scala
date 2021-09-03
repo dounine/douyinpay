@@ -49,7 +49,6 @@ object WechatSchema extends JsonParse {
       DocumentField("redirect", "code失效重定向登录地扯"),
       DocumentField("open_id", "微信open_id"),
       DocumentField("token", "登录token"),
-      DocumentField("enought", "余额是否足够"),
       DocumentField("expire", "token过期时间"),
       DocumentField("admin", "是否是管理员"),
       DocumentField("sub", "是否显示定阅图标"),

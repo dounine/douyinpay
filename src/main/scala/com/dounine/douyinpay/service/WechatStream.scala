@@ -552,37 +552,9 @@ object WechatStream extends JsonParse with SuportRouter {
           val openid = result._1.openid.get
           Source
             .single(openid)
-            .via(AccountStream.query())
-            .zip(
-              Source
-                .single(openid)
-                .via(OrderStream.queryPaySum())
-                .zipWith(
-                  Source
-                    .single(
-                      OpenidModel.OpenidInfo(
-                        appid = paramers.appid,
-                        openid = openid,
-                        ccode = paramers.ccode,
-                        ip = paramers.ip,
-                        locked = false,
-                        createTime = LocalDateTime.now()
-                      )
-                    )
-                    .via(OpenidStream.autoCreateOpenidInfo())
-                ) { (sum, _) => sum }
-            )
-            .zipWith(
-              Source
-                .single(openid)
-                .via(WechatStream.userInfoQuery2(paramers.appid))
-            ) { (s, i) =>
-              (s._1, s._2, i)
-            }
+            .via(WechatStream.userInfoQuery2(paramers.appid))
             .map {
               case (
-                    accountInfo: Option[AccountModel.AccountInfo],
-                    paySum: Option[Int],
                     wechatUserInfo: WechatModel.WechatUserInfo
                   ) => {
                 val (token, expire) = paramers.token match {
@@ -593,24 +565,10 @@ object WechatStream extends JsonParse with SuportRouter {
                     }
                   case None => jwtEncode(paramers.appid, openid)
                 }
-                val enought =
-                  (if (accountInfo.isEmpty)
-                     paySum.getOrElse(0) < limitMoney
-                   else true)
-                println(wechatUserInfo)
-//                if (!enought) {
-//                  logger.info(
-//                    "{} -> {} 需要收费",
-//                    openid,
-//                    paySum.getOrElse(0)
-//                  )
-//                }
                 WechatModel.WechatLoginResponse(
                   open_id = Some(openid),
                   token = Some(token),
                   expire = Some(expire),
-                  //                          "volumn" -> accountInfo,
-                  enought = Some(true), //enought,
                   admin = Some(admins.contains(openid)),
                   sub =
                     if (
