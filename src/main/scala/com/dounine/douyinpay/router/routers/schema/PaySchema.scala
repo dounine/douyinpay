@@ -213,7 +213,7 @@ object PaySchema extends JsonParse {
             )
           case None =>
             AccountModel.AccountRechargeResponse(
-              list = List(0.01, 5, 10, 50, 100, 200, 500)
+              list = List(5, 10, 50, 100, 200, 500)
                 .map(i => AccountModel.RechargeItem(i.toString)),
               balance = "0.00"
             )
