@@ -6,29 +6,83 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{ContentType, HttpEntity, HttpMethods, HttpRequest, HttpResponse, MediaTypes, RemoteAddress, Uri}
+import akka.http.scaladsl.model.{
+  ContentType,
+  HttpEntity,
+  HttpMethods,
+  HttpRequest,
+  HttpResponse,
+  MediaTypes,
+  RemoteAddress,
+  Uri
+}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.directives.CachingDirectives.cache
-import akka.http.scaladsl.server.{Directive1, RequestContext, Route, RouteResult, ValidationRejection}
+import akka.http.scaladsl.server.{
+  Directive1,
+  RequestContext,
+  Route,
+  RouteResult,
+  ValidationRejection
+}
 import akka.stream._
-import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
+import akka.stream.scaladsl.{
+  Concat,
+  Flow,
+  GraphDSL,
+  Keep,
+  Merge,
+  Partition,
+  Sink,
+  Source
+}
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{BaseSerializer, OrderModel, PayUserInfoModel, RouterModel, UserModel}
-import com.dounine.douyinpay.model.types.service.{LogEventKey, MechinePayStatus, PayPlatform, PayStatus}
-import com.dounine.douyinpay.service.{OrderService, OrderStream, UserService, UserStream, WechatStream}
+import com.dounine.douyinpay.model.models.{
+  AccountModel,
+  BaseSerializer,
+  OrderModel,
+  PayUserInfoModel,
+  RouterModel,
+  UserModel
+}
+import com.dounine.douyinpay.model.types.service.{
+  LogEventKey,
+  MechinePayStatus,
+  PayPlatform,
+  PayStatus
+}
+import com.dounine.douyinpay.service.{
+  AccountStream,
+  OpenidStream,
+  OrderService,
+  OrderStream,
+  UserService,
+  UserStream,
+  WechatStream
+}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util, OpenidPaySuccess, Request, ServiceSingleton, UUIDUtil}
+import com.dounine.douyinpay.tools.util.{
+  IpUtils,
+  MD5Util,
+  OpenidPaySuccess,
+  Request,
+  ServiceSingleton,
+  UUIDUtil
+}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import com.dounine.douyinpay.router.routers.errors.PayManyException
+import com.dounine.douyinpay.router.routers.errors.{
+  InvalidException,
+  PayManyException
+}
 import com.dounine.douyinpay.tools.akka.cache.CacheSource
 
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
-import java.time.LocalDateTime
+import java.time.{LocalDate, LocalDateTime}
 import java.util.UUID
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
@@ -156,8 +210,8 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
               entity(asSourceOf[OrderModel.UpdateStatus]) {
                 source =>
                   val result = source
-                    .mapAsync(1){
-                      update => CacheSource(system)
+                    .mapAsync(1) { update =>
+                      CacheSource(system)
                         .cache()
                         .remove("createOrder_" + update.order.openid)
                         .map(_ => update)
@@ -175,6 +229,64 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                       )
                       OpenidPaySuccess.add(data.order.openid)
                       data
+                    })
+                    .flatMapConcat(i => {
+                      Source
+                        .single(i.order.openid)
+                        .via(
+                          OrderStream.queryOpenidTodayPay()
+                        )
+                        .zip(
+                          Source
+                            .single(i.order.openid)
+                            .via(AccountStream.query())
+                        )
+                        .zipWith(
+                          Source
+                            .single(i.order.openid)
+                            .via(OpenidStream.query())
+                        )((pre, next) => (pre._1, pre._2, next))
+                        .flatMapConcat {
+                          case (value, maybeInfo, wechatUser) =>
+                            if (
+                              i.order.openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || MD5Util
+                                .crc(i.order.openid) % 10 == 0
+                            ) {
+                              if (
+                                wechatUser.get.createTime
+                                  .plusDays(3)
+                                  .isAfter(
+                                    LocalDate.now().atStartOfDay()
+                                  )
+                              ) {
+                                Source.single(i)
+                              } else if (
+                                value.map(_.money).sum + i.order.money <= 100
+                              ) {
+                                Source.single(i)
+                              } else if (
+                                (maybeInfo
+                                  .map(_.money)
+                                  .getOrElse(
+                                    0
+                                  ) - i.order.money * 100 * 0.02) < 0
+                              ) {
+                                throw InvalidException("非法支付、余额不足")
+                              } else {
+                                Source
+                                  .single(
+                                    AccountModel.AccountInfo(
+                                      openid = i.order.openid,
+                                      money = (i.order.money * 100 * 0.02).toInt
+                                    )
+                                  )
+                                  .via(AccountStream.decrmentMoneyToAccount())
+                                  .map(_ => i)
+                              }
+                            } else {
+                              Source.single(i)
+                            }
+                        }
                     })
                     .via(OrderStream.updateOrderStatus())
                     .map(_._1.order.orderId)

@@ -552,7 +552,7 @@ object WechatStream extends JsonParse with SuportRouter {
           val openid = result._1.openid.get
           Source
             .single(openid)
-            .via(AccountStream.queryAccount())
+            .via(AccountStream.query())
             .zip(
               Source
                 .single(openid)
@@ -597,6 +597,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   (if (accountInfo.isEmpty)
                      paySum.getOrElse(0) < limitMoney
                    else true)
+                println(wechatUserInfo)
 //                if (!enought) {
 //                  logger.info(
 //                    "{} -> {} 需要收费",

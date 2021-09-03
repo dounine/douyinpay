@@ -16,13 +16,19 @@ import akka.util.ByteString
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior
 import com.dounine.douyinpay.model.models.{
+  AccountModel,
   BaseSerializer,
   OpenidModel,
   WechatModel
 }
 import com.dounine.douyinpay.model.types.service.LogEventKey
-import com.dounine.douyinpay.service.{OpenidStream, WechatStream}
-import com.dounine.douyinpay.tools.util.IpUtils
+import com.dounine.douyinpay.service.{
+  AccountStream,
+  OpenidStream,
+  PayStream,
+  WechatStream
+}
+import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util, WeixinPay}
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -164,28 +170,46 @@ class WechatRouter()(implicit system: ActorSystem[_])
             }
           },
           post {
-            path("pay" / Segment / Segment) {
-              (appid,orderId) =>
-                entity(as[NodeSeq]) {
-                  data =>
-                    val message = WechatModel.WechatMessage.fromXml(appid, data)
-                    logger.info(
-                      Map(
-                        "time" -> System.currentTimeMillis(),
-                        "data" -> Map(
-                          "event" -> LogEventKey.wechatMessage,
-                          "appid" -> appid,
-                          "appname" -> config.getString(s"wechat.${appid}.name"),
-                          "message" -> message
-                        )
-                      ).toJson
+            path("pay" / "notify") {
+              entity(as[NodeSeq]) {
+                data: NodeSeq =>
+                  val notifyResponse =
+                    data.childXmlTo[AccountModel.NotifyResponse]
+                  require(
+                    WeixinPay.isSignatureValid(
+                      data = data.childXmlTo[Map[String, String]],
+                      sign = notifyResponse.sign
+                    ),
+                    "notify sign error"
+                  )
+
+                  logger
+                    .info("notify pay success -> {}", notifyResponse.toJson)
+
+                  val result = Source
+                    .single(notifyResponse.out_trade_no)
+                    .via(PayStream.paySuccess())
+                    .map(_ =>
+                      AccountModel.AccountInfo(
+                        openid = notifyResponse.openid,
+                        money = notifyResponse.total_fee.toInt
+                      )
                     )
-                    val result = Source
-                      .single(message)
-                      .via(WechatStream.notifyMessage())
-                      .runWith(Sink.head)
-                    complete(result)
-                }
+                    .via(AccountStream.incrmentMoneyToAccount())
+                    .map(i => {
+                      xmlResponse(
+                        Map(
+                          "return_code" -> "SUCCESS",
+                          "return_msg" -> "OK"
+                        )
+                      )
+                    })
+                    .runWith(Sink.head)
+
+                  complete(
+                    result
+                  )
+              }
             }
           },
           post {
@@ -200,7 +224,9 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         "data" -> Map(
                           "event" -> LogEventKey.wechatMessage,
                           "appid" -> appid,
-                          "appname" -> config.getString(s"wechat.${appid}.name"),
+                          "appname" -> config.getString(
+                            s"wechat.${appid}.name"
+                          ),
                           "message" -> message
                         )
                       ).toJson

@@ -64,8 +64,8 @@ class OrderTable(tag: Tag)
 
   def volumn: Rep[Int] = column[Int]("volumn", O.Length(11))
 
-  def fee: Rep[BigDecimal] =
-    column[BigDecimal]("fee", O.SqlType("decimal(10, 2)"))
+  def fee: Rep[Int] =
+    column[Int]("fee")
 
   def platform: Rep[PayPlatform] =
     column[PayPlatform]("platform", O.Length(PayPlatform.dbLength))

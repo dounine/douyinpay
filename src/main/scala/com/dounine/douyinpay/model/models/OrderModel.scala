@@ -22,7 +22,7 @@ object OrderModel {
       id: String,
       money: Int,
       volumn: Int,
-      fee: BigDecimal,
+      fee: Int,
       platform: PayPlatform,
       createTime: LocalDateTime,
       payCount: Int = 0,
@@ -139,9 +139,16 @@ object OrderModel {
       margin: String
   ) extends BaseSerializer
 
-  final case class MoneyMenuResponse(
+  final case class MoneyMenuItem(
       money: String,
       volumn: String,
-      enought: Boolean
+      commonEnought: Boolean,
+      vipEnought: Option[Boolean] = None
+  )
+
+  final case class MoneyMenuResponse(
+      list: List[MoneyMenuItem],
+      commonRemain: Int,
+      vipRemain: Option[String] = None
   )
 }

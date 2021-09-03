@@ -3,12 +3,12 @@ package com.dounine.douyinpay.model.models
 import java.time.LocalDateTime
 import scala.xml.NodeSeq
 
-object CardModel {
+object PayModel {
 
-  case class CardInfo(
+  case class PayInfo(
       id: String,
-      money: BigDecimal,
-      openid: Option[String],
+      money: Int,
+      openid: String,
       pay: Boolean,
       payTime: LocalDateTime,
       createTime: LocalDateTime

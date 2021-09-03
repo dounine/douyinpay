@@ -1,6 +1,6 @@
 package com.dounine.douyinpay.store
 
-import com.dounine.douyinpay.model.models.{AccountModel, CardModel}
+import com.dounine.douyinpay.model.models.{AccountModel, PayModel}
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.ProvenShape
 
@@ -22,7 +22,7 @@ class AccountTable(tag: Tag)
 
   def openid: Rep[String] = column[String]("openid", O.PrimaryKey, O.Length(32))
 
-  def money: Rep[BigDecimal] =
-    column[BigDecimal]("money", O.SqlType("decimal(10, 2)"))
+  def money: Rep[Int] =
+    column[Int]("money")
 
 }

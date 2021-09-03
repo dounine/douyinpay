@@ -107,7 +107,7 @@ object SchemaDef extends JsonParse {
     name = "Query",
     description = "查询",
     fields = fields[SecureContext, RequestInfo](
-      (OrderSchema.query ++ DouyinSchema.query): _*
+      (OrderSchema.query ++ DouyinSchema.query ++ PaySchema.query): _*
     )
   )
 
@@ -115,7 +115,7 @@ object SchemaDef extends JsonParse {
     name = "Mutation",
     description = "修改",
     fields = fields[SecureContext, RequestInfo](
-      (WechatSchema.mutation ++ OrderSchema.mutation): _*
+      (WechatSchema.mutation ++ OrderSchema.mutation ++ PaySchema.mutation): _*
     )
   )
 

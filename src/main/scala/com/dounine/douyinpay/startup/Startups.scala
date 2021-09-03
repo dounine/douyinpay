@@ -15,6 +15,7 @@ import com.dounine.douyinpay.behaviors.engine.{
 import com.dounine.douyinpay.model.models.UserModel
 import com.dounine.douyinpay.service.{
   DictionaryService,
+  OpenidStream,
   OrderService,
   OrderStream,
   UserService
@@ -23,7 +24,7 @@ import com.dounine.douyinpay.store.{
   AccountTable,
   AkkaPersistenerJournalTable,
   AkkaPersistenerSnapshotTable,
-  CardTable,
+  PayTable,
   DictionaryTable,
   OpenidTable,
   OrderTable,
@@ -33,6 +34,7 @@ import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.util.{
   DingDing,
+  LockedUsers,
   OpenidPaySuccess,
   ServiceSingleton
 }
@@ -103,7 +105,7 @@ class Startups(implicit system: ActorSystem[_]) {
       UserTable().schema,
       OrderTable().schema,
       DictionaryTable().schema,
-      CardTable().schema,
+      PayTable().schema,
       AccountTable().schema,
       OpenidTable().schema,
       AkkaPersistenerJournalTable().schema,
@@ -163,6 +165,11 @@ class Startups(implicit system: ActorSystem[_]) {
       .queryOrdersSuccess()
       .runForeach(maps => {
         OpenidPaySuccess.init(maps)
+      })
+    OpenidStream
+      .queryLockeds()
+      .runForeach(openids => {
+        LockedUsers.init(openids)
       })
   }
 

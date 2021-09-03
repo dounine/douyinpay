@@ -1,6 +1,6 @@
 package com.dounine.douyinpay.store
 
-import com.dounine.douyinpay.model.models.{CardModel, OpenidModel}
+import com.dounine.douyinpay.model.models.{PayModel, OpenidModel}
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.ProvenShape
 

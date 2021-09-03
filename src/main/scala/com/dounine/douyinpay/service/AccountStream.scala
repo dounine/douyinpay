@@ -12,7 +12,7 @@ import slick.jdbc.JdbcBackend
 
 object AccountStream {
 
-  def queryAccount()(implicit
+  def query()(implicit
       system: ActorSystem[_]
   ): Flow[String, Option[AccountModel.AccountInfo], NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
@@ -40,6 +40,24 @@ object AccountStream {
       .mapAsync(1) { info =>
         db.run(
             sqlu"""INSERT INTO douyinpay_account VALUE(${info.openid},${info.money}) ON DUPLICATE KEY UPDATE money=money+${info.money}"""
+          )
+          .map(_ == 1)
+      }
+  }
+
+  def decrmentMoneyToAccount()(implicit
+      system: ActorSystem[_]
+  ): Flow[AccountModel.AccountInfo, Boolean, NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+    Flow[AccountModel.AccountInfo]
+      .mapAsync(1) { info =>
+        db.run(
+            sqlu"""update douyinpay_account set money=money-${info.money} where openid=${info.openid}""""
           )
           .map(_ == 1)
       }

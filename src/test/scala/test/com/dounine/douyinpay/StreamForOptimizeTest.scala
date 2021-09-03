@@ -19,7 +19,7 @@ import com.dounine.douyinpay.router.routers.errors.DataException
 import com.dounine.douyinpay.store.EnumMappers
 import com.dounine.douyinpay.tools.akka.cache.CacheSource
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.{DingDing, IpUtils, MD5Util}
+import com.dounine.douyinpay.tools.util.{DingDing, IpUtils, MD5Util, UUIDUtil}
 import com.typesafe.config.ConfigFactory
 import org.apache.commons.codec.binary.Base64
 import org.apache.commons.codec.digest.DigestUtils
@@ -37,6 +37,7 @@ import scala.collection.mutable
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
+import scala.xml.XML
 
 object QrcodeTest {
   def apply(): Behavior[String] = {
@@ -103,7 +104,7 @@ object FlowLog {
     }
   }
 }
-
+case class Hi(name:String,age:String)
 class StreamForOptimizeTest
     extends ScalaTestWithActorTestKit(
       ConfigFactory
@@ -148,14 +149,62 @@ class StreamForOptimizeTest
 
   "stream optimize" should {
 
-    "hash" in {
-      info(DigestUtils.sha1Hex("jsapi_ticket=LIKLckvwlJT9cWIhEQTwfI2T0p5z6H7ojimL6kFjYs2faMmlEhC81SoPo0okdrGHMXhqO9IpCACh23iTxuHCrQ&nonceStr=e691fce5d2d34f0fae91c62dfa7b4389&timestamp=1629892971&url=https://douyin.61week.com/?ccode=&appid=wx7b168b095eb4090e&code=091FQ60w3DPgYW2H223w3c6cJh4FQ60U&state=wx7b168b095eb4090e".trim))
-      info(DigestUtils.sha1Hex("jsapi_ticket=LIKLckvwlJT9cWIhEQTwfI2T0p5z6H7ojimL6kFjYs2faMmlEhC81SoPo0okdrGHMXhqO9IpCACh23iTxuHCrQ&noncestr=e691fce5d2d34f0fae91c62dfa7b4389&timestamp=1629892971&url=https://douyin.61week.com/?ccode=&appid=wx7b168b095eb4090e&code=091FQ60w3DPgYW2H223w3c6cJh4FQ60U&state=wx7b168b095eb4090e".trim))
+    import org.json4s.Xml._
+    "xml load" in {
+      val xml =
+        """<xml><name>lake</name><age>18</age></xml>""".stripMargin
+
+
+      xml.childXmlTo[Hi]
+//      info(Hi(name="lake",age="18").toXml(Some("xml")))
+
+//      info(toJson(xml).extract[Map[String,Any]].get("xml").get.asInstanceOf[Map[String,String]].toString())
+    }
+
+    "mm" ignore {
+      val printData = Map(
+        "appId" -> "wxc1a77335b1dd223a",
+        "timeStamp" -> (System.currentTimeMillis() / 1000).toString,
+        "nonceStr" -> UUIDUtil.uuid(),
+        "package" -> "prepay_id=wx30144415876928d3d2dcfc1b6173320000",
+        "signType" -> "MD5"
+      )
+      val sign = MD5Util.md5(
+        printData.toList
+          .sortBy(_._1)
+          .map(i => s"${i._1}=${i._2}")
+          .mkString("&") + "&key=7c857798cbe4390fc3e3c3ad3f7f1d03"
+      )
+      val i = printData ++ Map(
+        "sign" -> sign.toUpperCase
+      )
+
+      i.foreach(println)
+    }
+
+    "time duration" ignore {
+      val start = LocalDateTime.now().plusSeconds(3)
+      val now = LocalDateTime.now()
+      info(java.time.Duration.between(start, now).getSeconds.toString)
+    }
+
+    "hash" ignore {
+      info(
+        DigestUtils.sha1Hex(
+          "jsapi_ticket=LIKLckvwlJT9cWIhEQTwfI2T0p5z6H7ojimL6kFjYs2faMmlEhC81SoPo0okdrGHMXhqO9IpCACh23iTxuHCrQ&nonceStr=e691fce5d2d34f0fae91c62dfa7b4389&timestamp=1629892971&url=https://douyin.61week.com/?ccode=&appid=wx7b168b095eb4090e&code=091FQ60w3DPgYW2H223w3c6cJh4FQ60U&state=wx7b168b095eb4090e".trim
+        )
+      )
+      info(
+        DigestUtils.sha1Hex(
+          "jsapi_ticket=LIKLckvwlJT9cWIhEQTwfI2T0p5z6H7ojimL6kFjYs2faMmlEhC81SoPo0okdrGHMXhqO9IpCACh23iTxuHCrQ&noncestr=e691fce5d2d34f0fae91c62dfa7b4389&timestamp=1629892971&url=https://douyin.61week.com/?ccode=&appid=wx7b168b095eb4090e&code=091FQ60w3DPgYW2H223w3c6cJh4FQ60U&state=wx7b168b095eb4090e".trim
+        )
+      )
     }
     "config get" ignore {
       import scala.jdk.CollectionConverters._
       val config = system.settings.config.getConfig("app.wechat")
-      val appids = config.entrySet().asScala.map(_.getKey.split("\\.").head).toSet
+      val appids =
+        config.entrySet().asScala.map(_.getKey.split("\\.").head).toSet
       println(appids)
     }
 
@@ -167,31 +216,41 @@ class StreamForOptimizeTest
 
     "cache abc" ignore {
       val cache = CacheSource(system).cache()
-      cache.orElse(
-        key = "abc",
-        value = () => Future.successful("hello"),
-        ttl = 3.seconds
-      ).futureValue shouldBe "hello"
+      cache
+        .orElse(
+          key = "abc",
+          value = () => Future.successful("hello"),
+          ttl = 3.seconds
+        )
+        .futureValue shouldBe "hello"
 
-      cache.orElse(
-        key = "abc",
-        value = () => Future.successful("hello2"),
-        ttl = 3.seconds
-      ).futureValue shouldBe "hello"
+      cache
+        .orElse(
+          key = "abc",
+          value = () => Future.successful("hello2"),
+          ttl = 3.seconds
+        )
+        .futureValue shouldBe "hello"
 
-      cache.put(
-        key = "abc",
-        value = () => Future.successful("hello2"),
-        ttl = 3.seconds
-      ).futureValue shouldBe "hello2"
+      cache
+        .put(
+          key = "abc",
+          value = () => Future.successful("hello2"),
+          ttl = 3.seconds
+        )
+        .futureValue shouldBe "hello2"
 
-      cache.remove(
-        key = "abc"
-      ).futureValue shouldBe true
+      cache
+        .remove(
+          key = "abc"
+        )
+        .futureValue shouldBe true
 
-      cache.remove(
-        key = "abc"
-      ).futureValue shouldBe true
+      cache
+        .remove(
+          key = "abc"
+        )
+        .futureValue shouldBe true
     }
 
     "optime test" ignore {
@@ -217,7 +276,8 @@ class StreamForOptimizeTest
       info(
         qrcodeLfuCache
           .getOrLoad("abc", k => Future.successful(true))
-          .futureValue.toString
+          .futureValue
+          .toString
       )
       println(qrcodeLfuCache.get("123").isEmpty)
       info(qrcodeLfuCache.get("abc").get.futureValue.toString)

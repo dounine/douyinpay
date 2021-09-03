@@ -1,19 +1,19 @@
 package com.dounine.douyinpay.store
 
-import com.dounine.douyinpay.model.models.{CardModel, UserModel}
+import com.dounine.douyinpay.model.models.{PayModel, UserModel}
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.ProvenShape
 
 import java.time.LocalDateTime
 
-object CardTable {
-  def apply(): TableQuery[CardTable] = TableQuery[CardTable]
+object PayTable {
+  def apply(): TableQuery[PayTable] = TableQuery[PayTable]
 }
-class CardTable(tag: Tag)
-    extends Table[CardModel.CardInfo](tag, _tableName = "douyinpay_card")
+class PayTable(tag: Tag)
+    extends Table[PayModel.PayInfo](tag, _tableName = "douyinpay_pay")
     with EnumMappers {
 
-  override def * : ProvenShape[CardModel.CardInfo] =
+  override def * : ProvenShape[PayModel.PayInfo] =
     (
       id,
       money,
@@ -21,15 +21,15 @@ class CardTable(tag: Tag)
       pay,
       payTime,
       createTime
-    ).mapTo[CardModel.CardInfo]
+    ).mapTo[PayModel.PayInfo]
 
   def id: Rep[String] = column[String]("id", O.PrimaryKey, O.Length(32))
 
-  def money: Rep[BigDecimal] =
-    column[BigDecimal]("money", O.SqlType("decimal(10, 2)"))
+  def money: Rep[Int] =
+    column[Int]("money")
 
-  def openid: Rep[Option[String]] =
-    column[Option[String]]("openid", O.Length(100))
+  def openid: Rep[String] =
+    column[String]("openid", O.Length(100))
 
   def pay: Rep[Boolean] =
     column[Boolean]("pay")

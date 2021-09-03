@@ -103,7 +103,7 @@ trait SuportRouter extends JsonParse {
       StatusCodes.OK,
       entity = HttpEntity(
         ContentTypes.`text/xml(UTF-8)`,
-        s"<xml>${data.map(i => s"<${i._1}>${i._2}</${i._1}>").mkString("")}</xml>"
+        data.toXml(Some("xml"))
       )
     )
   }

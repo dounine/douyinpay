@@ -32,13 +32,7 @@ object MD5Util {
     md5(str.getBytes, offset, length)
   }
 
-  def getCrc(str: String, tableCount: Int): Int = {
-    val crc32 = new CRC32
-    crc32.update(str.getBytes)
-    ((crc32.getValue % tableCount) + 1).toInt
-  }
-
-  def getCrcValue(str: String): Long = {
+  def crc(str: String): Long = {
     val crc32 = new CRC32
     crc32.update(str.getBytes)
     crc32.getValue

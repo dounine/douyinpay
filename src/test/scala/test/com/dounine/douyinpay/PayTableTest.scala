@@ -7,7 +7,7 @@ import akka.actor.testkit.typed.scaladsl.{
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import com.dounine.douyinpay.model.models.UserModel
 import com.dounine.douyinpay.service.UserService
-import com.dounine.douyinpay.store.{CardTable, EnumMappers, UserTable}
+import com.dounine.douyinpay.store.{PayTable, EnumMappers, UserTable}
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.json.JsonParse
 import com.typesafe.config.ConfigFactory
@@ -21,16 +21,16 @@ import java.time.LocalDateTime
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-class CardTableTest
+class PayTableTest
     extends ScalaTestWithActorTestKit(
       ConfigFactory
         .parseString(s"""
            |akka.remote.artery.canonical.port = 25520
            |akka.persistence.journal.leveldb.dir = "/tmp/journal_${classOf[
-          CardTableTest
+          PayTableTest
         ].getSimpleName}"
            |akka.persistence.snapshot-store.local.dir = "/tmp/snapshot_${classOf[
-          CardTableTest
+          PayTableTest
         ].getSimpleName}"
            |""".stripMargin)
         .withFallback(
@@ -47,7 +47,7 @@ class CardTableTest
   val sharding = ClusterSharding(system)
 
   val db = DataSource(system).source().db
-  val dict = CardTable()
+  val dict = PayTable()
 
   def beforeFun(): Unit = {
     try {

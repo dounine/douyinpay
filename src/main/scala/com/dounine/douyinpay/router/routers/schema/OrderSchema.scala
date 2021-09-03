@@ -2,15 +2,22 @@ package com.dounine.douyinpay.router.routers.schema
 
 import akka.stream.SystemMaterializer
 import akka.stream.scaladsl.{Sink, Source}
-import com.dounine.douyinpay.model.models.{OrderModel, WechatModel}
+import com.dounine.douyinpay.model.models.{
+  AccountModel,
+  OpenidModel,
+  OrderModel,
+  WechatModel
+}
 import com.dounine.douyinpay.model.types.service.{LogEventKey, PayPlatform}
 import com.dounine.douyinpay.router.routers.SecureContext
 import com.dounine.douyinpay.router.routers.errors.{
+  InvalidException,
   LockedException,
   PayManyException
 }
 import com.dounine.douyinpay.router.routers.schema.SchemaDef.RequestInfo
 import com.dounine.douyinpay.service.{
+  AccountStream,
   OpenidStream,
   OrderService,
   OrderStream,
@@ -18,6 +25,7 @@ import com.dounine.douyinpay.service.{
 }
 import com.dounine.douyinpay.tools.akka.cache.CacheSource
 import com.dounine.douyinpay.tools.json.JsonParse
+import com.dounine.douyinpay.tools.util
 import com.dounine.douyinpay.tools.util.{
   MD5Util,
   OpenidPaySuccess,
@@ -27,64 +35,188 @@ import com.dounine.douyinpay.tools.util.{
 import org.slf4j.LoggerFactory
 import sangria.macros.derive.{
   DocumentField,
+  Interfaces,
   ObjectTypeDescription,
   ObjectTypeName,
+  ReplaceField,
   deriveObjectType
 }
 import sangria.schema._
 
 import java.text.DecimalFormat
-import java.time.LocalDateTime
+import java.time.{LocalDate, LocalDateTime}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 object OrderSchema extends JsonParse {
 
   private val logger = LoggerFactory.getLogger(OrderSchema.getClass)
 
-  val MoneyMenuResponse =
-    deriveObjectType[Unit, OrderModel.MoneyMenuResponse](
-      ObjectTypeName("MoneyMenuResponse"),
-      ObjectTypeDescription("金额列表"),
+  implicit val MoneyMenuItem =
+    deriveObjectType[Unit, OrderModel.MoneyMenuItem](
+      ObjectTypeName("MoneyMenuItem"),
+      ObjectTypeDescription("金额"),
       DocumentField("money", "金额"),
-      DocumentField("volumn", "抖币"),
-      DocumentField("enought", "是否足够支付")
+      DocumentField("volumn", "币"),
+      DocumentField("commonEnought", "常规用户是否足够充值"),
+      DocumentField("vipEnought", "vip用户是否足够充值")
     )
+
+  val MoneyMenuResponse = ObjectType(
+    name = "MoneyMenuResponse",
+    description = "金额信息",
+    fields = fields[Unit, OrderModel.MoneyMenuResponse](
+      Field(
+        name = "list",
+        fieldType = ListType(MoneyMenuItem),
+        description = Some("列表"),
+        resolve = _.value.list
+      ),
+      Field(
+        name = "commonRemain",
+        fieldType = IntType,
+        description = Some("常规用户可用额度"),
+        resolve = _.value.commonRemain
+      ),
+      Field(
+        name = "vipRemain",
+        fieldType = OptionType(StringType),
+        description = Some("VIP用户可用额度"),
+        resolve = _.value.vipRemain
+      )
+    )
+  )
 
   val moneyFormat = new DecimalFormat("###,###.00")
   val volumnFormat = new DecimalFormat("###,###")
 
+  val commonUserMoneys = List(
+    6, 10, 30, 66, 88, 100
+  )
+  val vipUserMoneys = List(
+    6, 30, 66, 88, 288, 688, 1888, 6666, 8888
+  )
+
   val moneyMenu = Field[
     SecureContext,
     RequestInfo,
-    Seq[OrderModel.MoneyMenuResponse],
-    Seq[OrderModel.MoneyMenuResponse]
+    OrderModel.MoneyMenuResponse,
+    OrderModel.MoneyMenuResponse
   ](
     name = "moneyMenu",
-    fieldType = ListType(MoneyMenuResponse),
+    fieldType = MoneyMenuResponse,
     tags = Authorised :: Nil,
     description = Some("获取充值金额列表"),
-    resolve = (c: Context[SecureContext, RequestInfo]) =>
-      Source(
-        Array(
-          6, 30, 66, 88, 288, 688, 1888, 6666, 8888
+    resolve = (c: Context[SecureContext, RequestInfo]) => {
+      implicit val system = c.ctx.system
+      val openid = c.ctx.openid.get
+      Source
+        .single(c.ctx.openid.get)
+        .via(AccountStream.query()(c.ctx.system))
+        .zip(
+          Source
+            .single(c.ctx.openid.get)
+            .via(OrderStream.queryOpenidTodayPay()(c.ctx.system))
         )
-      ).map(money =>
-          (moneyFormat.format(money), volumnFormat.format(money * 10))
-        )
-        .map(tp2 =>
-          OrderModel.MoneyMenuResponse(
-            money = tp2._1,
-            volumn = tp2._2,
-            enought = true
+        .zipWith(
+          Source
+            .single(c.ctx.openid.get)
+            .via(
+              OpenidStream.query()
+            )
+        ) { (pre, next) =>
+          (
+            pre._1,
+            pre._2,
+            next
           )
-        )
-        .recover {
-          case e => {
-            e.printStackTrace()
-            throw e
+        }
+        .map {
+          case (
+                vipUser: Option[AccountModel.AccountInfo],
+                orders: Seq[OrderModel.DbInfo],
+                wechatInfo: Option[OpenidModel.OpenidInfo]
+              ) => {
+            vipUser match {
+              case Some(vip) =>
+                val commonRemain: Int = 100 - orders.map(_.money).sum
+                val accountMoney = vip.money
+                val list = vipUserMoneys
+                  .map(money =>
+                    (moneyFormat.format(money), volumnFormat.format(money * 10))
+                  )
+                  .map(tp2 => {
+                    val money = moneyFormat.parse(tp2._1).intValue()
+                    OrderModel.MoneyMenuItem(
+                      money = tp2._1,
+                      volumn = tp2._2,
+                      commonEnought = wechatInfo.get.createTime
+                        .plusDays(3)
+                        .isAfter(
+                          LocalDate.now().atStartOfDay()
+                        ) || commonRemain - money >= 0,
+                      vipEnought = Some(
+                        accountMoney - money * 100 * 0.02 >= 0
+                      )
+                    )
+                  })
+                OrderModel.MoneyMenuResponse(
+                  list = list,
+                  commonRemain = commonRemain,
+                  vipRemain = Some((vip.money / 100.0).formatted("%.2f"))
+                )
+              case None =>
+                if (
+                  openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || util.MD5Util
+                    .crc(openid) % 10 == 0
+                ) {
+                  val commonRemain: Int = 100 - orders.map(_.money).sum
+                  val list = commonUserMoneys
+                    .map(money =>
+                      (
+                        moneyFormat.format(money),
+                        volumnFormat.format(money * 10)
+                      )
+                    )
+                    .map(tp2 => {
+                      val money = moneyFormat.parse(tp2._1).intValue()
+                      OrderModel.MoneyMenuItem(
+                        money = tp2._1,
+                        volumn = tp2._2,
+                        commonEnought = wechatInfo.get.createTime
+                          .plusDays(3)
+                          .isAfter(
+                            LocalDate.now().atStartOfDay()
+                          ) || commonRemain - money >= 0
+                      )
+                    })
+                  OrderModel.MoneyMenuResponse(
+                    list = list,
+                    commonRemain = commonRemain
+                  )
+                } else {
+                  OrderModel.MoneyMenuResponse(
+                    list = vipUserMoneys
+                      .map(money =>
+                        (
+                          moneyFormat.format(money),
+                          volumnFormat.format(money * 10)
+                        )
+                      )
+                      .map(tp2 => {
+                        OrderModel.MoneyMenuItem(
+                          money = tp2._1,
+                          volumn = tp2._2,
+                          commonEnought = true
+                        )
+                      }),
+                    commonRemain = 100
+                  )
+                }
+            }
           }
         }
-        .runWith(Sink.seq)(SystemMaterializer(c.ctx.system).materializer)
+        .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
+    }
   )
 
   val orderStatus = Field[
@@ -116,6 +248,12 @@ object OrderSchema extends JsonParse {
       DocumentField("qrcodeUrl", "支付二维码地扯")
     )
 
+  val MoneyArg = Argument(
+    name = "money",
+    argumentType = StringType,
+    description = "充值金额"
+  )
+
   val orderCreate = Field[
     SecureContext,
     RequestInfo,
@@ -130,11 +268,7 @@ object OrderSchema extends JsonParse {
       name = "id",
       argumentType = StringType,
       description = "抖音帐号"
-    ) :: Argument(
-      name = "money",
-      argumentType = StringType,
-      description = "充值金额"
-    ) :: Argument(
+    ) :: MoneyArg :: Argument(
       name = "volumn",
       argumentType = StringType,
       description = "充值抖币"
@@ -148,6 +282,9 @@ object OrderSchema extends JsonParse {
       description = "签名md5((id,money,volumn,openid).sort.join(''))"
     ) :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
+      implicit val system = c.ctx.system
+      val money = moneyFormat.parse(c.arg(MoneyArg)).intValue()
+      val openid = c.ctx.openid.get
       Source
         .single(
           OrderModel.Recharge(
@@ -159,38 +296,39 @@ object OrderSchema extends JsonParse {
           )
         )
         .map(_ -> c.ctx.openid.get)
-        .mapAsync(1) { tp2 =>
-          CacheSource(c.ctx.system)
-            .cache()
-            .get[LocalDateTime]("createOrder_" + tp2._2)
-            .map {
-              case Some(time) => {
-                val nextSeconds = java.time.Duration
-                  .between(time, LocalDateTime.now())
-                  .getSeconds
-                if (nextSeconds <= 60) {
-                  logger.error(
-                    Map(
-                      "time" -> System
-                        .currentTimeMillis(),
-                      "data" -> Map(
-                        "event" -> LogEventKey.orderPayManay,
-                        "recharge" -> tp2._1,
-                        "openid" -> tp2._2,
-                        "ip" -> c.value.addressInfo.ip,
-                        "province" -> c.value.addressInfo.province,
-                        "city" -> c.value.addressInfo.city
-                      )
-                    ).toJson
-                  )
-                  throw PayManyException(
-                    s"您上一笔定单未支付、请于 ${60 - nextSeconds} 秒后再操作"
-                  )
+        .mapAsync(1) {
+          tp2 =>
+            CacheSource(c.ctx.system)
+              .cache()
+              .get[LocalDateTime]("createOrder_" + openid)
+              .map {
+                case Some(time) => {
+                  val nextSeconds = java.time.Duration
+                    .between(time, LocalDateTime.now())
+                    .getSeconds
+                  if (nextSeconds <= 60) {
+                    logger.error(
+                      Map(
+                        "time" -> System
+                          .currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.orderPayManay,
+                          "recharge" -> tp2._1,
+                          "openid" -> openid,
+                          "ip" -> c.value.addressInfo.ip,
+                          "province" -> c.value.addressInfo.province,
+                          "city" -> c.value.addressInfo.city
+                        )
+                      ).toJson
+                    )
+                    throw PayManyException(
+                      s"您上一笔定单未支付、请于 ${60 - nextSeconds} 秒后再操作"
+                    )
+                  }
+                  tp2
                 }
-                tp2
-              }
-              case None => tp2
-            }(c.ctx.system.executionContext)
+                case None => tp2
+              }(c.ctx.system.executionContext)
         }
         .map(i => {
           if (
@@ -200,7 +338,7 @@ object OrderSchema extends JsonParse {
                 i._1.money,
                 i._1.volumn,
                 i._1.ccode,
-                c.ctx.openid.get
+                openid
               ).sorted.mkString("")
             ) != i._1.sign
           ) {
@@ -209,7 +347,7 @@ object OrderSchema extends JsonParse {
                 "time" -> System.currentTimeMillis(),
                 "data" -> Map(
                   "event" -> LogEventKey.orderCreateSignError,
-                  "openid" -> c.ctx.openid.get,
+                  "openid" -> openid,
                   "payAccount" -> i._1.id,
                   "payMoney" -> i._1.money,
                   "payVolumn" -> i._1.volumn,
@@ -237,11 +375,11 @@ object OrderSchema extends JsonParse {
             nickName = userInfo.nickname,
             pay = false,
             expire = false,
-            openid = c.ctx.openid.get,
+            openid = openid,
             id = data.id,
             money = moneyFormat.parse(data.money).intValue(),
             volumn = volumnFormat.parse(data.money).intValue() * 10,
-            fee = BigDecimal("0.00"),
+            fee = 0,
             platform = PayPlatform.douyin,
             createTime = LocalDateTime.now()
           )
@@ -259,28 +397,75 @@ object OrderSchema extends JsonParse {
           )
           order
         })
+        .flatMapConcat(i => {
+          if (
+            openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || MD5Util
+              .crc(openid) % 10 == 0
+          ) {
+            Source
+              .single(openid)
+              .via(
+                OrderStream.queryOpenidTodayPay()
+              )
+              .zip(
+                Source
+                  .single(openid)
+                  .via(AccountStream.query())
+              )
+              .zipWith(
+                Source
+                  .single(openid)
+                  .via(OpenidStream.query())
+              )((pre, next) => (pre._1, pre._2, next))
+              .map {
+                case (value, maybeInfo, wechatUser) =>
+                  if (
+                    wechatUser.get.createTime
+                      .plusDays(3)
+                      .isAfter(LocalDate.now().atStartOfDay())
+                  ) {
+                    i
+                  } else if (value.map(_.money).sum + money <= 100) {
+                    i
+                  } else if (
+                    (maybeInfo
+                      .map(_.money)
+                      .getOrElse(0) - money * 100 * 0.02) < 0
+                  ) {
+                    throw InvalidException("非法支付、余额不足")
+                  } else {
+                    i.copy(
+                      fee = (i.money * 100 * 0.02).toInt
+                    )
+                  }
+              }
+          } else {
+            Source.single(i)
+          }
+        })
         .via(OrderStream.add()(c.ctx.system))
         .map(_._1)
         .via(OrderStream.aggregation()(c.ctx.system))
         .via(OrderStream.qrcodeCreate()(c.ctx.system))
-        .mapAsync(1) { info =>
-          info._2.qrcode match {
-            case Some(value) =>
-              CacheSource(c.ctx.system)
-                .cache()
-                .put[LocalDateTime](
-                  key = "createOrder_" + c.ctx.openid.get,
-                  value = LocalDateTime.now(),
-                  ttl = 60.seconds
-                )
-                .map(_ => info)(c.ctx.system.executionContext)
-            case None => {
-              CacheSource(c.ctx.system)
-                .cache()
-                .remove("createOrder_" + c.ctx.openid.get)
-                .map(_ => info)(c.ctx.system.executionContext)
+        .mapAsync(1) {
+          info =>
+            info._2.qrcode match {
+              case Some(value) =>
+                CacheSource(c.ctx.system)
+                  .cache()
+                  .put[LocalDateTime](
+                    key = "createOrder_" + openid,
+                    value = LocalDateTime.now(),
+                    ttl = 60.seconds
+                  )
+                  .map(_ => info)(c.ctx.system.executionContext)
+              case None => {
+                CacheSource(c.ctx.system)
+                  .cache()
+                  .remove("createOrder_" + openid)
+                  .map(_ => info)(c.ctx.system.executionContext)
+              }
             }
-          }
         }
         .via(OrderStream.notifyOrderCreateStatus()(c.ctx.system))
         .map(i => {
@@ -338,6 +523,7 @@ object OrderSchema extends JsonParse {
         })
         .recover {
           case e: PayManyException => throw e
+          case e: InvalidException => throw e
           case ee => {
             ee.printStackTrace()
             throw new Exception("当前充值人数太多、请稍候再试")

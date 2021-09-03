@@ -4,10 +4,10 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.stream.SystemMaterializer
 import akka.stream.alpakka.slick.scaladsl.{Slick, SlickSession}
-import akka.stream.scaladsl.Flow
-import com.dounine.douyinpay.model.models.{CardModel, OpenidModel}
+import akka.stream.scaladsl.{Flow, Source}
+import com.dounine.douyinpay.model.models.{PayModel, OpenidModel}
 import com.dounine.douyinpay.model.types.service.LogEventKey
-import com.dounine.douyinpay.store.{CardTable, OpenidTable}
+import com.dounine.douyinpay.store.{PayTable, OpenidTable}
 import com.dounine.douyinpay.tools.akka.db.DataSource
 import com.dounine.douyinpay.tools.json.JsonParse
 import org.slf4j.LoggerFactory
@@ -60,6 +60,22 @@ object OpenidStream extends JsonParse {
       .mapAsync(1) { openid =>
         db.run(OpenidTable().filter(_.openid === openid).result.headOption)
       }
+  }
+
+  def queryLockeds()(implicit
+      system: ActorSystem[_]
+  ): Source[Set[String], NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+
+    Source.future(
+      db.run(OpenidTable().filter(_.locked === true).map(_.openid).result)
+        .map(_.toSet)
+    )
   }
 
 }

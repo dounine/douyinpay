@@ -18,7 +18,6 @@ import com.dounine.douyinpay.model.models.{
   PhoneModel,
   RouterModel
 }
-import com.dounine.douyinpay.service.CardStream
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.net.URLEncoder
