@@ -2,7 +2,7 @@ import com.typesafe.sbt.packager.docker.{Cmd, DockerPermissionStrategy}
 
 val akkaVersion = "2.6.15"
 val akkaHttpVersion = "10.2.4"
-val json4sVersion = "3.7.0-M6"
+val json4sVersion = "4.0.3"
 val alpakka = "2.0.2"
 val elastic4sVersion = "7.12.0"
 
@@ -65,6 +65,7 @@ lazy val app = (project in file("."))
       "org.json4s" %% "json4s-jackson" % json4sVersion,
       "org.json4s" %% "json4s-native" % json4sVersion,
       "org.json4s" %% "json4s-ext" % json4sVersion,
+      "org.json4s" %% "json4s-xml" % json4sVersion,
       "org.sangria-graphql" %% "sangria" % "2.1.3",
       "org.sangria-graphql" %% "sangria-circe" % "1.3.1",
       "org.sangria-graphql" %% "sangria-slowlog" % "2.0.1",
