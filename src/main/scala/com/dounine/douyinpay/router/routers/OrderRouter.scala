@@ -250,7 +250,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           case (value, maybeInfo, wechatUser) =>
                             if (
                               i.order.openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || MD5Util
-                                .crc(i.order.openid) % 10 < 2
+                                .crc(i.order.openid) % 10 == 4
                             ) {
                               if (
                                 wechatUser.get.createTime

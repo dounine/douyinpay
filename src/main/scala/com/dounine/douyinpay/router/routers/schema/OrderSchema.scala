@@ -167,7 +167,7 @@ object OrderSchema extends JsonParse {
               case None =>
                 if (
                   openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || util.MD5Util
-                    .crc(openid) % 10 < 2
+                    .crc(openid) % 10 == 4
                 ) {
                   val commonRemain: Int = 100 - orders.map(_.money).sum
                   val list = commonUserMoneys
@@ -400,7 +400,7 @@ object OrderSchema extends JsonParse {
         .flatMapConcat(i => {
           if (
             openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || MD5Util
-              .crc(openid) % 10 < 2
+              .crc(openid) % 10 == 4
           ) {
             Source
               .single(openid)
