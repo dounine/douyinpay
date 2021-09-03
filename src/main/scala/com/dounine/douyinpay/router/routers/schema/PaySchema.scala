@@ -301,7 +301,7 @@ object PaySchema extends JsonParse {
         body = s"充值 - ${money / 100.0}元",
         mch_id = mch_id,
         nonce_str = UUIDUtil.uuid(),
-        notify_url = "https://douyinpai.61week.com/api/wechat/pay/notify",
+        notify_url = "https://douyinapi.61week.com/api/wechat/pay/notify",
         openid = c.ctx.openid.get,
         out_trade_no = orderId,
         spbill_create_ip = "183.6.105.141",
