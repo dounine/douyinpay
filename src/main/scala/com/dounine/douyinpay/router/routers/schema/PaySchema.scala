@@ -253,10 +253,8 @@ object PaySchema extends JsonParse {
               cost = "0.02",
               limitUse = "100",
               freeUse = orders.map(_.money).sum.toString,
-              balance = account
-                .map(_.money)
-                .getOrElse(BigDecimal("0.00"))
-                .formatted("%.2f")
+              balance =
+                (account.map(_.money).getOrElse(0) / 100.0).formatted("%.2f")
             )
           }
         }
