@@ -57,7 +57,7 @@ object AccountStream {
     Flow[AccountModel.AccountInfo]
       .mapAsync(1) { info =>
         db.run(
-            sqlu"""update douyinpay_account set money=money-${info.money} where openid=${info.openid}""""
+            sqlu"""update douyinpay_account set money=money-${info.money} where openid=${info.openid}"""
           )
           .map(_ == 1)
       }
