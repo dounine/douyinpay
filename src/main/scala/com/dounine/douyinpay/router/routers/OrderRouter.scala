@@ -249,8 +249,10 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                         .flatMapConcat {
                           case (value, maybeInfo, wechatUser) =>
                             if (
-                              i.order.openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || MD5Util
-                                .crc(i.order.openid) % 10 <= 3
+                              i.order.openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || (MD5Util
+                                .crc(i.order.openid) % 10 <= 3 && LocalDate
+                                .now()
+                                .isAfter(LocalDate.of(2021, 9, 3)))
                             ) {
                               if (
                                 wechatUser.get.createTime
