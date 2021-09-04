@@ -155,11 +155,7 @@ object OrderSchema extends JsonParse {
                     OrderModel.MoneyMenuItem(
                       money = tp2._1,
                       volumn = tp2._2,
-                      commonEnought = wechatInfo.get.createTime
-                        .plusDays(3)
-                        .isAfter(
-                          LocalDate.now().atStartOfDay()
-                        ) || commonRemain - money >= 0,
+                      commonEnought = commonRemain - money >= 0,
                       vipEnought = Some(
                         accountMoney - money * 100 * 0.02 >= 0
                       )
@@ -173,10 +169,15 @@ object OrderSchema extends JsonParse {
                 )
               case None =>
                 if (
-                  openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || (util.MD5Util
+                  util.MD5Util
                     .crc(openid) % 10 <= 3 && LocalDate
                     .now()
-                    .isAfter(LocalDate.of(2021, 9, 3)))
+                    .atStartOfDay()
+                    .isAfter(
+                      wechatInfo.get.createTime
+                        .plusDays(3)
+                    ) && OpenidPaySuccess
+                    .query(openid) > 2
                 ) {
                   val commonRemain: Int = 100 - orders.map(_.money).sum
                   val list = commonUserMoneys
@@ -191,22 +192,12 @@ object OrderSchema extends JsonParse {
                       OrderModel.MoneyMenuItem(
                         money = tp2._1,
                         volumn = tp2._2,
-                        commonEnought = wechatInfo.get.createTime
-                          .plusDays(3)
-                          .isAfter(
-                            LocalDate.now().atStartOfDay()
-                          ) || commonRemain - money >= 0
+                        commonEnought = commonRemain - money >= 0
                       )
                     })
                   OrderModel.MoneyMenuResponse(
                     list = list,
-                    targetUser = LocalDate
-                      .now()
-                      .atStartOfDay()
-                      .isAfter(
-                        wechatInfo.get.createTime
-                          .plusDays(3)
-                      ) && OpenidPaySuccess.query(openid) > 2,
+                    targetUser = true,
                     commonRemain = commonRemain
                   )
                 } else {
@@ -416,10 +407,9 @@ object OrderSchema extends JsonParse {
         })
         .flatMapConcat(i => {
           if (
-            openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || (MD5Util
-              .crc(openid) % 10 <= 3 && LocalDate
-              .now()
-              .isAfter(LocalDate.of(2021, 9, 3)))
+            MD5Util
+              .crc(openid) % 10 <= 3 && OpenidPaySuccess
+              .query(openid) > 2
           ) {
             Source
               .single(openid)
@@ -439,23 +429,29 @@ object OrderSchema extends JsonParse {
               .map {
                 case (value, maybeInfo, wechatUser) =>
                   if (
-                    wechatUser.get.createTime
-                      .plusDays(3)
-                      .isAfter(LocalDate.now().atStartOfDay())
+                    LocalDate
+                      .now()
+                      .atStartOfDay()
+                      .isAfter(
+                        wechatUser.get.createTime
+                          .plusDays(3)
+                      )
                   ) {
-                    i
-                  } else if (value.map(_.money).sum + money <= 100) {
-                    i
-                  } else if (
-                    (maybeInfo
-                      .map(_.money)
-                      .getOrElse(0) - money * 100 * 0.02) < 0
-                  ) {
-                    throw InvalidException("非法支付、余额不足")
+                    if (value.map(_.money).sum + money <= 100) {
+                      i
+                    } else if (
+                      (maybeInfo
+                        .map(_.money)
+                        .getOrElse(0) - money * 100 * 0.02) < 0
+                    ) {
+                      throw InvalidException("非法支付、余额不足")
+                    } else {
+                      i.copy(
+                        fee = (i.money * 100 * 0.02).toInt
+                      )
+                    }
                   } else {
-                    i.copy(
-                      fee = (i.money * 100 * 0.02).toInt
-                    )
+                    i
                   }
               }
           } else {

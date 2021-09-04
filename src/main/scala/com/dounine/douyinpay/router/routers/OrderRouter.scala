@@ -6,78 +6,24 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{
-  ContentType,
-  HttpEntity,
-  HttpMethods,
-  HttpRequest,
-  HttpResponse,
-  MediaTypes,
-  RemoteAddress,
-  Uri
-}
+import akka.http.scaladsl.model.{ContentType, HttpEntity, HttpMethods, HttpRequest, HttpResponse, MediaTypes, RemoteAddress, Uri}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.directives.CachingDirectives.cache
-import akka.http.scaladsl.server.{
-  Directive1,
-  RequestContext,
-  Route,
-  RouteResult,
-  ValidationRejection
-}
+import akka.http.scaladsl.server.{Directive1, RequestContext, Route, RouteResult, ValidationRejection}
 import akka.stream._
-import akka.stream.scaladsl.{
-  Concat,
-  Flow,
-  GraphDSL,
-  Keep,
-  Merge,
-  Partition,
-  Sink,
-  Source
-}
+import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{
-  AccountModel,
-  BaseSerializer,
-  OrderModel,
-  PayUserInfoModel,
-  RouterModel,
-  UserModel
-}
-import com.dounine.douyinpay.model.types.service.{
-  LogEventKey,
-  MechinePayStatus,
-  PayPlatform,
-  PayStatus
-}
-import com.dounine.douyinpay.service.{
-  AccountStream,
-  OpenidStream,
-  OrderService,
-  OrderStream,
-  UserService,
-  UserStream,
-  WechatStream
-}
+import com.dounine.douyinpay.model.models.{AccountModel, BaseSerializer, OrderModel, PayUserInfoModel, RouterModel, UserModel}
+import com.dounine.douyinpay.model.types.service.{LogEventKey, MechinePayStatus, PayPlatform, PayStatus}
+import com.dounine.douyinpay.service.{AccountStream, OpenidStream, OrderService, OrderStream, UserService, UserStream, WechatStream}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.{
-  IpUtils,
-  MD5Util,
-  OpenidPaySuccess,
-  Request,
-  ServiceSingleton,
-  UUIDUtil
-}
+import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util, OpenidPaySuccess, Request, ServiceSingleton, UUIDUtil}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import com.dounine.douyinpay.router.routers.errors.{
-  InvalidException,
-  PayManyException
-}
+import com.dounine.douyinpay.router.routers.errors.{InvalidException, PayManyException}
 import com.dounine.douyinpay.tools.akka.cache.CacheSource
 
 import java.net.InetAddress
@@ -249,20 +195,18 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                         .flatMapConcat {
                           case (value, maybeInfo, wechatUser) =>
                             if (
-                              i.order.openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || (MD5Util
+                              (MD5Util
                                 .crc(i.order.openid) % 10 <= 3 && LocalDate
                                 .now()
-                                .isAfter(LocalDate.of(2021, 9, 3)))
+                                .atStartOfDay()
+                                .isAfter(
+                                  wechatUser.get.createTime
+                                    .plusDays(3)
+                                ) &&
+                              OpenidPaySuccess
+                                .query(i.order.openid) > 2)
                             ) {
                               if (
-                                wechatUser.get.createTime
-                                  .plusDays(3)
-                                  .isAfter(
-                                    LocalDate.now().atStartOfDay()
-                                  )
-                              ) {
-                                Source.single(i)
-                              } else if (
                                 value.map(_.money).sum + i.order.money <= 100
                               ) {
                                 Source.single(i)
