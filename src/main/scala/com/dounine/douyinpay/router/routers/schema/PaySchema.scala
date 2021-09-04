@@ -111,6 +111,12 @@ object PaySchema extends JsonParse {
         fieldType = StringType,
         description = Some("余额"),
         resolve = _.value.balance
+      ),
+      Field(
+        name = "vipUser",
+        fieldType = BooleanType,
+        description = Some("是否是vip用户"),
+        resolve = _.value.vipUser
       )
     )
   )
@@ -209,13 +215,15 @@ object PaySchema extends JsonParse {
                       if (i < 1) i.toString else i.toInt.toString
                     )
                 ),
-              balance = (value.money / 100.0).formatted("%.2f")
+              balance = (value.money / 100.0).formatted("%.2f"),
+              vipUser = true
             )
           case None =>
             AccountModel.AccountRechargeResponse(
               list = List(5, 10, 50, 100, 200, 500)
                 .map(i => AccountModel.RechargeItem(i.toString)),
-              balance = "0.00"
+              balance = "0.00",
+              vipUser = false
             )
         }
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)

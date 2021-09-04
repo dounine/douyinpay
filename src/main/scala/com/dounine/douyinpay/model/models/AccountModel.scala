@@ -58,7 +58,8 @@ object AccountModel {
 
   case class AccountRechargeResponse(
       list: List[RechargeItem],
-      balance: String
+      balance: String,
+      vipUser: Boolean
   )
 
   case class AccountLimit(
