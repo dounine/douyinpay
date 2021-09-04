@@ -148,6 +148,7 @@ object OrderModel {
 
   final case class MoneyMenuResponse(
       list: List[MoneyMenuItem],
+      targetUser: Boolean,
       commonRemain: Int,
       vipRemain: Option[String] = None
   )

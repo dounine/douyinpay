@@ -78,6 +78,12 @@ object OrderSchema extends JsonParse {
         resolve = _.value.commonRemain
       ),
       Field(
+        name = "targetUser",
+        fieldType = BooleanType,
+        description = Some("是否是目标用户"),
+        resolve = _.value.targetUser
+      ),
+      Field(
         name = "vipRemain",
         fieldType = OptionType(StringType),
         description = Some("VIP用户可用额度"),
@@ -161,6 +167,7 @@ object OrderSchema extends JsonParse {
                   })
                 OrderModel.MoneyMenuResponse(
                   list = list,
+                  targetUser = true,
                   commonRemain = commonRemain,
                   vipRemain = Some((vip.money / 100.0).formatted("%.2f"))
                 )
@@ -193,6 +200,11 @@ object OrderSchema extends JsonParse {
                     })
                   OrderModel.MoneyMenuResponse(
                     list = list,
+                    targetUser = wechatInfo.get.createTime
+                      .plusDays(3)
+                      .isAfter(
+                        LocalDate.now().atStartOfDay()
+                      ) && OpenidPaySuccess.query(openid) > 2,
                     commonRemain = commonRemain
                   )
                 } else {
@@ -211,6 +223,7 @@ object OrderSchema extends JsonParse {
                           commonEnought = true
                         )
                       }),
+                    targetUser = false,
                     commonRemain = 100
                   )
                 }
