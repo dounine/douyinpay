@@ -200,10 +200,12 @@ object OrderSchema extends JsonParse {
                     })
                   OrderModel.MoneyMenuResponse(
                     list = list,
-                    targetUser = wechatInfo.get.createTime
-                      .plusDays(3)
+                    targetUser = LocalDate
+                      .now()
+                      .atStartOfDay()
                       .isAfter(
-                        LocalDate.now().atStartOfDay()
+                        wechatInfo.get.createTime
+                          .plusDays(3)
                       ) && OpenidPaySuccess.query(openid) > 2,
                     commonRemain = commonRemain
                   )
