@@ -169,8 +169,7 @@ object OrderSchema extends JsonParse {
                 )
               case None =>
                 if (
-                  util.MD5Util
-                    .crc(openid) % 10 <= 3 && LocalDate
+                  LocalDate
                     .now()
                     .atStartOfDay()
                     .isAfter(
@@ -407,8 +406,7 @@ object OrderSchema extends JsonParse {
         })
         .flatMapConcat(i => {
           if (
-            MD5Util
-              .crc(openid) % 10 <= 3 && OpenidPaySuccess
+            OpenidPaySuccess
               .query(openid) > 2
           ) {
             Source
