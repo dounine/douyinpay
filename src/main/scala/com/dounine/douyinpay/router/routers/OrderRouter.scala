@@ -231,61 +231,66 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                       data
                     })
                     .flatMapConcat(i => {
-                      Source
-                        .single(i.order.openid)
-                        .via(
-                          OrderStream.queryOpenidTodayPay()
-                        )
-                        .zip(
-                          Source
-                            .single(i.order.openid)
-                            .via(AccountStream.query())
-                        )
-                        .zipWith(
-                          Source
-                            .single(i.order.openid)
-                            .via(OpenidStream.query())
-                        )((pre, next) => (pre._1, pre._2, next))
-                        .flatMapConcat {
-                          case (value, maybeInfo, wechatUser) =>
-                            if (
-                              LocalDate
-                                .now()
-                                .atStartOfDay()
-                                .isAfter(
-                                  wechatUser.get.createTime
-                                    .plusDays(3)
-                                ) &&
-                              OpenidPaySuccess
-                                .query(i.order.openid) > 2
-                            ) {
+                      if (i.pay) {
+                        Source
+                          .single(i.order.openid)
+                          .via(
+                            OrderStream.queryOpenidTodayPay()
+                          )
+                          .zip(
+                            Source
+                              .single(i.order.openid)
+                              .via(AccountStream.query())
+                          )
+                          .zipWith(
+                            Source
+                              .single(i.order.openid)
+                              .via(OpenidStream.query())
+                          )((pre, next) => (pre._1, pre._2, next))
+                          .flatMapConcat {
+                            case (value, maybeInfo, wechatUser) =>
                               if (
-                                value.map(_.money).sum + i.order.money <= 100
+                                LocalDate
+                                  .now()
+                                  .atStartOfDay()
+                                  .isAfter(
+                                    wechatUser.get.createTime
+                                      .plusDays(3)
+                                  ) &&
+                                OpenidPaySuccess
+                                  .query(i.order.openid) > 2
                               ) {
-                                Source.single(i)
-                              } else if (
-                                (maybeInfo
-                                  .map(_.money)
-                                  .getOrElse(
-                                    0
-                                  ) - i.order.money * 100 * 0.02) < 0
-                              ) {
-                                throw InvalidException("非法支付、余额不足")
-                              } else {
-                                Source
-                                  .single(
-                                    AccountModel.AccountInfo(
-                                      openid = i.order.openid,
-                                      money = (i.order.money * 100 * 0.02).toInt
+                                if (
+                                  value.map(_.money).sum + i.order.money <= 100
+                                ) {
+                                  Source.single(i)
+                                } else if (
+                                  (maybeInfo
+                                    .map(_.money)
+                                    .getOrElse(
+                                      0
+                                    ) - i.order.money * 100 * 0.02) < 0
+                                ) {
+                                  throw InvalidException("非法支付、余额不足")
+                                } else {
+                                  Source
+                                    .single(
+                                      AccountModel.AccountInfo(
+                                        openid = i.order.openid,
+                                        money =
+                                          (i.order.money * 100 * 0.02).toInt
+                                      )
                                     )
-                                  )
-                                  .via(AccountStream.decrmentMoneyToAccount())
-                                  .map(_ => i)
+                                    .via(
+                                      AccountStream.decrmentMoneyToAccount()
+                                    )
+                                    .map(_ => i)
+                                }
+                              } else {
+                                Source.single(i)
                               }
-                            } else {
-                              Source.single(i)
-                            }
-                        }
+                          }
+                      } else Source.single(i)
                     })
                     .via(OrderStream.updateOrderStatus())
                     .map(_._1.order.orderId)
