@@ -9,9 +9,10 @@ object QrcodeUrlRandom {
   val randomCount: AtomicInteger = new AtomicInteger(0)
 
   def random()(implicit system: ActorSystem[_]): String = {
-    val urls: util.List[String] =
-      system.settings.config.getStringList("app.qrcodeUrls")
-    urls.get(randomCount.getAndIncrement() % urls.size())
+    val urls: Array[String] =
+      system.settings.config.getString("app.qrcodeUrls").split(",")
+
+    urls(randomCount.getAndIncrement() % urls.length)
   }
 
 }
