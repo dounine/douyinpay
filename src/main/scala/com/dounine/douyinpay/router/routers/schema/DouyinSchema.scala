@@ -100,7 +100,7 @@ object DouyinSchema extends JsonParse {
     arguments = IdArg :: PlatformArg :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val s = c.ctx.system
-      val id = c.arg(IdArg)
+      val id = c.arg(IdArg).replaceAll("[^A-Za-z0-9_.]", "")
       val platform = c.arg(PlatformArg)
 
       logger.info(
