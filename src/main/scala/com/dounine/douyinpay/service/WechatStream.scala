@@ -515,7 +515,6 @@ object WechatStream extends JsonParse with SuportRouter {
     implicit val ec = system.executionContext
     implicit val materializer = SystemMaterializer(system).materializer
     val config = system.settings.config.getConfig("app")
-    val limitMoney = config.getInt("limitMoney")
     val admins = config.getStringList("admins")
     Flow[LoginParamers]
       .mapAsync(1)(paramers => {
@@ -546,13 +545,31 @@ object WechatStream extends JsonParse with SuportRouter {
       })
       .flatMapConcat(result => {
         if (result._1.errmsg.isDefined) {
-          throw ReLoginException(result._1.errmsg.getOrElse(""))
+          throw ReLoginException(
+            result._1.errmsg.getOrElse(""),
+            Some(result._2.appid)
+          )
         } else {
           val paramers = result._2
           val openid = result._1.openid.get
           Source
             .single(openid)
             .via(WechatStream.userInfoQuery2(paramers.appid))
+            .flatMapConcat(res => {
+              Source
+                .single(
+                  OpenidModel.OpenidInfo(
+                    openid = openid,
+                    appid = result._2.appid,
+                    ccode = result._2.ccode,
+                    ip = result._2.ip,
+                    locked = false,
+                    createTime = LocalDateTime.now()
+                  )
+                )
+                .via(OpenidStream.autoCreateOpenidInfo())
+                .map(_ => res)
+            })
             .map {
               case (
                     wechatUserInfo: WechatModel.WechatUserInfo

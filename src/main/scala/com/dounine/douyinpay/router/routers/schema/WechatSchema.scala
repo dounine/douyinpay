@@ -3,7 +3,7 @@ package com.dounine.douyinpay.router.routers.schema
 import akka.actor.typed.ActorSystem
 import akka.stream.SystemMaterializer
 import akka.stream.scaladsl.{Sink, Source}
-import com.dounine.douyinpay.model.models.{UserModel, WechatModel}
+import com.dounine.douyinpay.model.models.{OpenidModel, UserModel, WechatModel}
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.SecureContext
 import com.dounine.douyinpay.router.routers.errors.{
@@ -88,7 +88,8 @@ object WechatSchema extends JsonParse {
       argumentType = StringType,
       description = "加密"
     ) :: Nil,
-    resolve = (c: Context[SecureContext, RequestInfo]) =>
+    resolve = (c: Context[SecureContext, RequestInfo]) => {
+      implicit val system = c.ctx.system
       Source
         .single(
           WechatModel.LoginParamers(
@@ -144,7 +145,7 @@ object WechatSchema extends JsonParse {
                 )
               ).toJson
             )
-            throw ReLoginException("sign error")
+            throw ReLoginException("sign error", Some(i.appid))
           } else {
             logger.info(
               Map(
@@ -163,42 +164,28 @@ object WechatSchema extends JsonParse {
           }
           i
         })
-        .flatMapConcat { i =>
-          i.token match {
-            case Some(token) =>
-              WechatStream.jwtDecode(token)(c.ctx.system) match {
-                case Some(session) =>
-                  if (session.appid != i.appid) {
-                    throw ReLoginException("appid not equals session appid")
-                  }
-                  Source
-                    .single(session.openid)
-                    .via(OpenidStream.query()(c.ctx.system))
-                    .map(result => {
-                      if (result.isDefined && result.get.locked) {
-                        logger.error(
-                          Map(
-                            "time" -> System.currentTimeMillis(),
-                            "data" -> Map(
-                              "event" -> LogEventKey.userLockedAccess,
-                              "appid" -> i.appid,
-                              "openid" -> result.get.openid,
-                              "ip" -> c.value.addressInfo.ip,
-                              "province" -> c.value.addressInfo.province,
-                              "city" -> c.value.addressInfo.city
-                            )
-                          ).toJson
-                        )
-                        throw LockedException(
-                          "user locked -> " + result.get.openid
-                        )
-                      } else if (c.value.addressInfo.city == "济南") {
-                        if (OpenidPaySuccess.query(session.openid) <= 2) {
+        .flatMapConcat {
+          i =>
+            i.token match {
+              case Some(token) =>
+                WechatStream.jwtDecode(token)(c.ctx.system) match {
+                  case Some(session) =>
+                    if (session.appid != i.appid) {
+                      throw ReLoginException(
+                        "appid not equals session appid",
+                        Some(i.appid)
+                      )
+                    }
+                    Source
+                      .single(session.openid)
+                      .via(OpenidStream.query()(c.ctx.system))
+                      .map(result => {
+                        if (result.isDefined && result.get.locked) {
                           logger.error(
                             Map(
                               "time" -> System.currentTimeMillis(),
                               "data" -> Map(
-                                "event" -> LogEventKey.ipRangeLockedAccess,
+                                "event" -> LogEventKey.userLockedAccess,
                                 "appid" -> i.appid,
                                 "openid" -> result.get.openid,
                                 "ip" -> c.value.addressInfo.ip,
@@ -208,17 +195,73 @@ object WechatSchema extends JsonParse {
                             ).toJson
                           )
                           throw LockedException(
-                            "ip locked -> " + result.get.openid
+                            "user locked -> " + result.get.openid
+                          )
+                        } else if (c.value.addressInfo.city == "济南") {
+                          if (OpenidPaySuccess.query(session.openid) <= 2) {
+                            logger.error(
+                              Map(
+                                "time" -> System.currentTimeMillis(),
+                                "data" -> Map(
+                                  "event" -> LogEventKey.ipRangeLockedAccess,
+                                  "appid" -> i.appid,
+                                  "openid" -> result.get.openid,
+                                  "ip" -> c.value.addressInfo.ip,
+                                  "province" -> c.value.addressInfo.province,
+                                  "city" -> c.value.addressInfo.city
+                                )
+                              ).toJson
+                            )
+                            throw LockedException(
+                              "ip locked -> " + result.get.openid
+                            )
+                          }
+                        } else {
+                          logger.info(
+                            Map(
+                              "time" -> System.currentTimeMillis(),
+                              "data" -> Map(
+                                "event" -> LogEventKey.wechatLogin,
+                                "appid" -> i.appid,
+                                "openid" -> session.openid,
+                                "ccode" -> i.ccode,
+                                "token" -> i.token.getOrElse(""),
+                                "ip" -> c.value.addressInfo.ip,
+                                "province" -> c.value.addressInfo.province,
+                                "city" -> c.value.addressInfo.city
+                              )
+                            ).toJson
                           )
                         }
-                      } else {
+                        i
+                      })
+                  case None =>
+                    if (c.value.addressInfo.city == "济南") {
+                      logger.error(
+                        Map(
+                          "time" -> System.currentTimeMillis(),
+                          "data" -> Map(
+                            "event" -> LogEventKey.ipRangeLockedAccess,
+                            "appid" -> i.appid,
+                            "ip" -> c.value.addressInfo.ip,
+                            "province" -> c.value.addressInfo.province,
+                            "city" -> c.value.addressInfo.city
+                          )
+                        ).toJson
+                      )
+                      throw LockedException(
+                        "ip locked"
+                      )
+                    }
+                    Source
+                      .single(i)
+                      .map(ii => {
                         logger.info(
                           Map(
                             "time" -> System.currentTimeMillis(),
                             "data" -> Map(
                               "event" -> LogEventKey.wechatLogin,
                               "appid" -> i.appid,
-                              "openid" -> session.openid,
                               "ccode" -> i.ccode,
                               "token" -> i.token.getOrElse(""),
                               "ip" -> c.value.addressInfo.ip,
@@ -227,85 +270,47 @@ object WechatSchema extends JsonParse {
                             )
                           ).toJson
                         )
-                      }
-                      i
-                    })
-                case None =>
-                  if (c.value.addressInfo.city == "济南") {
-                    logger.error(
-                      Map(
-                        "time" -> System.currentTimeMillis(),
-                        "data" -> Map(
-                          "event" -> LogEventKey.ipRangeLockedAccess,
-                          "appid" -> i.appid,
-                          "ip" -> c.value.addressInfo.ip,
-                          "province" -> c.value.addressInfo.province,
-                          "city" -> c.value.addressInfo.city
-                        )
-                      ).toJson
-                    )
-                    throw LockedException(
-                      "ip locked"
-                    )
-                  }
-                  Source
-                    .single(i)
-                    .map(ii => {
-                      logger.info(
-                        Map(
-                          "time" -> System.currentTimeMillis(),
-                          "data" -> Map(
-                            "event" -> LogEventKey.wechatLogin,
-                            "appid" -> i.appid,
-                            "ccode" -> i.ccode,
-                            "token" -> i.token.getOrElse(""),
-                            "ip" -> c.value.addressInfo.ip,
-                            "province" -> c.value.addressInfo.province,
-                            "city" -> c.value.addressInfo.city
-                          )
-                        ).toJson
-                      )
-                      ii
-                    })
-              }
-            case None =>
-              if (c.value.addressInfo.city == "济南") {
-                logger.error(
-                  Map(
-                    "time" -> System.currentTimeMillis(),
-                    "data" -> Map(
-                      "event" -> LogEventKey.ipRangeLockedAccess,
-                      "appid" -> i.appid,
-                      "ip" -> c.value.addressInfo.ip,
-                      "province" -> c.value.addressInfo.province,
-                      "city" -> c.value.addressInfo.city
-                    )
-                  ).toJson
-                )
-                throw LockedException(
-                  "ip locked"
-                )
-              }
-              Source
-                .single(i)
-                .map(ii => {
-                  logger.info(
+                        ii
+                      })
+                }
+              case None =>
+                if (c.value.addressInfo.city == "济南") {
+                  logger.error(
                     Map(
                       "time" -> System.currentTimeMillis(),
                       "data" -> Map(
-                        "event" -> LogEventKey.wechatLogin,
+                        "event" -> LogEventKey.ipRangeLockedAccess,
                         "appid" -> i.appid,
-                        "ccode" -> i.ccode,
-                        "token" -> i.token.getOrElse(""),
                         "ip" -> c.value.addressInfo.ip,
                         "province" -> c.value.addressInfo.province,
                         "city" -> c.value.addressInfo.city
                       )
                     ).toJson
                   )
-                  ii
-                })
-          }
+                  throw LockedException(
+                    "ip locked"
+                  )
+                }
+                Source
+                  .single(i)
+                  .map(ii => {
+                    logger.info(
+                      Map(
+                        "time" -> System.currentTimeMillis(),
+                        "data" -> Map(
+                          "event" -> LogEventKey.wechatLogin,
+                          "appid" -> i.appid,
+                          "ccode" -> i.ccode,
+                          "token" -> i.token.getOrElse(""),
+                          "ip" -> c.value.addressInfo.ip,
+                          "province" -> c.value.addressInfo.province,
+                          "city" -> c.value.addressInfo.city
+                        )
+                      ).toJson
+                    )
+                    ii
+                  })
+            }
         }
         .via(WechatStream.webBaseUserInfo()(c.ctx.system))
         .recover {
@@ -328,6 +333,7 @@ object WechatSchema extends JsonParse {
             )
         }
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
+    }
   )
 
   val SignatureResponse =
