@@ -37,7 +37,7 @@ class SecureContext(val system: ActorSystem[_], val requestInfo: RequestInfo) {
           .runWith(Sink.head)
           .collect {
             case Some(value) => value
-            case None        => throw AuthException("user not found")
+            case None        => throw AuthException("系统错误、请联系客服")
           }
       case None => throw AuthException("token required")
     }
