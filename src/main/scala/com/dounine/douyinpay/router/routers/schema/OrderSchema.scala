@@ -330,6 +330,10 @@ object OrderSchema extends JsonParse {
       argumentType = StringType,
       description = "渠道"
     ) :: Argument(
+      name = "domain",
+      argumentType = StringType,
+      description = "domain"
+    ) :: Argument(
       name = "sign",
       argumentType = StringType,
       description = "签名md5((id,money,volumn,openid).sort.join(''))"
@@ -338,6 +342,7 @@ object OrderSchema extends JsonParse {
       implicit val system = c.ctx.system
       val money = moneyFormat.parse(c.arg(MoneyArg)).intValue()
       val openid = c.ctx.openid.get
+      val domain = c.arg[String]("domain")
       Source
         .single(
           OrderModel.Recharge(
@@ -345,6 +350,7 @@ object OrderSchema extends JsonParse {
             money = c.arg[String]("money"),
             volumn = c.arg[String]("volumn"),
             ccode = c.arg[String]("ccode"),
+            domain = c.arg[String]("domain"),
             sign = c.arg[String]("sign")
           )
         )
@@ -391,6 +397,7 @@ object OrderSchema extends JsonParse {
                 i._1.money,
                 i._1.volumn,
                 i._1.ccode,
+                i._1.domain,
                 openid
               ).sorted.mkString("")
             ) != i._1.sign
@@ -575,9 +582,9 @@ object OrderSchema extends JsonParse {
           val routerPrefix = config.getString("routerPrefix")
           OrderModel.OrderCreateResponse(
             queryUrl =
-              (c.value.scheme + "://douyinapi.61week.com" + s"/${routerPrefix}/order/info/" + result._1.orderId),
+              (domain + s"/order/info/" + result._1.orderId),
             qrcodeUrl =
-              (c.value.scheme + "://douyinapi.61week.com" + s"/${routerPrefix}/file/image?path=" + result._2)
+              (domain + s"/file/image?path=" + result._2)
           )
         })
         .recover {

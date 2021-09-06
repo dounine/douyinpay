@@ -70,7 +70,7 @@ object OrderStream {
             Map(
               "order" -> order,
               "timeout" -> 10 * 1000,
-              "callback" -> s"https://douyinapi.61week.com/${routerPrefix}/order/update"
+              "callback" -> s"https://backup.61week.com/${routerPrefix}/order/update"
             )
           )
           .map(order -> _)(system.executionContext)

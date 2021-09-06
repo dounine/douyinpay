@@ -66,6 +66,7 @@ object OrderModel {
       id: String,
       money: String,
       volumn: String,
+      domain: String,
       ccode: String,
       sign: String
   ) extends BaseSerializer
