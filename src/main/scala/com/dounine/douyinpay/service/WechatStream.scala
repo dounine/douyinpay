@@ -574,14 +574,15 @@ object WechatStream extends JsonParse with SuportRouter {
               case (
                     wechatUserInfo: WechatModel.WechatUserInfo
                   ) => {
-                val (token, expire) = paramers.token match {
-                  case Some(token) =>
-                    jwtDecode(token) match {
-                      case Some(value) => (paramers.token.get, value.exp.get)
-                      case None        => jwtEncode(paramers.appid, openid)
-                    }
-                  case None => jwtEncode(paramers.appid, openid)
-                }
+//                val (token, expire) = paramers.token match {
+//                  case Some(token) =>
+//                    jwtDecode(token) match {
+//                      case Some(value) => (paramers.token.get, value.exp.get)
+//                      case None        => jwtEncode(paramers.appid, openid)
+//                    }
+//                  case None => jwtEncode(paramers.appid, openid)
+//                }
+                val (token, expire) =  jwtEncode(paramers.appid, openid)
                 WechatModel.WechatLoginResponse(
                   open_id = Some(openid),
                   token = Some(token),
