@@ -336,7 +336,7 @@ object OrderSchema extends JsonParse {
     ) :: Argument(
       name = "sign",
       argumentType = StringType,
-      description = "签名md5((id,money,volumn,openid).sort.join(''))"
+      description = "签名md5((id,money,volumn,domain,openid).sort.join(''))"
     ) :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val system = c.ctx.system
@@ -413,6 +413,7 @@ object OrderSchema extends JsonParse {
                   "payVolumn" -> i._1.volumn,
                   "payCcode" -> i._1.ccode,
                   "sign" -> i._1.sign,
+                  "domain" -> i._1.domain,
                   "ip" -> c.value.addressInfo.ip,
                   "province" -> c.value.addressInfo.province,
                   "city" -> c.value.addressInfo.city
