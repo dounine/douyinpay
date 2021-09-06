@@ -355,6 +355,30 @@ object OrderStream {
       }
   }
 
+  def queryOpenidPaySum()(implicit
+                    system: ActorSystem[_]
+  ): Flow[String, Option[Int], NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+
+    Flow[String]
+      .mapAsync(1) { openid =>
+        db.run(
+          OrderTable()
+            .filter(i =>
+              i.openid === openid && i.pay === true
+            )
+            .map(_.money)
+            .sum
+            .result
+        )
+      }
+  }
+
   def queryTodayPaySum()(implicit
       system: ActorSystem[_]
   ): Source[(Int, Int), NotUsed] = {
