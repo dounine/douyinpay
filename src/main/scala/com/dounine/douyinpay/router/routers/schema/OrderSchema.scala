@@ -222,6 +222,23 @@ object OrderSchema extends JsonParse {
             }
           }
         }
+        .map(result =>{
+          logger.error(
+            Map(
+              "time" -> System
+                .currentTimeMillis(),
+              "data" -> Map(
+                "event" -> LogEventKey.payMoneyMenu,
+                "data" -> result,
+                "openid" -> openid,
+                "ip" -> c.value.addressInfo.ip,
+                "province" -> c.value.addressInfo.province,
+                "city" -> c.value.addressInfo.city
+              )
+            ).toJson
+          )
+          result
+        })
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
     }
   )
