@@ -103,11 +103,7 @@ object WechatSchema extends JsonParse {
           )
         )
         .map(i => {
-          if(i.code.trim==""){
-            throw ReLoginException(
-              "code is null"
-            )
-          }else if (i.appid.trim == "") {
+          if (i.appid.trim == "") {
             throw ReLoginException(
               "appid is null set default",
               Some("wx7b168b095eb4090e")
@@ -167,7 +163,11 @@ object WechatSchema extends JsonParse {
               ).toJson
             )
           }
-          i
+          i.copy(
+            token = i.token.flatMap(t => {
+              if (t == "") None else Some(t)
+            })
+          )
         })
         .flatMapConcat {
           i =>
@@ -264,6 +264,10 @@ object WechatSchema extends JsonParse {
                       throw LockedException(
                         "ip locked"
                       )
+                    } else if (i.code.trim == "") {
+                      throw ReLoginException(
+                        "code is null"
+                      )
                     }
                     Source
                       .single(i)
@@ -305,6 +309,10 @@ object WechatSchema extends JsonParse {
                   )
                   throw LockedException(
                     "ip locked"
+                  )
+                } else if (i.code.trim == "") {
+                  throw ReLoginException(
+                    "code is null"
                   )
                 }
                 Source
