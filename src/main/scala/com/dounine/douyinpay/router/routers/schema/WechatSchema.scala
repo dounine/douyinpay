@@ -103,7 +103,11 @@ object WechatSchema extends JsonParse {
           )
         )
         .map(i => {
-          if (i.appid.trim == "") {
+          if(i.code.trim==""){
+            throw ReLoginException(
+              "code is null"
+            )
+          }else if (i.appid.trim == "") {
             throw ReLoginException(
               "appid is null set default",
               Some("wx7b168b095eb4090e")
@@ -145,7 +149,7 @@ object WechatSchema extends JsonParse {
                 )
               ).toJson
             )
-            throw ReLoginException("sign error", Some(i.appid))
+            throw ReLoginException("sign error")
           } else {
             logger.info(
               Map(
@@ -154,6 +158,7 @@ object WechatSchema extends JsonParse {
                   "event" -> LogEventKey.wechatLogin,
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
+                  "code" -> i.code,
                   "token" -> i.token.getOrElse(""),
                   "ip" -> c.value.addressInfo.ip,
                   "province" -> c.value.addressInfo.province,
@@ -187,6 +192,8 @@ object WechatSchema extends JsonParse {
                               "data" -> Map(
                                 "event" -> LogEventKey.userLockedAccess,
                                 "appid" -> i.appid,
+                                "ccode" -> i.ccode,
+                                "code" -> i.code,
                                 "openid" -> result.get.openid,
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -205,6 +212,8 @@ object WechatSchema extends JsonParse {
                                 "data" -> Map(
                                   "event" -> LogEventKey.ipRangeLockedAccess,
                                   "appid" -> i.appid,
+                                  "ccode" -> i.ccode,
+                                  "code" -> i.code,
                                   "openid" -> result.get.openid,
                                   "ip" -> c.value.addressInfo.ip,
                                   "province" -> c.value.addressInfo.province,
@@ -225,6 +234,7 @@ object WechatSchema extends JsonParse {
                                 "appid" -> i.appid,
                                 "openid" -> session.openid,
                                 "ccode" -> i.ccode,
+                                "code" -> i.code,
                                 "token" -> i.token.getOrElse(""),
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -243,6 +253,8 @@ object WechatSchema extends JsonParse {
                           "data" -> Map(
                             "event" -> LogEventKey.ipRangeLockedAccess,
                             "appid" -> i.appid,
+                            "ccode" -> i.ccode,
+                            "code" -> i.code,
                             "ip" -> c.value.addressInfo.ip,
                             "province" -> c.value.addressInfo.province,
                             "city" -> c.value.addressInfo.city
@@ -263,6 +275,7 @@ object WechatSchema extends JsonParse {
                               "event" -> LogEventKey.wechatLogin,
                               "appid" -> i.appid,
                               "ccode" -> i.ccode,
+                              "code" -> i.code,
                               "token" -> i.token.getOrElse(""),
                               "ip" -> c.value.addressInfo.ip,
                               "province" -> c.value.addressInfo.province,
@@ -281,6 +294,9 @@ object WechatSchema extends JsonParse {
                       "data" -> Map(
                         "event" -> LogEventKey.ipRangeLockedAccess,
                         "appid" -> i.appid,
+                        "ccode" -> i.ccode,
+                        "code" -> i.code,
+                        "token" -> i.token.getOrElse(""),
                         "ip" -> c.value.addressInfo.ip,
                         "province" -> c.value.addressInfo.province,
                         "city" -> c.value.addressInfo.city
@@ -301,6 +317,7 @@ object WechatSchema extends JsonParse {
                           "event" -> LogEventKey.wechatLogin,
                           "appid" -> i.appid,
                           "ccode" -> i.ccode,
+                          "code" -> i.code,
                           "token" -> i.token.getOrElse(""),
                           "ip" -> c.value.addressInfo.ip,
                           "province" -> c.value.addressInfo.province,
