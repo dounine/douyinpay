@@ -68,7 +68,7 @@ object OrderSchema extends JsonParse {
       Field(
         name = "backUrl",
         fieldType = OptionType(StringType),
-        description = Some(""),
+        description = Some("backUrl"),
         resolve = _.value.backUrl
       ),
       Field(

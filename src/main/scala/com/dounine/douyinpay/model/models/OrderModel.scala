@@ -147,6 +147,7 @@ object OrderModel {
   )
 
   final case class MoneyMenuResponse(
+      backUrl: Option[String] = None,
       list: List[MoneyMenuItem],
       targetUser: Boolean,
       commonRemain: Int,
