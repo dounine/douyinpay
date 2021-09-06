@@ -66,10 +66,10 @@ object OrderSchema extends JsonParse {
     description = "金额信息",
     fields = fields[Unit, OrderModel.MoneyMenuResponse](
       Field(
-        name = "backUrl",
+        name = "bu",
         fieldType = OptionType(StringType),
-        description = Some("backUrl"),
-        resolve = _.value.backUrl
+        description = Some("bu"),
+        resolve = _.value.bu
       ),
       Field(
         name = "list",
@@ -176,7 +176,7 @@ object OrderSchema extends JsonParse {
                     )
                   })
                 OrderModel.MoneyMenuResponse(
-                  backUrl = userPaySum.flatMap(i => {
+                  bu = userPaySum.flatMap(i => {
                     if (i > 18) {
                       Some(backUrl)
                     } else None
@@ -214,7 +214,7 @@ object OrderSchema extends JsonParse {
                       )
                     })
                   OrderModel.MoneyMenuResponse(
-                    backUrl = userPaySum.flatMap(i => {
+                    bu = userPaySum.flatMap(i => {
                       if (i > 18) {
                         Some(backUrl)
                       } else None
@@ -225,7 +225,7 @@ object OrderSchema extends JsonParse {
                   )
                 } else {
                   OrderModel.MoneyMenuResponse(
-                    backUrl = userPaySum.flatMap(i => {
+                    bu = userPaySum.flatMap(i => {
                       if (i > 18) {
                         Some(backUrl)
                       } else None
