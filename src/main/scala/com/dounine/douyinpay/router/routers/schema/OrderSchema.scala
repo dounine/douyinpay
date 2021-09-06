@@ -66,6 +66,12 @@ object OrderSchema extends JsonParse {
     description = "金额信息",
     fields = fields[Unit, OrderModel.MoneyMenuResponse](
       Field(
+        name = "backUrl",
+        fieldType = OptionType(StringType),
+        description = Some(""),
+        resolve = _.value.backUrl
+      ),
+      Field(
         name = "list",
         fieldType = ListType(MoneyMenuItem),
         description = Some("列表"),
@@ -115,6 +121,7 @@ object OrderSchema extends JsonParse {
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val system = c.ctx.system
       val openid = c.ctx.openid.get
+      val backUrl = "https://backup.61week.com/api"
       Source
         .single(c.ctx.openid.get)
         .via(AccountStream.query()(c.ctx.system))
@@ -129,18 +136,25 @@ object OrderSchema extends JsonParse {
             .via(
               OpenidStream.query()
             )
+            .zip(
+              Source
+                .single(c.ctx.openid.get)
+                .via(OrderStream.queryOpenidPaySum())
+            )
         ) { (pre, next) =>
           (
             pre._1,
             pre._2,
-            next
+            next._1,
+            next._2
           )
         }
         .map {
           case (
                 vipUser: Option[AccountModel.AccountInfo],
                 orders: Seq[OrderModel.DbInfo],
-                wechatInfo: Option[OpenidModel.OpenidInfo]
+                wechatInfo: Option[OpenidModel.OpenidInfo],
+                userPaySum: Option[Int]
               ) => {
             vipUser match {
               case Some(vip) =>
@@ -162,6 +176,11 @@ object OrderSchema extends JsonParse {
                     )
                   })
                 OrderModel.MoneyMenuResponse(
+                  backUrl = userPaySum.flatMap(i => {
+                    if (i > 18) {
+                      Some(backUrl)
+                    } else None
+                  }),
                   list = list,
                   targetUser = true,
                   commonRemain = commonRemain,
@@ -195,12 +214,22 @@ object OrderSchema extends JsonParse {
                       )
                     })
                   OrderModel.MoneyMenuResponse(
+                    backUrl = userPaySum.flatMap(i => {
+                      if (i > 18) {
+                        Some(backUrl)
+                      } else None
+                    }),
                     list = list,
                     targetUser = true,
                     commonRemain = commonRemain
                   )
                 } else {
                   OrderModel.MoneyMenuResponse(
+                    backUrl = userPaySum.flatMap(i => {
+                      if (i > 18) {
+                        Some(backUrl)
+                      } else None
+                    }),
                     list = vipUserMoneys
                       .map(money =>
                         (
@@ -222,7 +251,7 @@ object OrderSchema extends JsonParse {
             }
           }
         }
-        .map(result =>{
+        .map(result => {
           logger.info(
             Map(
               "time" -> System
