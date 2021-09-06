@@ -120,7 +120,7 @@ object DouyinSchema extends JsonParse {
         .cache()
         .orElse[Option[PayUserInfoModel.Info]](
           key = "userInfo_" + platform + id,
-          ttl = 3.days,
+          ttl = 1.hours,
           value = () =>
             platform match {
               case PayPlatform.douyin | PayPlatform.huoshan =>
