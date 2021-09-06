@@ -12,7 +12,7 @@ import akka.http.scaladsl.model.{
   MediaTypes
 }
 import akka.stream.{RestartSettings, SystemMaterializer}
-import akka.stream.scaladsl.{Flow, RestartSource, Source}
+import akka.stream.scaladsl.{Flow, RestartSource, Sink, Source}
 import akka.util.ByteString
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.Token
 import com.dounine.douyinpay.behaviors.engine.{
@@ -44,7 +44,7 @@ import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 import java.net.{URLDecoder, URLEncoder}
 import java.time.{Clock, LocalDateTime}
 import java.time.format.DateTimeFormatter
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import scala.util.Try
 import scala.concurrent.duration._
 
@@ -330,6 +330,39 @@ object WechatStream extends JsonParse with SuportRouter {
                 "Content" -> "直接回复具体问题就可以了噢、我们的客服会直接处理您的问题的。"
               )
             )
+          } else if (message.eventKey.contains("DOUYIN")) {
+            val result = Await.result(
+              Source
+                .single(message.fromUserName)
+                .via(
+                  OrderStream.queryOpenidPaySum()
+                )
+                .runWith(Sink.head),
+              3.seconds
+            )
+            if (result.getOrElse(0) >= 18) {
+              xmlResponse(
+                Map(
+                  "ToUserName" -> message.fromUserName,
+                  "FromUserName" -> message.toUserName,
+                  "CreateTime" -> message.createTime,
+                  "MsgType" -> "text",
+                  "Content" -> s"""您本次充值专用链接：<a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%3Fccode%3Dbackup_service%26appid%3D${message.appid}%26platform%3Ddouyin%26bu%3Dhttps%3A%2F%2Fbackup.61week.com%2Fapi&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">抖音充值</a>"""".stripMargin
+                )
+              )
+            } else {
+              if (message.appid == "wx7b168b095eb4090e") {
+                xmlResponse(
+                  Map(
+                    "ToUserName" -> message.fromUserName,
+                    "FromUserName" -> message.toUserName,
+                    "CreateTime" -> message.createTime,
+                    "MsgType" -> "text",
+                    "Content" -> s"""抖音充值链接：<a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dbackup_service%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">抖音充值</a>""""
+                  )
+                )
+              }
+            }
           } else {
             textResponse("success")
           }
@@ -582,7 +615,7 @@ object WechatStream extends JsonParse with SuportRouter {
 //                    }
 //                  case None => jwtEncode(paramers.appid, openid)
 //                }
-                val (token, expire) =  jwtEncode(paramers.appid, openid)
+                val (token, expire) = jwtEncode(paramers.appid, openid)
                 WechatModel.WechatLoginResponse(
                   open_id = Some(openid),
                   token = Some(token),
