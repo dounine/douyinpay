@@ -223,7 +223,7 @@ object OrderSchema extends JsonParse {
           }
         }
         .map(result =>{
-          logger.error(
+          logger.info(
             Map(
               "time" -> System
                 .currentTimeMillis(),

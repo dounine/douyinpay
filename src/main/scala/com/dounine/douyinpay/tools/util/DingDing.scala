@@ -25,6 +25,7 @@ object DingDing extends JsonParse {
     val system = Value("system_notify")
     val app = Value("app_notify")
     val order = Value("order_notify")
+    val orderFail = Value("order_notify_fail")
     val payed = Value("payed_notify")
     val payerr = Value("payerr_notify")
     val event = Value("event_notify")

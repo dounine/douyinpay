@@ -114,14 +114,19 @@ object OrderStream {
     implicit val ec = system.executionContext
     val wechat = system.settings.config.getConfig("app.wechat")
     val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
-    val notify = (order: OrderModel.DbInfo, title: String) => {
-      DingDing
-        .sendMessageFuture(
-          DingDing.MessageType.order,
-          data = DingDing.MessageData(
-            markdown = DingDing.Markdown(
-              title = "定单通知",
-              text = s"""
+    val notify =
+      (
+          order: OrderModel.DbInfo,
+          title: String,
+          mType: DingDing.MessageType.MessageType
+      ) => {
+        DingDing
+          .sendMessageFuture(
+            mType,
+            data = DingDing.MessageData(
+              markdown = DingDing.Markdown(
+                title = "定单通知",
+                text = s"""
                         |## ${title}
                         | - 公众号: ${wechat.getString(s"${order.appid}.name")}
                         | - 公众号ID: ${order.appid}
@@ -134,31 +139,31 @@ object OrderStream {
                         | - 全部充值次数: ${order.payCount}
                         | - 全部充值金额: ${order.payMoney}
                         | - 耗时: ${java.time.Duration
-                .between(order.createTime, LocalDateTime.now())
-                .getSeconds}s
+                  .between(order.createTime, LocalDateTime.now())
+                  .getSeconds}s
                         | - openid: ${order.openid}
                         | - 创建时间: ${order.createTime.format(
-                timeFormatter
-              )}
+                  timeFormatter
+                )}
                         | - 通知时间: ${LocalDateTime
-                .now()
-                .format(timeFormatter)}
+                  .now()
+                  .format(timeFormatter)}
                         |""".stripMargin
+              )
             )
           )
-        )
-        .map(_ => order)
-    }
+          .map(_ => order)
+      }
     Flow[(OrderModel.DbInfo, OrderModel.QrcodeResponse)]
       .mapAsync(1) { tp2 =>
         if (tp2._2.qrcode.isDefined) {
-          notify(tp2._1, "创建成功")
+          notify(tp2._1, "创建成功", DingDing.MessageType.order)
             .map(_ => tp2)
             .recover {
               case e => tp2
             }
         } else {
-          notify(tp2._1, "创建失败")
+          notify(tp2._1, "创建失败", DingDing.MessageType.orderFail)
             .map(_ => tp2)
             .recover {
               case e => tp2
