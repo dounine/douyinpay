@@ -107,7 +107,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         val params: String = Map(
                           "appid" -> "wx7b168b095eb4090e",
                           "redirect_uri" -> URLEncoder.encode(
-                            (scheme + "://" + domain) + s"/pages/douyin/index?ccode=${ccode}&platform=douyin&appid=wx7b168b095eb4090e",
+                            (scheme + "://" + domain) + s"/?ccode=${ccode}&platform=douyin&appid=wx7b168b095eb4090e",
                             "utf-8"
                           ),
                           "response_type" -> "code",
@@ -153,7 +153,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                         val params: String = Map(
                           "appid" -> appid,
                           "redirect_uri" -> URLEncoder.encode(
-                            (scheme + "://" + domain) + s"/pages/douyin/index?ccode=${ccode}&platform=douyin&appid=${appid}",
+                            (scheme + "://" + domain) + s"/?ccode=${ccode}&platform=douyin&appid=${appid}",
                             "utf-8"
                           ),
                           "response_type" -> "code",

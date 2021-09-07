@@ -347,7 +347,7 @@ object WechatSchema extends JsonParse {
             val domain =
               c.ctx.system.settings.config.getString("app.file.domain")
             val domainEncode = URLEncoder.encode(
-              (c.value.scheme + "://" + domain) + s"/pages/${platform}/index?ccode=${c
+              (c.value.scheme + "://" + domain) + s"/?ccode=${c
                 .arg[String]("ccode")}&appid=${appid}&platform=${platform}",
               "utf-8"
             )
