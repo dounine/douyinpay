@@ -347,7 +347,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> message.createTime,
                   "MsgType" -> "text",
-                  "Content" -> s"""1、<a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%3Fccode%3D${message.eventKey.getOrElse("")}%26appid%3D${message.appid}%26platform%3Ddouyin%26bu%3Dhttps%3A%2F%2Fbackup.61week.com%2Fapi&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>\n2、页面无法访问建议切换网络重试""".stripMargin
+                  "Content" -> s"""点击链接充值：<a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%3Fccode%3D${message.eventKey.getOrElse("")}%26appid%3D${message.appid}%26platform%3Ddouyin%26bu%3Dhttps%3A%2F%2Fbackup.61week.com%2Fapi&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>""".stripMargin
                 )
               )
             } else {
@@ -357,7 +357,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> message.createTime,
                   "MsgType" -> "text",
-                  "Content" -> s"""1、<a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3D${message.eventKey.getOrElse("")}%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>\n2、页面无法访问建议切换网络重试"""
+                  "Content" -> s"""点击链接充值：<a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3D${message.eventKey.getOrElse("")}%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>"""
                 )
               )
             }
