@@ -330,7 +330,10 @@ object WechatStream extends JsonParse with SuportRouter {
                 "Content" -> "直接回复具体问题就可以了噢、我们的客服会直接处理您的问题的。"
               )
             )
-          } else if (message.eventKey.contains("DOUYIN_SGCC") || message.eventKey.contains("DOUYIN_YYCC")) {
+          } else if (
+            message.eventKey.contains("DOUYIN_SGCC") || message.eventKey
+              .contains("DOUYIN_YYCC")
+          ) {
             val result = Await.result(
               Source
                 .single(message.fromUserName)
@@ -347,7 +350,10 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> message.createTime,
                   "MsgType" -> "text",
-                  "Content" -> s"""请点击 👉 <a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%3Fccode%3D${message.eventKey.getOrElse("")}%26appid%3D${message.appid}%26platform%3Ddouyin%26bu%3Dhttps%3A%2F%2Fbackup.61week.com%2Fapi&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>""".stripMargin
+                  "Content" -> s"""请点击 👉 <a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%3Fccode%3D${message.eventKey
+                    .getOrElse(
+                      ""
+                    )}%26appid%3D${message.appid}%26platform%3Ddouyin%26bu%3Dhttps%3A%2F%2Fbackup.61week.com%2Fapi&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>""".stripMargin
                 )
               )
             } else {
@@ -357,7 +363,10 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> message.createTime,
                   "MsgType" -> "text",
-                  "Content" -> s"""请点击 👉 <a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3D${message.eventKey.getOrElse("")}%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>"""
+                  "Content" -> s"""请点击 👉 <a href="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3D${message.eventKey
+                    .getOrElse(
+                      ""
+                    )}%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">充值链接</a>"""
                 )
               )
             }
@@ -619,16 +628,19 @@ object WechatStream extends JsonParse with SuportRouter {
                   token = Some(token),
                   expire = Some(expire),
                   admin = Some(admins.contains(openid)),
-                  sub = Some(wechatUserInfo.nickname.isDefined),
-                  needSub = if (
-                    wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
-                      .query(openid).count >= 1
-                  ) Some(true)
-                  else Some(false),
+                  sub = Some(wechatUserInfo.subscribe == 1),
+                  needSub =
+                    if (
+                      wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
+                        .query(openid)
+                        .count >= 1
+                    ) Some(true)
+                    else Some(false),
                   subUrl =
                     if (
                       wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
-                        .query(openid).count >= 1
+                        .query(openid)
+                        .count >= 1
                     )
                       Some(config.getString(s"wechat.${paramers.appid}.subUrl"))
                     else None
