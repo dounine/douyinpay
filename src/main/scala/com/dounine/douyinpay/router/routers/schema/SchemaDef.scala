@@ -69,6 +69,8 @@ object SchemaDef extends JsonParse {
   )
   case class RequestInfo(
       url: String,
+      origin: String,
+      referer: String,
       scheme: String,
       headers: Map[String, String] = Map.empty,
       parameters: Map[String, String] = Map.empty,

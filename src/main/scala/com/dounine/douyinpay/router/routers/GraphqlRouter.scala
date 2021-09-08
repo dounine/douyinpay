@@ -47,9 +47,11 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
               extractRequest { request =>
                 prepareGraphQLRequest {
                   case Success(req) =>
-                    val scheme: String = request.headers
-                      .map(i => i.name() -> i.value())
+                    val headers = request.headers
+                      .map(h => h.name() -> h.value())
                       .toMap
+
+                    val scheme: String = headers
                       .getOrElse("X-Scheme", request.uri.scheme)
                     val slowLog = SlowLog(logger, threshold = 1.seconds)
                     val middleware = tracing match {
@@ -67,15 +69,13 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
                       case (m, e: Exception) =>
                         HandledException(e.getMessage)
                     }
+
                     val ip: String = Seq(
                       "X-Forwarded-For",
                       "X-Real-Ip",
                       "Remote-Address"
                     ).map(
-                        request.headers
-                          .map(h => h.name() -> h.value())
-                          .toMap
-                          .get
+                        headers.get
                       )
                       .find(_.isDefined)
                       .flatMap(_.map(i => i.split(",").head))
@@ -86,11 +86,11 @@ class GraphqlRouter()(implicit system: ActorSystem[_])
 
                     val requestInfo = SchemaDef.RequestInfo(
                       url = request.uri.toString(),
+                      origin = headers.getOrElse("Origin", ""),
+                      referer = headers.getOrElse("Referer", ""),
                       scheme = scheme,
                       parameters = parameters,
-                      headers = request.headers
-                        .map(h => h.name() -> h.value())
-                        .toMap,
+                      headers = headers,
                       addressInfo = SchemaDef.AddressInfo(
                         ip = ip,
                         province = province,

@@ -138,6 +138,8 @@ object WechatSchema extends JsonParse {
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
+                  "origin" -> c.value.origin,
+                  "referer" -> c.value.referer,
                   "token" -> i.token.getOrElse(""),
                   "sign" -> i.sign,
                   "ip" -> c.value.addressInfo.ip,
@@ -156,6 +158,8 @@ object WechatSchema extends JsonParse {
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
+                  "origin" -> c.value.origin,
+                  "referer" -> c.value.referer,
                   "token" -> i.token.getOrElse(""),
                   "ip" -> c.value.addressInfo.ip,
                   "province" -> c.value.addressInfo.province,
@@ -195,6 +199,8 @@ object WechatSchema extends JsonParse {
                                 "appid" -> i.appid,
                                 "ccode" -> i.ccode,
                                 "code" -> i.code,
+                                "origin" -> c.value.origin,
+                                "referer" -> c.value.referer,
                                 "openid" -> result.get.openid,
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -238,6 +244,8 @@ object WechatSchema extends JsonParse {
                                 "openid" -> session.openid,
                                 "ccode" -> i.ccode,
                                 "code" -> i.code,
+                                "origin" -> c.value.origin,
+                                "referer" -> c.value.referer,
                                 "token" -> i.token.getOrElse(""),
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -269,6 +277,11 @@ object WechatSchema extends JsonParse {
                     //                      )
                     //                    } else
                     if (i.code.trim == "") {
+                      logger.error(
+                        "code is null origin -> {}, referer -> {}",
+                        c.value.origin,
+                        c.value.referer
+                      )
                       throw ReLoginException(
                         "code is null"
                       )
@@ -284,6 +297,8 @@ object WechatSchema extends JsonParse {
                               "appid" -> i.appid,
                               "ccode" -> i.ccode,
                               "code" -> i.code,
+                              "origin" -> c.value.origin,
+                              "referer" -> c.value.referer,
                               "token" -> i.token.getOrElse(""),
                               "ip" -> c.value.addressInfo.ip,
                               "province" -> c.value.addressInfo.province,
@@ -316,6 +331,11 @@ object WechatSchema extends JsonParse {
                 //                  )
                 //                } else
                 if (i.code.trim == "") {
+                  logger.error(
+                    "code is null origin -> {}, referer -> {}",
+                    c.value.origin,
+                    c.value.referer
+                  )
                   throw ReLoginException(
                     "code is null"
                   )
@@ -331,6 +351,8 @@ object WechatSchema extends JsonParse {
                           "appid" -> i.appid,
                           "ccode" -> i.ccode,
                           "code" -> i.code,
+                          "origin" -> c.value.origin,
+                          "referer" -> c.value.referer,
                           "token" -> i.token.getOrElse(""),
                           "ip" -> c.value.addressInfo.ip,
                           "province" -> c.value.addressInfo.province,
@@ -400,6 +422,8 @@ object WechatSchema extends JsonParse {
             "appid" -> c.ctx.appid.get,
             "openid" -> c.ctx.openid.get,
             "url" -> URLDecoder.decode(c.arg[String]("url"), "utf-8"),
+            "origin" -> c.value.origin,
+            "referer" -> c.value.referer,
             "ip" -> c.value.addressInfo.ip,
             "province" -> c.value.addressInfo.province,
             "city" -> c.value.addressInfo.city
