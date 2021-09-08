@@ -97,6 +97,28 @@ object WechatStream extends JsonParse with SuportRouter {
       }
   }
 
+  def userInfoQuery3()(implicit
+      system: ActorSystem[_]
+  ): Flow[
+    (String, String),
+    WechatModel.WechatUserInfo,
+    NotUsed
+  ] = {
+    implicit val ec = system.executionContext
+    Flow[(String, String)]
+      .flatMapConcat { tp2 =>
+        accessToken(tp2._1).map(tp2._2 -> _)
+      }
+      .mapAsync(1) { tp2 =>
+        val token = tp2._2
+        val openid = tp2._1
+        Request
+          .get[WechatModel.WechatUserInfo](
+            s"https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN"
+          )
+      }
+  }
+
   def accessToken(appid: String)(implicit
       system: ActorSystem[_]
   ): Source[AccessTokenBehavior.Token, NotUsed] = {
