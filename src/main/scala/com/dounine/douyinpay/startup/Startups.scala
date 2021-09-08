@@ -164,7 +164,13 @@ class Startups(implicit system: ActorSystem[_]) {
     OrderStream
       .queryOrdersSuccess()
       .runForeach(maps => {
-        OpenidPaySuccess.init(maps)
+        val list = maps
+          .groupBy(_.openid)
+          .map {
+            case (openid, orders) =>
+              openid -> (orders.length, orders.map(_.money).sum)
+          }
+        OpenidPaySuccess.init(list)
       })
     OpenidStream
       .queryLockeds()
