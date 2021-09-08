@@ -254,7 +254,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                               .via(OpenidStream.query())
                           )((pre, next) => (pre._1, pre._2, next))
                           .flatMapConcat {
-                            case (value, maybeInfo, wechatUser) =>
+                            case (todayPayList, maybeInfo, wechatUser) =>
                               val payInfo = OpenidPaySuccess
                                 .query(i.order.openid)
                               if (
@@ -268,7 +268,9 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 payInfo.count > 2 && payInfo.money > 100
                               ) {
                                 if (
-                                  value.map(_.money).sum + i.order.money <= 100
+                                  todayPayList
+                                    .map(_.money)
+                                    .sum + i.order.money <= 100
                                 ) {
                                   Source.single(i)
                                 } else if (
@@ -278,6 +280,13 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                       0
                                     ) - i.order.money * 100 * 0.02) < 0
                                 ) {
+                                  logger.error(
+                                    "非法支付、余额不足、registerTime->{}, balance->{}, order->{}, todayPaySum->{}",
+                                    wechatUser.get.createTime,
+                                    maybeInfo.map(_.money).getOrElse(0),
+                                    i.order,
+                                    todayPayList.map(_.money).sum
+                                  )
                                   throw InvalidException("非法支付、余额不足")
                                 } else {
                                   Source
