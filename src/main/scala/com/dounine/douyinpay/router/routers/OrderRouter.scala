@@ -191,6 +191,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                         "time" -> System.currentTimeMillis(),
                         "data" -> Map(
                           "event" -> LogEventKey.orderQuery,
+                          "orderId" -> orderId,
                           "openid" -> session.openid,
                           "ip" -> ip.getIp(),
                           "province" -> province,
