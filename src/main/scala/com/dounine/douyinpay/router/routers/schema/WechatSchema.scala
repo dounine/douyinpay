@@ -106,7 +106,8 @@ object WechatSchema extends JsonParse {
         .map(i => {
           if (i.appid.trim == "") {
             throw ReLoginException(
-              "appid is null set default",
+              s"appid is null set default , windowUrl -> ${c.value.headers
+                .getOrElse("windowUrl", "")}",
               Some("wxc1a77335b1dd223a")
             )
           } else if (
@@ -115,7 +116,8 @@ object WechatSchema extends JsonParse {
               .hasPath(i.appid.trim)
           ) {
             throw ReLoginException(
-              "appid not exit set default",
+              s"appid not exit set default , windowUrl -> ${c.value.headers
+                .getOrElse("windowUrl", "")}",
               Some("wxc1a77335b1dd223a")
             )
           }
@@ -138,8 +140,6 @@ object WechatSchema extends JsonParse {
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
-                  "origin" -> c.value.origin,
-                  "referer" -> c.value.referer,
                   "token" -> i.token.getOrElse(""),
                   "sign" -> i.sign,
                   "ip" -> c.value.addressInfo.ip,
@@ -158,8 +158,6 @@ object WechatSchema extends JsonParse {
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
-                  "origin" -> c.value.origin,
-                  "referer" -> c.value.referer,
                   "token" -> i.token.getOrElse(""),
                   "ip" -> c.value.addressInfo.ip,
                   "province" -> c.value.addressInfo.province,
@@ -199,8 +197,6 @@ object WechatSchema extends JsonParse {
                                 "appid" -> i.appid,
                                 "ccode" -> i.ccode,
                                 "code" -> i.code,
-                                "origin" -> c.value.origin,
-                                "referer" -> c.value.referer,
                                 "openid" -> result.get.openid,
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -244,8 +240,6 @@ object WechatSchema extends JsonParse {
                                 "openid" -> session.openid,
                                 "ccode" -> i.ccode,
                                 "code" -> i.code,
-                                "origin" -> c.value.origin,
-                                "referer" -> c.value.referer,
                                 "token" -> i.token.getOrElse(""),
                                 "ip" -> c.value.addressInfo.ip,
                                 "province" -> c.value.addressInfo.province,
@@ -278,9 +272,8 @@ object WechatSchema extends JsonParse {
                     //                    } else
                     if (i.code.trim == "") {
                       logger.error(
-                        "code is null origin -> {}, referer -> {}",
-                        c.value.origin,
-                        c.value.referer
+                        "code is null windowUrl -> {}",
+                        c.value.headers.getOrElse("windowUrl", "")
                       )
                       throw ReLoginException(
                         "code is null"
@@ -297,8 +290,6 @@ object WechatSchema extends JsonParse {
                               "appid" -> i.appid,
                               "ccode" -> i.ccode,
                               "code" -> i.code,
-                              "origin" -> c.value.origin,
-                              "referer" -> c.value.referer,
                               "token" -> i.token.getOrElse(""),
                               "ip" -> c.value.addressInfo.ip,
                               "province" -> c.value.addressInfo.province,
@@ -332,9 +323,8 @@ object WechatSchema extends JsonParse {
                 //                } else
                 if (i.code.trim == "") {
                   logger.error(
-                    "code is null origin -> {}, referer -> {}",
-                    c.value.origin,
-                    c.value.referer
+                    "code is null windowUrl -> {}",
+                    c.value.headers.getOrElse("windowUrl", "")
                   )
                   throw ReLoginException(
                     "code is null"
@@ -351,8 +341,6 @@ object WechatSchema extends JsonParse {
                           "appid" -> i.appid,
                           "ccode" -> i.ccode,
                           "code" -> i.code,
-                          "origin" -> c.value.origin,
-                          "referer" -> c.value.referer,
                           "token" -> i.token.getOrElse(""),
                           "ip" -> c.value.addressInfo.ip,
                           "province" -> c.value.addressInfo.province,
@@ -368,7 +356,6 @@ object WechatSchema extends JsonParse {
         .recover {
           case e: ReLoginException =>
             e.printStackTrace()
-            logger.error(e.getMessage)
             val appid = e.appid.getOrElse(c.arg[String]("appid"))
             val platform = c.arg[String]("platform")
             val domain =
