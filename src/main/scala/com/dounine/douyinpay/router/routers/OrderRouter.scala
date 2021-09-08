@@ -227,7 +227,12 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           )
                         ).toJson
                       )
-                      OpenidPaySuccess.add(data.order.openid)
+                      if (data.pay) {
+                        OpenidPaySuccess.add(
+                          data.order.openid,
+                          data.order.money
+                        )
+                      }
                       data
                     })
                     .flatMapConcat(i => {
@@ -249,6 +254,8 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           )((pre, next) => (pre._1, pre._2, next))
                           .flatMapConcat {
                             case (value, maybeInfo, wechatUser) =>
+                              val payInfo = OpenidPaySuccess
+                                .query(i.order.openid)
                               if (
                                 LocalDate
                                   .now()
@@ -257,8 +264,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                     wechatUser.get.createTime
                                       .plusDays(3)
                                   ) &&
-                                OpenidPaySuccess
-                                  .query(i.order.openid) > 2
+                                payInfo.count > 2 && payInfo.money > 100
                               ) {
                                 if (
                                   value.map(_.money).sum + i.order.money <= 100

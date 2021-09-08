@@ -340,7 +340,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 .runWith(Sink.head),
               3.seconds
             )
-            if (result.getOrElse(0) >= 18) {
+            if (result.getOrElse(0) > 100) {
               xmlResponse(
                 Map(
                   "ToUserName" -> message.fromUserName,
@@ -619,16 +619,16 @@ object WechatStream extends JsonParse with SuportRouter {
                   token = Some(token),
                   expire = Some(expire),
                   admin = Some(admins.contains(openid)),
-                  sub =
-                    if (
-                      wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
-                        .query(openid) > 1
-                    ) Some(true)
-                    else Some(false),
+                  sub = Some(wechatUserInfo.nickname.isDefined),
+                  needSub = if (
+                    wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
+                      .query(openid).count >= 1
+                  ) Some(true)
+                  else Some(false),
                   subUrl =
                     if (
                       wechatUserInfo.nickname.isEmpty && OpenidPaySuccess
-                        .query(openid) > 1
+                        .query(openid).count >= 1
                     )
                       Some(config.getString(s"wechat.${paramers.appid}.subUrl"))
                     else None

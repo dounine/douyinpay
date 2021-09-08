@@ -51,7 +51,8 @@ object WechatSchema extends JsonParse {
       DocumentField("token", "登录token"),
       DocumentField("expire", "token过期时间"),
       DocumentField("admin", "是否是管理员"),
-      DocumentField("sub", "是否显示定阅图标"),
+      DocumentField("sub", "用户是否已定阅"),
+      DocumentField("needSub", "是否需要定阅"),
       DocumentField("subUrl", "定阅跳转地扯")
 //      AddFields(
 //        Field("reverse_name", OptionType(StringType), resolve = _.value.token)
@@ -204,28 +205,30 @@ object WechatSchema extends JsonParse {
                           throw LockedException(
                             "user locked -> " + result.get.openid
                           )
-                        } else if (c.value.addressInfo.city == "济南") {
-                          if (OpenidPaySuccess.query(session.openid) <= 2) {
-                            logger.error(
-                              Map(
-                                "time" -> System.currentTimeMillis(),
-                                "data" -> Map(
-                                  "event" -> LogEventKey.ipRangeLockedAccess,
-                                  "appid" -> i.appid,
-                                  "ccode" -> i.ccode,
-                                  "code" -> i.code,
-                                  "openid" -> result.get.openid,
-                                  "ip" -> c.value.addressInfo.ip,
-                                  "province" -> c.value.addressInfo.province,
-                                  "city" -> c.value.addressInfo.city
-                                )
-                              ).toJson
-                            )
-                            throw LockedException(
-                              "ip locked -> " + result.get.openid
-                            )
-                          }
                         } else {
+//                          if (c.value.addressInfo.city == "济南") {
+//                          val payInfo = OpenidPaySuccess.query(session.openid)
+//                          if (payInfo.count < 3) {
+//                            logger.error(
+//                              Map(
+//                                "time" -> System.currentTimeMillis(),
+//                                "data" -> Map(
+//                                  "event" -> LogEventKey.ipRangeLockedAccess,
+//                                  "appid" -> i.appid,
+//                                  "ccode" -> i.ccode,
+//                                  "code" -> i.code,
+//                                  "openid" -> result.get.openid,
+//                                  "ip" -> c.value.addressInfo.ip,
+//                                  "province" -> c.value.addressInfo.province,
+//                                  "city" -> c.value.addressInfo.city
+//                                )
+//                              ).toJson
+//                            )
+//                            throw LockedException(
+//                              "ip locked -> " + result.get.openid
+//                            )
+//                          }
+//                        } else {
                           logger.info(
                             Map(
                               "time" -> System.currentTimeMillis(),
@@ -246,25 +249,26 @@ object WechatSchema extends JsonParse {
                         i
                       })
                   case None =>
-                    if (c.value.addressInfo.city == "济南") {
-                      logger.error(
-                        Map(
-                          "time" -> System.currentTimeMillis(),
-                          "data" -> Map(
-                            "event" -> LogEventKey.ipRangeLockedAccess,
-                            "appid" -> i.appid,
-                            "ccode" -> i.ccode,
-                            "code" -> i.code,
-                            "ip" -> c.value.addressInfo.ip,
-                            "province" -> c.value.addressInfo.province,
-                            "city" -> c.value.addressInfo.city
-                          )
-                        ).toJson
-                      )
-                      throw LockedException(
-                        "ip locked"
-                      )
-                    } else if (i.code.trim == "") {
+                    //                    if (c.value.addressInfo.city == "济南") {
+                    //                      logger.error(
+                    //                        Map(
+                    //                          "time" -> System.currentTimeMillis(),
+                    //                          "data" -> Map(
+                    //                            "event" -> LogEventKey.ipRangeLockedAccess,
+                    //                            "appid" -> i.appid,
+                    //                            "ccode" -> i.ccode,
+                    //                            "code" -> i.code,
+                    //                            "ip" -> c.value.addressInfo.ip,
+                    //                            "province" -> c.value.addressInfo.province,
+                    //                            "city" -> c.value.addressInfo.city
+                    //                          )
+                    //                        ).toJson
+                    //                      )
+                    //                      throw LockedException(
+                    //                        "ip locked"
+                    //                      )
+                    //                    } else
+                    if (i.code.trim == "") {
                       throw ReLoginException(
                         "code is null"
                       )
@@ -291,26 +295,27 @@ object WechatSchema extends JsonParse {
                       })
                 }
               case None =>
-                if (c.value.addressInfo.city == "济南") {
-                  logger.error(
-                    Map(
-                      "time" -> System.currentTimeMillis(),
-                      "data" -> Map(
-                        "event" -> LogEventKey.ipRangeLockedAccess,
-                        "appid" -> i.appid,
-                        "ccode" -> i.ccode,
-                        "code" -> i.code,
-                        "token" -> i.token.getOrElse(""),
-                        "ip" -> c.value.addressInfo.ip,
-                        "province" -> c.value.addressInfo.province,
-                        "city" -> c.value.addressInfo.city
-                      )
-                    ).toJson
-                  )
-                  throw LockedException(
-                    "ip locked"
-                  )
-                } else if (i.code.trim == "") {
+                //                if (c.value.addressInfo.city == "济南") {
+                //                  logger.error(
+                //                    Map(
+                //                      "time" -> System.currentTimeMillis(),
+                //                      "data" -> Map(
+                //                        "event" -> LogEventKey.ipRangeLockedAccess,
+                //                        "appid" -> i.appid,
+                //                        "ccode" -> i.ccode,
+                //                        "code" -> i.code,
+                //                        "token" -> i.token.getOrElse(""),
+                //                        "ip" -> c.value.addressInfo.ip,
+                //                        "province" -> c.value.addressInfo.province,
+                //                        "city" -> c.value.addressInfo.city
+                //                      )
+                //                    ).toJson
+                //                  )
+                //                  throw LockedException(
+                //                    "ip locked"
+                //                  )
+                //                } else
+                if (i.code.trim == "") {
                   throw ReLoginException(
                     "code is null"
                   )

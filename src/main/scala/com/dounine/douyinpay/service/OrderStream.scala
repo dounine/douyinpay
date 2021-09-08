@@ -29,7 +29,7 @@ object OrderStream {
   def queryOrdersSuccess()(implicit
       system: ActorSystem[_]
   ): Source[
-    Map[String, Int],
+    Seq[OrderModel.DbInfo],
     NotUsed
   ] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
@@ -42,12 +42,7 @@ object OrderStream {
       db.run(
         OrderTable()
           .filter(_.pay === true)
-          .groupBy(_.openid)
-          .map {
-            case (openid, paySuccessOrders) => (openid, paySuccessOrders.length)
-          }
           .result
-          .map(_.map(i => i._1 -> i._2).toMap)
       )
     )
   }
@@ -356,7 +351,7 @@ object OrderStream {
   }
 
   def queryOpenidPaySum()(implicit
-                    system: ActorSystem[_]
+      system: ActorSystem[_]
   ): Flow[String, Option[Int], NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
@@ -369,9 +364,7 @@ object OrderStream {
       .mapAsync(1) { openid =>
         db.run(
           OrderTable()
-            .filter(i =>
-              i.openid === openid && i.pay === true
-            )
+            .filter(i => i.openid === openid && i.pay === true)
             .map(_.money)
             .sum
             .result

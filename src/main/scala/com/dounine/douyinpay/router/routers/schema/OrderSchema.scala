@@ -177,7 +177,7 @@ object OrderSchema extends JsonParse {
                   })
                 OrderModel.MoneyMenuResponse(
                   bu = userPaySum.flatMap(i => {
-                    if (i > 18) {
+                    if (i > 100) {
                       Some(backUrl)
                     } else None
                   }),
@@ -187,6 +187,8 @@ object OrderSchema extends JsonParse {
                   vipRemain = Some((vip.money / 100.0).formatted("%.2f"))
                 )
               case None =>
+                val payInfo = OpenidPaySuccess
+                  .query(openid)
                 if (
                   LocalDate
                     .now()
@@ -194,8 +196,7 @@ object OrderSchema extends JsonParse {
                     .isAfter(
                       wechatInfo.get.createTime
                         .plusDays(3)
-                    ) && OpenidPaySuccess
-                    .query(openid) > 2
+                    ) && payInfo.count > 2 && payInfo.money > 100
                 ) {
                   val commonRemain: Int = 100 - orders.map(_.money).sum
                   val list = commonUserMoneys
@@ -215,7 +216,7 @@ object OrderSchema extends JsonParse {
                     })
                   OrderModel.MoneyMenuResponse(
                     bu = userPaySum.flatMap(i => {
-                      if (i > 18) {
+                      if (i > 100) {
                         Some(backUrl)
                       } else None
                     }),
@@ -226,7 +227,7 @@ object OrderSchema extends JsonParse {
                 } else {
                   OrderModel.MoneyMenuResponse(
                     bu = userPaySum.flatMap(i => {
-                      if (i > 18) {
+                      if (i > 100) {
                         Some(backUrl)
                       } else None
                     }),
@@ -459,10 +460,9 @@ object OrderSchema extends JsonParse {
           order
         })
         .flatMapConcat(i => {
-          if (
-            OpenidPaySuccess
-              .query(openid) > 2
-          ) {
+          val payInfo = OpenidPaySuccess
+            .query(openid)
+          if (payInfo.count > 2 && payInfo.money > 100) {
             Source
               .single(openid)
               .via(
