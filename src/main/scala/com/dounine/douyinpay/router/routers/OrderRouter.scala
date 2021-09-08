@@ -228,12 +228,6 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           )
                         ).toJson
                       )
-                      if (data.pay) {
-                        OpenidPaySuccess.add(
-                          data.order.openid,
-                          data.order.money
-                        )
-                      }
                       data
                     })
                     .flatMapConcat(i => {
@@ -307,6 +301,15 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                               }
                           }
                       } else Source.single(i)
+                    })
+                    .map(data => {
+                      if (data.pay) {
+                        OpenidPaySuccess.add(
+                          data.order.openid,
+                          data.order.money
+                        )
+                      }
+                      data
                     })
                     .via(OrderStream.updateOrderStatus())
                     .map(_._1.order.orderId)
