@@ -176,7 +176,7 @@ object OrderStream {
       }
     Flow[(OrderModel.DbInfo, OrderModel.QrcodeResponse)]
       .mapAsync(1) { tp2 =>
-        if (tp2._2.qrcode.isDefined) {
+        if (tp2._2.qrcode.isDefined || tp2._2.codeUrl.isDefined) {
           notify(tp2._1, "创建成功", DingDing.MessageType.order)
             .map(_ => tp2)
             .recover {
