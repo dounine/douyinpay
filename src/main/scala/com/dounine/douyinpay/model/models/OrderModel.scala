@@ -49,6 +49,8 @@ object OrderModel {
   final case class QrcodeResponse(
       message: Option[String],
       qrcode: Option[String],
+      codeUrl: Option[String],
+      code: Option[Int],
       setup: Option[String]
   ) extends BaseSerializer
 

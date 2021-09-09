@@ -16,10 +16,16 @@ import com.dounine.douyinpay.model.models.{AccountModel, OrderModel}
 import com.dounine.douyinpay.store.{AccountTable, OrderTable}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.akka.db.DataSource
-import com.dounine.douyinpay.tools.util.{DingDing, QrcodeUrlRandom, Request}
+import com.dounine.douyinpay.tools.util.{
+  DingDing,
+  QrcodeUrlRandom,
+  QrcodeUtil,
+  Request
+}
 import slick.jdbc.JdbcBackend
 
-import java.nio.file.Files
+import java.io.File
+import java.nio.file.{Files, Paths}
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, LocalDateTime}
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -55,7 +61,6 @@ object OrderStream {
   ] = {
     val config = system.settings.config
     val qrcodeUrl = QrcodeUrlRandom.random()
-    val domain = config.getString("app.file.domain")
     val routerPrefix = config.getString("app.routerPrefix")
     Flow[OrderModel.DbInfo]
       .mapAsync(1) { order: OrderModel.DbInfo =>
@@ -74,28 +79,48 @@ object OrderStream {
 
   def downloadQrocdeFile()(implicit
       system: ActorSystem[_]
-  ): Flow[(OrderModel.DbInfo, String), (OrderModel.DbInfo, String), NotUsed] = {
+  ): Flow[
+    (OrderModel.DbInfo, OrderModel.QrcodeResponse),
+    (OrderModel.DbInfo, String),
+    NotUsed
+  ] = {
     implicit val ec = system.executionContext
-    Flow[(OrderModel.DbInfo, String)]
-      .mapAsync(1) { tp2 =>
-        Http(system)
-          .singleRequest(
-            request = HttpRequest(
-              method = HttpMethods.GET,
-              uri = tp2._2
-            ),
-            settings = ConnectSettings.httpSettings(system)
-          )
-          .flatMap {
-            case HttpResponse(code: StatusCode, value, entity, protocol) =>
-              val tmpFile = Files.createTempFile("qrcode", "png")
-              entity.dataBytes
-                .runWith(FileIO.toPath(tmpFile))
-                .map(_ => (tp2._1, tmpFile.toAbsolutePath.toString))
-            case msg => {
-              Future.failed(new Exception(msg.toString()))
-            }
-          }
+    Flow[(OrderModel.DbInfo, OrderModel.QrcodeResponse)]
+      .mapAsync(1) { tp2: (OrderModel.DbInfo, OrderModel.QrcodeResponse) =>
+        tp2._2.codeUrl match {
+          case Some(url) =>
+            Future.successful(
+              tp2._1,
+              QrcodeUtil
+                .create2(
+                  data = url,
+                  markFile = Some(
+                    OrderStream.getClass
+                      .getResourceAsStream("/icon_wechatpay.jpeg")
+                  )
+                )
+                .getAbsolutePath
+            )
+          case None =>
+            Http(system)
+              .singleRequest(
+                request = HttpRequest(
+                  method = HttpMethods.GET,
+                  uri = tp2._2.qrcode.get
+                ),
+                settings = ConnectSettings.httpSettings(system)
+              )
+              .flatMap {
+                case HttpResponse(code: StatusCode, value, entity, protocol) =>
+                  val tmpFile = Files.createTempFile("qrcode", "png")
+                  entity.dataBytes
+                    .runWith(FileIO.toPath(tmpFile))
+                    .map(_ => (tp2._1, tmpFile.toAbsolutePath.toString))
+                case msg => {
+                  Future.failed(new Exception(msg.toString()))
+                }
+              }
+        }
       }
   }
 

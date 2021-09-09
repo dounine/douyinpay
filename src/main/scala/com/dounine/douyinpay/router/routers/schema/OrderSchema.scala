@@ -11,6 +11,7 @@ import com.dounine.douyinpay.model.models.{
 import com.dounine.douyinpay.model.types.service.{LogEventKey, PayPlatform}
 import com.dounine.douyinpay.router.routers.SecureContext
 import com.dounine.douyinpay.router.routers.errors.{
+  DouyinAccountFailException,
   InvalidException,
   LockedException,
   PayManyException
@@ -356,6 +357,19 @@ object OrderSchema extends JsonParse {
           )
         )
         .map(_ -> c.ctx.openid.get)
+        .mapAsync(1) { tp2 =>
+          CacheSource(c.ctx.system)
+            .cache()
+            .get[LocalDateTime](
+              key = "qrcodeCreateFail_" + openid
+            )
+            .map {
+              case Some(value) =>
+                throw DouyinAccountFailException("您帐户充值异常、建议您第二天再充值")
+              case None =>
+                tp2
+            }(c.ctx.system.executionContext)
+        }
         .mapAsync(1) {
           tp2 =>
             CacheSource(c.ctx.system)
@@ -516,38 +530,58 @@ object OrderSchema extends JsonParse {
         .via(OrderStream.qrcodeCreate()(c.ctx.system))
         .mapAsync(1) {
           info =>
-            info._2.qrcode match {
-              case Some(value) =>
-                CacheSource(c.ctx.system)
-                  .cache()
-                  .put[LocalDateTime](
-                    key = "createOrder_" + openid,
-                    value = LocalDateTime.now(),
-                    ttl = 60.seconds
-                  )
-                  .map(_ => info)(c.ctx.system.executionContext)
-              case None => {
-                CacheSource(c.ctx.system)
-                  .cache()
-                  .remove("createOrder_" + openid)
-                  .map(_ => info)(c.ctx.system.executionContext)
-              }
+            if (info._2.qrcode.isDefined || info._2.codeUrl.isDefined) {
+              CacheSource(c.ctx.system)
+                .cache()
+                .put[LocalDateTime](
+                  key = "createOrder_" + openid,
+                  value = LocalDateTime.now(),
+                  ttl = 60.seconds
+                )
+                .map(_ => info)(c.ctx.system.executionContext)
+            } else {
+              CacheSource(c.ctx.system)
+                .cache()
+                .remove("createOrder_" + openid)
+                .map(_ => info)(c.ctx.system.executionContext)
             }
         }
         .via(OrderStream.notifyOrderCreateStatus()(c.ctx.system))
-        .map(i => {
-          if (i._2.qrcode.isEmpty) {
+        .mapAsync(1)(i => {
+          if (i._2.code.getOrElse(-1) > 0) {
             logger.error(
               Map(
                 "time" -> System.currentTimeMillis(),
                 "data" -> Map(
                   "event" -> LogEventKey.orderCreateFail,
                   "order" -> i._1,
-                  "payQrcode" -> "",
-                  "payMessage" -> i._2.message.getOrElse(
-                    ""
-                  ),
-                  "paySetup" -> i._2.setup.getOrElse(""),
+                  "result" -> i._2,
+                  "ip" -> c.value.addressInfo.ip,
+                  "province" -> c.value.addressInfo.province,
+                  "city" -> c.value.addressInfo.city
+                )
+              ).toJson
+            )
+            CacheSource(c.ctx.system)
+              .cache()
+              .put[LocalDateTime](
+                key = "qrcodeCreateFail_" + openid,
+                value = LocalDateTime.now(),
+                ttl = 1.hours
+              )
+              .map(_ => {
+                throw DouyinAccountFailException(
+                  i._2.message.getOrElse("empty error message")
+                )
+              })(c.ctx.system.executionContext)
+          } else if (i._2.qrcode.isEmpty && i._2.codeUrl.isEmpty) {
+            logger.error(
+              Map(
+                "time" -> System.currentTimeMillis(),
+                "data" -> Map(
+                  "event" -> LogEventKey.orderCreateFail,
+                  "order" -> i._1,
+                  "result" -> i._2,
                   "ip" -> c.value.addressInfo.ip,
                   "province" -> c.value.addressInfo.province,
                   "city" -> c.value.addressInfo.city
@@ -555,7 +589,7 @@ object OrderSchema extends JsonParse {
               ).toJson
             )
             throw new Exception(
-              s"${i._1.orderId} qrcode is empty"
+              s"${i._1.orderId} qrcode or codeUrl is empty"
             )
           } else {
             logger.info(
@@ -573,14 +607,11 @@ object OrderSchema extends JsonParse {
                 )
               ).toJson
             )
+            Future.successful(i)
           }
-          i
         })
-        .map(t => (t._1, t._2.qrcode.get))
         .via(OrderStream.downloadQrocdeFile()(c.ctx.system))
         .map((result: (OrderModel.DbInfo, String)) => {
-          val config = c.ctx.system.settings.config.getConfig("app")
-          val routerPrefix = config.getString("routerPrefix")
           OrderModel.OrderCreateResponse(
             queryUrl =
               (domain + s"/order/info/" + result._1.orderId),
@@ -589,8 +620,9 @@ object OrderSchema extends JsonParse {
           )
         })
         .recover {
-          case e: PayManyException => throw e
-          case e: InvalidException => throw e
+          case e: PayManyException           => throw e
+          case e: InvalidException           => throw e
+          case e: DouyinAccountFailException => throw e
           case ee => {
             ee.printStackTrace()
             throw new Exception("当前充值人数太多、请稍候再试")
