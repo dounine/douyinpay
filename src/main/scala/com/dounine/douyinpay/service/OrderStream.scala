@@ -138,8 +138,13 @@ object OrderStream {
       (
           order: OrderModel.DbInfo,
           title: String,
-          mType: DingDing.MessageType.MessageType
+          mType: DingDing.MessageType.MessageType,
+          message: Option[String]
       ) => {
+        val msg = message match {
+          case Some(value) => s"\n - 错误信息: ${value}"
+          case None        => ""
+        }
         DingDing
           .sendMessageFuture(
             mType,
@@ -157,7 +162,7 @@ object OrderStream {
                         | - 今日充值次数: ${order.todayPayCount}
                         | - 今日充值金额: ${order.todayPayMoney}
                         | - 全部充值次数: ${order.payCount}
-                        | - 全部充值金额: ${order.payMoney}
+                        | - 全部充值金额: ${order.payMoney}${msg}
                         | - 耗时: ${java.time.Duration
                   .between(order.createTime, LocalDateTime.now())
                   .getSeconds}s
@@ -177,13 +182,13 @@ object OrderStream {
     Flow[(OrderModel.DbInfo, OrderModel.QrcodeResponse)]
       .mapAsync(1) { tp2 =>
         if (tp2._2.qrcode.isDefined || tp2._2.codeUrl.isDefined) {
-          notify(tp2._1, "创建成功", DingDing.MessageType.order)
+          notify(tp2._1, "创建成功", DingDing.MessageType.order, None)
             .map(_ => tp2)
             .recover {
               case e => tp2
             }
         } else {
-          notify(tp2._1, "创建失败", DingDing.MessageType.orderFail)
+          notify(tp2._1, "创建失败", DingDing.MessageType.orderFail, tp2._2.message)
             .map(_ => tp2)
             .recover {
               case e => tp2
