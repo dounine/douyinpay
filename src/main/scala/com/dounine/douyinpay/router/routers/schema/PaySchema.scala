@@ -160,15 +160,28 @@ object PaySchema extends JsonParse {
                   )
                   .via(AccountStream.query())
                   .map(_.get)
-                  .map(user => {
-                    AccountModel.QueryPayResponse(
-                      orderId = orderId,
-                      pay = true,
-                      createTime = Some(payInfo.createTime.toString),
-                      money = Some((payInfo.money / 100).toString),
-                      balance = Some((user.money / 100.0).formatted("%.2f"))
-                    )
-                  })
+                  .zip(
+                    Source
+                      .single(payInfo.openid)
+                      .via(OrderStream.queryOpenidTodayPay())
+                  )
+                  .map {
+                    case (user, todayOrders) => {
+                      val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+                      val todayRemain: Double =
+                        if (commonRemain < 0) 0d else commonRemain * 0.02
+
+                      AccountModel.QueryPayResponse(
+                        orderId = orderId,
+                        pay = true,
+                        createTime = Some(payInfo.createTime.toString),
+                        money = Some((payInfo.money / 100).toString),
+                        balance = Some(
+                          (todayRemain + (user.money / 100.0)).formatted("%.2f")
+                        )
+                      )
+                    }
+                  }
                   .runWith(Sink.head)
               } else {
                 Future.successful(
@@ -224,7 +237,7 @@ object PaySchema extends JsonParse {
                     )
                 ),
               balance =
-                (todayRemain + accountUser.map(_.money /100D).getOrElse(0D))
+                (todayRemain + accountUser.map(_.money / 100d).getOrElse(0d))
                   .formatted("%.2f"),
               vipUser = accountUser.isDefined
             )
