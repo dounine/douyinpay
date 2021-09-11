@@ -146,7 +146,8 @@ object OrderModel {
       money: String,
       volumn: String,
       commonEnought: Boolean,
-      vipEnought: Option[Boolean] = None
+      vipEnought: Option[Boolean] = None,
+      enought: Option[Boolean] = None
   )
 
   final case class MoneyMenuResponse(
@@ -154,6 +155,7 @@ object OrderModel {
       list: List[MoneyMenuItem],
       targetUser: Boolean,
       commonRemain: Int,
-      vipRemain: Option[String] = None
+      vipRemain: Option[String] = None,
+      balance: Option[String] = None
   )
 }

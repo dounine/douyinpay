@@ -249,6 +249,11 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                           )((pre, next) => (pre._1, pre._2, next))
                           .flatMapConcat {
                             case (todayPayList, maybeInfo, wechatUser) =>
+                              val commonRemain: Int =
+                                100 - todayPayList.map(_.money).sum
+                              val todayRemain: Double =
+                                if (commonRemain < 0) 0d
+                                else commonRemain * 0.02
                               val payInfo = OpenidPaySuccess
                                 .query(i.order.openid)
                               if (
@@ -268,11 +273,11 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 ) {
                                   Source.single(i)
                                 } else if (
-                                  (maybeInfo
+                                  ((maybeInfo
                                     .map(_.money)
                                     .getOrElse(
                                       0
-                                    ) - i.order.money * 100 * 0.02) < 0
+                                    ) + (todayRemain * 100)) - i.order.money * 100 * 0.02) < 0
                                 ) {
                                   logger.error(
                                     "非法支付、余额不足、registerTime->{}, balance->{}, order->{}, todayPaySum->{}",
@@ -288,7 +293,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                       AccountModel.AccountInfo(
                                         openid = i.order.openid,
                                         money =
-                                          (i.order.money * 100 * 0.02).toInt
+                                          (i.order.money * 100 * 0.02).toInt - (todayRemain * 100).toInt
                                       )
                                     )
                                     .via(

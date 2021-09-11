@@ -464,7 +464,7 @@ object OrderStream {
             .filter(i =>
               i.pay === true && i.createTime >= LocalDate
                 .now()
-                .atStartOfDay() && i.openid === openid && i.fee === 0
+                .atStartOfDay() && i.openid === openid
             )
             .result
         )

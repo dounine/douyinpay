@@ -202,8 +202,16 @@ object PaySchema extends JsonParse {
         .via(
           AccountStream.query()
         )
+        .zip(
+          Source
+            .single(c.ctx.openid.get)
+            .via(OrderStream.queryOpenidTodayPay()(c.ctx.system))
+        )
         .map {
-          case Some(value) =>
+          case (accountUser, todayOrders) =>
+            val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+            val todayRemain: Double =
+              if (commonRemain < 0) 0d else commonRemain * 0.02
             AccountModel.AccountRechargeResponse(
               list = (if (openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o")
                         List(0.01, 5, 10, 50, 100, 200, 500)
@@ -215,15 +223,10 @@ object PaySchema extends JsonParse {
                       if (i < 1) i.toString else i.toInt.toString
                     )
                 ),
-              balance = (value.money / 100.0).formatted("%.2f"),
-              vipUser = true
-            )
-          case None =>
-            AccountModel.AccountRechargeResponse(
-              list = List(5, 10, 50, 100, 200, 500)
-                .map(i => AccountModel.RechargeItem(i.toString)),
-              balance = "0.00",
-              vipUser = false
+              balance =
+                (todayRemain + accountUser.map(_.money /100D).getOrElse(0D))
+                  .formatted("%.2f"),
+              vipUser = accountUser.isDefined
             )
         }
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)

@@ -58,6 +58,7 @@ object OrderSchema extends JsonParse {
       ObjectTypeDescription("金额"),
       DocumentField("money", "金额"),
       DocumentField("volumn", "币"),
+      DocumentField("enought", "是否足够抵扣"),
       DocumentField("commonEnought", "常规用户是否足够充值"),
       DocumentField("vipEnought", "vip用户是否足够充值")
     )
@@ -77,6 +78,12 @@ object OrderSchema extends JsonParse {
         fieldType = ListType(MoneyMenuItem),
         description = Some("列表"),
         resolve = _.value.list
+      ),
+      Field(
+        name = "balance",
+        fieldType = OptionType(StringType),
+        description = Some("用户余额"),
+        resolve = _.value.balance
       ),
       Field(
         name = "commonRemain",
@@ -102,9 +109,9 @@ object OrderSchema extends JsonParse {
   val moneyFormat = new DecimalFormat("###,###.00")
   val volumnFormat = new DecimalFormat("###,###")
 
-  val commonUserMoneys = List(
-    6, 10, 30, 66, 88, 100
-  )
+//  val commonUserMoneys = List(
+//    6, 10, 30, 66, 88, 100
+//  )
   val vipUserMoneys = List(
     6, 30, 66, 88, 288, 688, 1888, 6666, 8888
   )
@@ -153,13 +160,15 @@ object OrderSchema extends JsonParse {
         .map {
           case (
                 vipUser: Option[AccountModel.AccountInfo],
-                orders: Seq[OrderModel.DbInfo],
+                todayOrders: Seq[OrderModel.DbInfo],
                 wechatInfo: Option[OpenidModel.OpenidInfo],
                 userPaySum: Option[Int]
               ) => {
             vipUser match {
               case Some(vip) =>
-                val commonRemain: Int = 100 - orders.map(_.money).sum
+                val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+                val todayRemain: Double =
+                  if (commonRemain < 0) 0d else commonRemain * 0.02
                 val accountMoney = vip.money
                 val list = vipUserMoneys
                   .map(money =>
@@ -170,6 +179,9 @@ object OrderSchema extends JsonParse {
                     OrderModel.MoneyMenuItem(
                       money = tp2._1,
                       volumn = tp2._2,
+                      enought = Some(
+                        ((todayRemain * 100 + vip.money) - (money * 100 * 0.02)) >= 0
+                      ),
                       commonEnought = commonRemain - money >= 0,
                       vipEnought = Some(
                         accountMoney - money * 100 * 0.02 >= 0
@@ -185,7 +197,9 @@ object OrderSchema extends JsonParse {
                   list = list,
                   targetUser = true,
                   commonRemain = commonRemain,
-                  vipRemain = Some((vip.money / 100.0).formatted("%.2f"))
+                  vipRemain = Some((vip.money / 100.0).formatted("%.2f")),
+                  balance =
+                    Some((todayRemain + (vip.money / 100.0)).formatted("%.2f"))
                 )
               case None =>
                 val payInfo = OpenidPaySuccess
@@ -199,8 +213,11 @@ object OrderSchema extends JsonParse {
                         .plusDays(3)
                     ) && payInfo.count > 2 && payInfo.money > 100
                 ) {
-                  val commonRemain: Int = 100 - orders.map(_.money).sum
-                  val list = commonUserMoneys
+                  val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+                  val todayRemain: Double =
+                    if (commonRemain < 0) 0d else commonRemain * 0.02
+
+                  val list = vipUserMoneys
                     .map(money =>
                       (
                         moneyFormat.format(money),
@@ -212,6 +229,9 @@ object OrderSchema extends JsonParse {
                       OrderModel.MoneyMenuItem(
                         money = tp2._1,
                         volumn = tp2._2,
+                        enought = Some(
+                          (todayRemain - (money * 0.02)) >= 0
+                        ),
                         commonEnought = commonRemain - money >= 0
                       )
                     })
@@ -223,7 +243,8 @@ object OrderSchema extends JsonParse {
                     }),
                     list = list,
                     targetUser = true,
-                    commonRemain = commonRemain
+                    commonRemain = commonRemain,
+                    balance = Some(todayRemain.formatted("%.2f"))
                   )
                 } else {
                   OrderModel.MoneyMenuResponse(
@@ -493,7 +514,10 @@ object OrderSchema extends JsonParse {
                   .via(OpenidStream.query())
               )((pre, next) => (pre._1, pre._2, next))
               .map {
-                case (value, maybeInfo, wechatUser) =>
+                case (todayOrders, maybeInfo, wechatUser) =>
+                  val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+                  val todayRemain: Double =
+                    if (commonRemain < 0) 0d else commonRemain * 0.02
                   if (
                     LocalDate
                       .now()
@@ -503,12 +527,14 @@ object OrderSchema extends JsonParse {
                           .plusDays(3)
                       )
                   ) {
-                    if (value.map(_.money).sum + money <= 100) {
+                    if (todayOrders.map(_.money).sum + money <= 100) {
                       i
                     } else if (
-                      (maybeInfo
+                      ((maybeInfo
                         .map(_.money)
-                        .getOrElse(0) - money * 100 * 0.02) < 0
+                        .getOrElse(
+                          0
+                        ) + todayRemain * 100) - money * 100 * 0.02) < 0
                     ) {
                       throw InvalidException("非法支付、余额不足")
                     } else {
