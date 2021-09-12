@@ -218,7 +218,7 @@ object OrderSchema extends JsonParse {
                     .atStartOfDay()
                     .isAfter(
                       wechatInfo.get.createTime
-                        .plusDays(3)
+                        .plusDays(1)
                     ) && payInfo.count > 2 && payInfo.money > 100
                 ) {
                   val list = vipUserMoneys
@@ -528,7 +528,7 @@ object OrderSchema extends JsonParse {
                       .atStartOfDay()
                       .isAfter(
                         wechatUser.get.createTime
-                          .plusDays(3)
+                          .plusDays(1)
                       )
                   ) {
                     if (todayOrders.map(_.money).sum + money <= 100) {

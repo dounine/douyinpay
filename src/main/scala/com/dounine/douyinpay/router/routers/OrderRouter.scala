@@ -276,7 +276,7 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                   .atStartOfDay()
                                   .isAfter(
                                     wechatUser.get.createTime
-                                      .plusDays(3)
+                                      .plusDays(1)
                                   ) &&
                                 payInfo.count > 2 && payInfo.money > 100
                               ) {
