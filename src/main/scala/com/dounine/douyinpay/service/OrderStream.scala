@@ -402,6 +402,33 @@ object OrderStream {
       }
   }
 
+  type SharePayedMoney = Int
+  def queryOpenidSharedPay()(implicit
+      system: ActorSystem[_]
+  ): Flow[String, Option[SharePayedMoney], NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+
+    Flow[String]
+      .mapAsync(1) { openid =>
+        db.run(
+          OrderTable()
+            .filter(i =>
+              i.ccode === openid && i.pay === true && i.createTime >= LocalDate
+                .now()
+                .atStartOfDay()
+            )
+            .map(_.money)
+            .sum
+            .result
+        )
+      }
+  }
+
   def queryTodayPaySum()(implicit
       system: ActorSystem[_]
   ): Source[(Int, Int), NotUsed] = {

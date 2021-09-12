@@ -241,16 +241,30 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                             Source
                               .single(i.order.openid)
                               .via(AccountStream.query())
+                              .zip(
+                                Source
+                                  .single(i.order.openid)
+                                  .via(OrderStream.queryOpenidSharedPay())
+                              )
                           )
                           .zipWith(
                             Source
                               .single(i.order.openid)
                               .via(OpenidStream.query())
-                          )((pre, next) => (pre._1, pre._2, next))
+                          )((pre, next) => (pre._1, pre._2._1, pre._2._2, next))
                           .flatMapConcat {
-                            case (todayPayList, maybeInfo, wechatUser) =>
+                            case (
+                                  todayPayList,
+                                  maybeInfo,
+                                  sharePayedMoney,
+                                  wechatUser
+                                ) =>
                               val commonRemain: Int =
-                                100 - todayPayList.map(_.money).sum
+                                (100 + sharePayedMoney.getOrElse(
+                                  0
+                                ) / 2) - todayPayList
+                                  .map(_.money)
+                                  .sum
                               val todayRemain: Double =
                                 if (commonRemain < 0) 0d
                                 else commonRemain * 0.02

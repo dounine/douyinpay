@@ -219,10 +219,17 @@ object PaySchema extends JsonParse {
           Source
             .single(c.ctx.openid.get)
             .via(OrderStream.queryOpenidTodayPay()(c.ctx.system))
+            .zip(
+              Source
+                .single(c.ctx.openid.get)
+                .via(OrderStream.queryOpenidSharedPay())
+            )
         )
         .map {
-          case (accountUser, todayOrders) =>
-            val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+          case (accountUser, (todayOrders, sharePayedMoney)) =>
+            val commonRemain: Int =
+              (100 + sharePayedMoney
+                .getOrElse(0) / 2) - todayOrders.map(_.money).sum
             val todayRemain: Double =
               if (commonRemain < 0) 0d else commonRemain * 0.02
             AccountModel.AccountRechargeResponse(

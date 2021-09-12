@@ -17,6 +17,7 @@ import com.dounine.douyinpay.router.routers.errors.{
   PayManyException
 }
 import com.dounine.douyinpay.router.routers.schema.SchemaDef.RequestInfo
+import com.dounine.douyinpay.service.OrderStream.SharePayedMoney
 import com.dounine.douyinpay.service.{
   AccountStream,
   OpenidStream,
@@ -138,6 +139,11 @@ object OrderSchema extends JsonParse {
             .single(c.ctx.openid.get)
             .via(OrderStream.queryOpenidTodayPay()(c.ctx.system))
         )
+        .zip(
+          Source
+            .single(c.ctx.openid.get)
+            .via(OrderStream.queryOpenidSharedPay())
+        )
         .zipWith(
           Source
             .single(c.ctx.openid.get)
@@ -151,7 +157,8 @@ object OrderSchema extends JsonParse {
             )
         ) { (pre, next) =>
           (
-            pre._1,
+            pre._1._1,
+            pre._1._2,
             pre._2,
             next._1,
             next._2
@@ -161,15 +168,16 @@ object OrderSchema extends JsonParse {
           case (
                 vipUser: Option[AccountModel.AccountInfo],
                 todayOrders: Seq[OrderModel.DbInfo],
+                sharePayed: Option[SharePayedMoney],
                 wechatInfo: Option[OpenidModel.OpenidInfo],
                 userPaySum: Option[Int]
               ) => {
+            val commonRemain: Int =
+              (100 + sharePayed.getOrElse(0) / 2) - todayOrders.map(_.money).sum
+            val todayRemain: Double =
+              if (commonRemain < 0) 0d else commonRemain * 0.02
             vipUser match {
               case Some(vip) =>
-                val commonRemain: Int = 100 - todayOrders.map(_.money).sum
-                val todayRemain: Double =
-                  if (commonRemain < 0) 0d else commonRemain * 0.02
-                val accountMoney = vip.money
                 val list = vipUserMoneys
                   .map(money =>
                     (moneyFormat.format(money), volumnFormat.format(money * 10))
@@ -184,7 +192,7 @@ object OrderSchema extends JsonParse {
                       ),
                       commonEnought = commonRemain - money >= 0,
                       vipEnought = Some(
-                        accountMoney - money * 100 * 0.02 >= 0
+                        vip.money - money * 100 * 0.02 >= 0
                       )
                     )
                   })
@@ -213,10 +221,6 @@ object OrderSchema extends JsonParse {
                         .plusDays(3)
                     ) && payInfo.count > 2 && payInfo.money > 100
                 ) {
-                  val commonRemain: Int = 100 - todayOrders.map(_.money).sum
-                  val todayRemain: Double =
-                    if (commonRemain < 0) 0d else commonRemain * 0.02
-
                   val list = vipUserMoneys
                     .map(money =>
                       (
