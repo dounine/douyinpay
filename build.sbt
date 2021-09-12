@@ -72,6 +72,8 @@ lazy val app = (project in file("."))
       "org.sangria-graphql" %% "sangria-slowlog" % "2.0.1",
       "org.sangria-graphql" %% "sangria-akka-http-core" % "0.0.2",
       "org.sangria-graphql" %% "sangria-akka-http-circe" % "0.0.2",
+      "org.sangria-graphql" %% "sangria-akka-http-circe" % "0.0.2",
+      "org.sangria-graphql" %% "sangria-streaming-api" % "1.0.3",
       "org.seleniumhq.selenium" % "selenium-java" % "3.141.59",
       "com.google.zxing" % "core" % "3.4.1",
       "com.google.zxing" % "javase" % "3.4.1",

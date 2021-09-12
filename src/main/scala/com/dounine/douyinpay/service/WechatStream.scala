@@ -429,32 +429,45 @@ object WechatStream extends JsonParse with SuportRouter {
         ) {
           message.event.get match {
             case "subscribe" =>
-              DingDing.sendMessage(
-                DingDing.MessageType.fans,
-                data = DingDing.MessageData(
-                  markdown = DingDing.Markdown(
-                    title = s"新增关注",
-                    text = s"""
-                              |## ${message.fromUserName}
-                              | - event: 新增关注
-                              | - appid: ${message.appid}
-                              | - appname: ${wechat.getString(
-                      s"${message.appid}.name"
-                    )}
-                              | - 场景值：${message.eventKey.getOrElse("")}
-                              | - time: ${LocalDateTime
-                      .now()
-                      .format(
-                        timeFormatter
-                      )}
-                              | - ntime: ${LocalDateTime
-                      .now()
-                      .format(timeFormatter)}
-                              |""".stripMargin
+              Source
+                .single(
+                  message.fromUserName
+                )
+                .via(
+                  OpenidStream.query()
+                )
+                .runWith(Sink.head)
+                .foreach((openidUser: Option[OpenidModel.OpenidInfo]) => {
+                  DingDing.sendMessage(
+                    DingDing.MessageType.fans,
+                    data = DingDing.MessageData(
+                      markdown = DingDing.Markdown(
+                        title = s"新增关注",
+                        text = s"""
+                                  |## ${message.fromUserName}
+                                  | - event: 新增关注
+                                  | - appid: ${message.appid}
+                                  | - appname: ${wechat.getString(
+                          s"${message.appid}.name"
+                        )}
+                                  | - 场景值：${message.eventKey.getOrElse("")}
+                                  | - 来源渠道：${openidUser
+                          .map(_.ccode)
+                          .getOrElse("无")}
+                                  | - time: ${LocalDateTime
+                          .now()
+                          .format(
+                            timeFormatter
+                          )}
+                                  | - ntime: ${LocalDateTime
+                          .now()
+                          .format(timeFormatter)}
+                                  |""".stripMargin
+                      )
+                    ),
+                    system
                   )
-                ),
-                system
-              )
+                })
               xmlResponse(
                 Map(
                   "ToUserName" -> message.fromUserName,
