@@ -6,14 +6,18 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.headers.`User-Agent`
 import akka.http.scaladsl.model.{
   ContentType,
   HttpEntity,
+  HttpHeader,
   HttpMethods,
+  HttpProtocol,
   HttpRequest,
   HttpResponse,
   MediaTypes,
   RemoteAddress,
+  StatusCode,
   Uri
 }
 import akka.http.scaladsl.server.Directives.{concat, _}
@@ -180,6 +184,38 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                     )
                   })
               )
+            } ~ path("kuaishou" / "url") {
+              parameters("shortUrl") {
+                shortUrl: String =>
+                  val result = http
+                    .singleRequest(
+                      HttpRequest(
+                        uri = shortUrl,
+                        headers = Seq(
+                          `User-Agent`(
+                            "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1 wechatdevtools/1.05.2107221 MicroMessenger/8.0.5 Language/zh_CN webview/16314653301349493"
+                          )
+                        )
+                      )
+                    )
+                    .map {
+                      case HttpResponse(
+                            code: StatusCode,
+                            value: Seq[HttpHeader],
+                            entity,
+                            protocol: HttpProtocol
+                          ) =>
+                        value
+                          .find(_.name().equalsIgnoreCase("Location")) match {
+                          case Some(value) => Some(value.value())
+                          case None        => None
+                        }
+                    }(system.executionContext)
+                    .map(result => {
+                      okData(result.getOrElse(""))
+                    })
+                  complete(result)
+              }
             } ~ path("order" / "info" / Segment) {
               orderId =>
                 auth {
