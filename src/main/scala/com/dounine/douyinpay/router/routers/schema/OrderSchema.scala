@@ -386,12 +386,12 @@ object OrderSchema extends JsonParse {
         .mapAsync(1) { tp2 =>
           CacheSource(c.ctx.system)
             .cache()
-            .get[LocalDateTime](
+            .get[String](
               key = "qrcodeCreateFail_" + openid
             )
             .map {
               case Some(value) =>
-                throw DouyinAccountFailException("您帐户充值异常、建议您第二天再充值")
+                throw DouyinAccountFailException(value)
               case None =>
                 tp2
             }(c.ctx.system.executionContext)
@@ -595,14 +595,14 @@ object OrderSchema extends JsonParse {
             )
             CacheSource(c.ctx.system)
               .cache()
-              .put[LocalDateTime](
+              .put[String](
                 key = "qrcodeCreateFail_" + openid,
-                value = LocalDateTime.now(),
+                value = i._2.message.getOrElse("empty error message"),
                 ttl = 1.hours
               )
-              .map(_ => {
+              .map(v => {
                 throw DouyinAccountFailException(
-                  i._2.message.getOrElse("empty error message")
+                  v
                 )
               })(c.ctx.system.executionContext)
           } else if (i._2.qrcode.isEmpty && i._2.codeUrl.isEmpty) {
