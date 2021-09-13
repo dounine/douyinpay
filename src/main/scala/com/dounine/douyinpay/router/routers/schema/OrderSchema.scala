@@ -268,6 +268,7 @@ object OrderSchema extends JsonParse {
                         OrderModel.MoneyMenuItem(
                           money = tp2._1,
                           volumn = tp2._2,
+                          enought = Some(true),
                           commonEnought = true
                         )
                       }),
