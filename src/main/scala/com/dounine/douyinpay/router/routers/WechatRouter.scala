@@ -21,21 +21,31 @@ import com.dounine.douyinpay.model.models.{
   OpenidModel,
   WechatModel
 }
-import com.dounine.douyinpay.model.types.service.LogEventKey
+import com.dounine.douyinpay.model.types.service.{LogEventKey, PayStatus}
 import com.dounine.douyinpay.service.{
   AccountStream,
   OpenidStream,
   PayStream,
   WechatStream
 }
-import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util, WeixinPay}
+import com.dounine.douyinpay.tools.util.{
+  DecodeUtil,
+  IpUtils,
+  MD5Util,
+  WeixinPay
+}
+import org.apache.commons.codec.binary.Base64
 import org.apache.commons.codec.digest.DigestUtils
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.net.{Inet4Address, InetAddress, URLEncoder}
+import java.security.SecureRandom
 import java.util.UUID
+import javax.crypto.spec.SecretKeySpec
+import javax.crypto.{Cipher, KeyGenerator}
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
+import scala.util.Try
 import scala.xml.NodeSeq
 
 class WechatRouter()(implicit system: ActorSystem[_])
@@ -189,14 +199,106 @@ class WechatRouter()(implicit system: ActorSystem[_])
                   val result = Source
                     .single(notifyResponse.out_trade_no)
                     .via(PayStream.paySuccess())
-                    .map(_ =>
-                      AccountModel.AccountInfo(
-                        openid = notifyResponse.openid,
-                        money = notifyResponse.total_fee.toInt
-                      )
+                    .flatMapConcat((result: Boolean) =>
+                      if (result) {
+                        Source
+                          .single(
+                            AccountModel.AccountInfo(
+                              openid = notifyResponse.openid,
+                              money = notifyResponse.total_fee.toInt
+                            )
+                          )
+                          .via(AccountStream.incrmentMoneyToAccount())
+                          .map((i: Boolean) => {
+                            logger
+                              .info("incrmentMoneyToAccount success -> {}", i)
+                            i
+                          })
+                      } else {
+                        logger.error("notify pay update is payed")
+                        Source.single(false)
+                      }
                     )
-                    .via(AccountStream.incrmentMoneyToAccount())
                     .map(i => {
+                      xmlResponse(
+                        Map(
+                          "return_code" -> "SUCCESS",
+                          "return_msg" -> "OK"
+                        )
+                      )
+                    })
+                    .runWith(Sink.head)
+                  complete(
+                    result
+                  )
+              }
+            }
+          },
+          post {
+            path("refund" / "notify") {
+              entity(as[NodeSeq]) {
+                data: NodeSeq =>
+                  val notifyResponse =
+                    data.childXmlTo[AccountModel.RefundNotifyResponse]
+
+                  logger
+                    .info("refund success -> {}", notifyResponse.toJson)
+
+                  val key = system.settings.config
+                    .getString(s"app.wechat.${notifyResponse.appid}.pay.key")
+
+                  DecodeUtil
+                    .decryptData(
+                      notifyResponse.req_info,
+                      MD5Util.md5(key)
+                    )
+                    .map(_.childXmlTo[AccountModel.RefundNotifySuccessDetail])
+                    .fold(
+                      fa => {
+                        fa.printStackTrace()
+                        throw fa
+                      },
+                      (fu: AccountModel.RefundNotifySuccessDetail) => {
+                        logger.info("refund notify info -> {}", fu.toJson)
+                        fu
+                      }
+                    )
+
+                  val wechatResponse = Source
+                    .single(
+                      DecodeUtil
+                        .decryptData(
+                          notifyResponse.req_info,
+                          MD5Util.md5(key)
+                        )
+                        .map(
+                          _.childXmlTo[AccountModel.RefundNotifySuccessDetail]
+                        )
+                        .fold(
+                          fa => {
+                            throw fa
+                          },
+                          (fu: AccountModel.RefundNotifySuccessDetail) => fu
+                        )
+                    )
+                    .flatMapConcat(result => {
+                      Source
+                        .single(result.out_refund_no)
+                        .via(
+                          PayStream.query()
+                        )
+                        .flatMapConcat(r => {
+                          if (r.pay == PayStatus.refunding) {
+                            Source
+                              .single(result.out_refund_no)
+                              .via(PayStream.updateStatus(PayStatus.refund))
+                          } else {
+                            logger.error("重复退款回调")
+                            Source.single(false, 0)
+                          }
+                        })
+                    })
+                    .map(r => {
                       xmlResponse(
                         Map(
                           "return_code" -> "SUCCESS",
@@ -207,7 +309,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
                     .runWith(Sink.head)
 
                   complete(
-                    result
+                    wechatResponse
                   )
               }
             }

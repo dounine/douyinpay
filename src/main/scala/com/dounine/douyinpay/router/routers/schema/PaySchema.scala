@@ -1,7 +1,16 @@
 package com.dounine.douyinpay.router.routers.schema
 
+import akka.http.scaladsl.{ConnectionContext, Http}
+import akka.http.scaladsl.model.{
+  ContentTypes,
+  HttpEntity,
+  HttpMethods,
+  HttpRequest,
+  HttpResponse
+}
 import akka.stream.SystemMaterializer
 import akka.stream.scaladsl.{Sink, Source}
+import akka.util.ByteString
 import com.dounine.douyinpay.model.models.{
   AccountModel,
   OrderModel,
@@ -9,7 +18,11 @@ import com.dounine.douyinpay.model.models.{
   PayUserInfoModel,
   WechatModel
 }
-import com.dounine.douyinpay.model.types.service.{LogEventKey, PayPlatform}
+import com.dounine.douyinpay.model.types.service.{
+  LogEventKey,
+  PayPlatform,
+  PayStatus
+}
 import com.dounine.douyinpay.router.routers.SecureContext
 import com.dounine.douyinpay.router.routers.errors.{
   LockedException,
@@ -46,8 +59,11 @@ import sangria.macros.derive.{
 import sangria.schema._
 import org.json4s.Xml._
 
+import java.io.InputStream
+import java.security.{KeyStore, SecureRandom}
 import java.text.DecimalFormat
-import java.time.LocalDateTime
+import java.time.{LocalDate, LocalDateTime}
+import javax.net.ssl.{KeyManagerFactory, SSLContext}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -121,6 +137,50 @@ object PaySchema extends JsonParse {
     )
   )
 
+  val BillItem =
+    deriveObjectType[Unit, AccountModel.BillItem](
+      ObjectTypeName("BillItem"),
+      ObjectTypeDescription("帐单"),
+      DocumentField("id", "id"),
+      DocumentField("money", "金额"),
+      DocumentField("canRefund", "是否可退款"),
+      DocumentField("refund", "可退款金额"),
+      DocumentField("status", "状态"),
+      DocumentField("createTime", "创建时间")
+    )
+
+  val BillResponse = ObjectType(
+    name = "BillResponse",
+    description = "帐单信息",
+    fields = fields[Unit, AccountModel.BillResponse](
+      Field(
+        name = "list",
+        fieldType = ListType(BillItem),
+        description = Some("帐单金额列表"),
+        resolve = _.value.list
+      ),
+      Field(
+        name = "sum",
+        fieldType = StringType,
+        description = Some("总讲"),
+        resolve = _.value.sum
+      )
+    )
+  )
+
+  val RefundResponse = ObjectType(
+    name = "RefundResponse",
+    description = "退款信息",
+    fields = fields[Unit, AccountModel.RefundResponse](
+      Field(
+        name = "msg",
+        fieldType = StringType,
+        description = Some("退款信息"),
+        resolve = _.value.msg
+      )
+    )
+  )
+
   val MoneyArg = Argument(
     name = "money",
     argumentType = IntType,
@@ -149,11 +209,11 @@ object PaySchema extends JsonParse {
       implicit val system = c.ctx.system
       Source
         .single(orderId)
-        .via(PayStream.payQuery())
+        .via(PayStream.query())
         .mapAsync(1) {
           payInfo =>
             {
-              if (payInfo.pay) {
+              if (payInfo.pay == PayStatus.payed) {
                 Source
                   .single(
                     payInfo.openid
@@ -233,22 +293,330 @@ object PaySchema extends JsonParse {
             val todayRemain: Double =
               if (commonRemain < 0) 0d else commonRemain * 0.02
             AccountModel.AccountRechargeResponse(
-              list = (if (openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o")
-                        List(0.01, 5, 10, 50, 100, 200, 500)
-                      else
-                        List(5.0, 10, 50, 100, 200, 500))
-                .map(i =>
-                  AccountModel
-                    .RechargeItem(
-                      if (i < 1) i.toString else i.toInt.toString
-                    )
-                ),
+              list =
+                (if (
+                   openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || openid == "oHUbp6rLcRUSsn9kX5T8WTwyO5XI"
+                 )
+                   List(0.01, 5, 10, 50, 100, 200, 500)
+                 else
+                   List(5.0, 10, 50, 100, 200, 500))
+                  .map(i =>
+                    AccountModel
+                      .RechargeItem(
+                        if (i < 1) i.toString else i.toInt.toString
+                      )
+                  ),
               balance =
                 (todayRemain + accountUser.map(_.money / 100d).getOrElse(0d))
                   .formatted("%.2f"),
               vipUser = accountUser.isDefined
             )
         }
+        .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
+    }
+  )
+
+  val moneyFormat = new DecimalFormat("###,###")
+
+  val billInfo = Field[
+    SecureContext,
+    RequestInfo,
+    AccountModel.BillResponse,
+    AccountModel.BillResponse
+  ](
+    name = "billInfo",
+    fieldType = BillResponse,
+    tags = Authorised :: Nil,
+    description = Some("帐单信息"),
+    arguments = Argument(
+      name = "date",
+      argumentType = StringType,
+      description = "日期"
+    ) :: Nil,
+    resolve = (c: Context[SecureContext, RequestInfo]) => {
+      implicit val system = c.ctx.system
+      val openid = c.ctx.openid.get
+      val date = c.arg[String]("date")
+      Source
+        .single((LocalDate.parse(date), openid))
+        .via(
+          PayStream.todayPay()
+        )
+        .zip(
+          Source
+            .single(
+              c.ctx.openid.get
+            )
+            .via(
+              AccountStream.query()
+            )
+        )
+        .map {
+          case (todayPay, accountInfo) => {
+            val money = accountInfo.map(_.money).getOrElse(0)
+            AccountModel.BillResponse(
+              list = todayPay
+                .map(i => {
+                  val canRefund =
+                    i.pay == PayStatus.payed && money >= i.money && i.createTime
+                      .plusHours(1)
+                      .isAfter(LocalDateTime.now())
+                  AccountModel.BillItem(
+                    id = i.id,
+                    money = i.money.toString,
+                    canRefund = canRefund,
+                    status = i.pay match {
+                      case PayStatus.normal    => ""
+                      case PayStatus.payed     => ""
+                      case PayStatus.payerr    => "错误"
+                      case PayStatus.refund    => "已退款"
+                      case PayStatus.refunding => "退款中"
+                      case PayStatus.cancel    => "撤消"
+                    },
+                    refund =
+                      if (canRefund)
+                        Some(
+                          Math
+                            .min(
+                              money,
+                              i.money
+                            )
+                            .toString
+                        )
+                      else None,
+                    createTime = i.createTime.toString.replace("T", " ")
+                  )
+                })
+                .toList
+                .sortBy(_.createTime)(Ordering.String.reverse),
+              sum = moneyFormat.format(
+                todayPay
+                  .map(_.money / 100)
+                  .sum
+              )
+            )
+          }
+        }
+        .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
+    }
+  )
+
+  val refund = Field[
+    SecureContext,
+    RequestInfo,
+    AccountModel.RefundResponse,
+    AccountModel.RefundResponse
+  ](
+    name = "refund",
+    fieldType = RefundResponse,
+    tags = Authorised :: Nil,
+    description = Some("申请退款"),
+    arguments = Argument(
+      name = "payId",
+      argumentType = StringType,
+      description = "退款定单"
+    ) :: Nil,
+    resolve = (c: Context[SecureContext, RequestInfo]) => {
+      implicit val system = c.ctx.system
+      val openid = c.ctx.openid.get
+      val payId = c.arg[String]("payId")
+      val appid = c.ctx.appid.get
+      Source
+        .single(payId)
+        .via(
+          PayStream.query()
+        )
+        .zip(
+          Source
+            .single(
+              openid
+            )
+            .via(
+              AccountStream.query()
+            )
+        )
+        .flatMapConcat {
+          case (payInfo, accountInfo) => {
+            val money = accountInfo.map(_.money).getOrElse(0)
+
+            if (
+              !(payInfo.pay == PayStatus.payed && money >= payInfo.money && payInfo.createTime
+                .plusHours(1)
+                .isAfter(LocalDateTime.now()))
+            ) {
+              logger.error(
+                Map(
+                  "time" -> System.currentTimeMillis(),
+                  "data" -> Map(
+                    "event" -> LogEventKey.refundFail,
+                    "msg" -> "申请退款失败、条件不满足。",
+                    "openid" -> openid,
+                    "appid" -> appid,
+                    "payInfo" -> payInfo,
+                    "accountInfo" -> accountInfo,
+                    "ip" -> c.value.addressInfo.ip,
+                    "province" -> c.value.addressInfo.province,
+                    "city" -> c.value.addressInfo.city
+                  )
+                ).toJson
+              )
+              throw new Exception("申请退款失败、条件不满足。")
+            } else {
+              logger.info(
+                Map(
+                  "time" -> System.currentTimeMillis(),
+                  "data" -> Map(
+                    "event" -> LogEventKey.refundRequest,
+                    "openid" -> openid,
+                    "appid" -> appid,
+                    "payInfo" -> payInfo,
+                    "accountInfo" -> accountInfo,
+                    "ip" -> c.value.addressInfo.ip,
+                    "province" -> c.value.addressInfo.province,
+                    "city" -> c.value.addressInfo.city
+                  )
+                ).toJson
+              )
+            }
+
+            val refundMoney = Math
+              .min(
+                money,
+                payInfo.money
+              )
+
+            Source
+              .single(
+                AccountModel.AccountInfo(
+                  openid = openid,
+                  money = refundMoney
+                )
+              )
+              .via(
+                AccountStream.decrmentMoneyToAccount()
+              )
+              .map(i => {
+                (payInfo, accountInfo, refundMoney)
+              })
+          }
+        }
+        .mapAsync(1) {
+          case (payInfo, accountInfo, refundMoney) => {
+            val mch_id =
+              c.ctx.system.settings.config
+                .getString(s"app.wechat.${appid}.pay.mchid")
+
+            val http = Http(system)
+            val password: Array[Char] =
+              mch_id.toCharArray
+
+            val ks: KeyStore = KeyStore.getInstance("PKCS12")
+            val keystore: InputStream =
+              WeixinPay.getClass.getResourceAsStream("/api/apiclient_cert.p12")
+
+            require(keystore != null, "Keystore required!")
+            ks.load(keystore, password)
+
+            val keyManagerFactory: KeyManagerFactory =
+              KeyManagerFactory
+                .getInstance(KeyManagerFactory.getDefaultAlgorithm)
+            keyManagerFactory.init(ks, password)
+
+            val sslContext: SSLContext = SSLContext.getInstance("TLS")
+            sslContext.init(
+              keyManagerFactory.getKeyManagers,
+              null,
+              new SecureRandom
+            )
+            val https = ConnectionContext.httpsClient(sslContext)
+
+            val data = Map(
+              "appid" -> appid,
+              "mch_id" -> mch_id,
+              "nonce_str" -> UUIDUtil.uuid(),
+              "out_trade_no" -> payInfo.id,
+              "out_refund_no" -> payInfo.id,
+              "refund_desc" -> "申请退款",
+              "total_fee" -> refundMoney.toString,
+              "refund_fee" -> refundMoney.toString,
+              "notify_url" -> "https://backup.61week.com/api/wechat/refund/notify"
+            )
+            val signData = WeixinPay.generateSignature(
+              data,
+              appid
+            )
+            implicit val ec = c.ctx.system.executionContext
+            http
+              .singleRequest(
+                HttpRequest(
+                  method = HttpMethods.POST,
+                  uri = "https://api.mch.weixin.qq.com/secapi/pay/refund",
+                  entity = HttpEntity(
+                    ContentTypes.`text/xml(UTF-8)`,
+                    signData.toXml(Some("xml"))
+                  )
+                ),
+                https
+              )
+              .flatMap {
+                case HttpResponse(code, value, entity, protocol) =>
+                  entity.dataBytes
+                    .runFold(ByteString.empty)(_ ++ _)
+                    .map(_.utf8String)
+                    .map(_.childXmlTo[AccountModel.WechatRefundResponse])
+              }
+              .map(r => {
+                if (r.return_code == "SUCCESS") {
+                  logger.info(
+                    Map(
+                      "time" -> System.currentTimeMillis(),
+                      "data" -> Map(
+                        "event" -> LogEventKey.refundOk,
+                        "openid" -> openid,
+                        "appid" -> appid,
+                        "payInfo" -> payInfo,
+                        "accountInfo" -> accountInfo,
+                        "ip" -> c.value.addressInfo.ip,
+                        "province" -> c.value.addressInfo.province,
+                        "city" -> c.value.addressInfo.city
+                      )
+                    ).toJson
+                  )
+                  AccountModel.RefundResponse(
+                    msg = "申请成功、正在退款中..."
+                  )
+                } else {
+                  logger.error(
+                    Map(
+                      "time" -> System.currentTimeMillis(),
+                      "data" -> Map(
+                        "event" -> LogEventKey.refundFail,
+                        "msg" -> r.return_msg,
+                        "openid" -> openid,
+                        "appid" -> appid,
+                        "payInfo" -> payInfo,
+                        "accountInfo" -> accountInfo,
+                        "ip" -> c.value.addressInfo.ip,
+                        "province" -> c.value.addressInfo.province,
+                        "city" -> c.value.addressInfo.city
+                      )
+                    ).toJson
+                  )
+                  AccountModel.RefundResponse(
+                    msg = r.return_msg
+                  )
+                }
+              })
+          }
+        }
+        .flatMapConcat((result: AccountModel.RefundResponse) => {
+          Source
+            .single(payId)
+            .via(
+              PayStream.updateStatus(PayStatus.refunding)
+            )
+            .map(_ => result)
+        })
         .runWith(Sink.head)(SystemMaterializer(c.ctx.system).materializer)
     }
   )
@@ -346,7 +714,7 @@ object PaySchema extends JsonParse {
             id = orderId,
             money = money,
             openid = c.ctx.openid.get,
-            pay = false,
+            pay = PayStatus.normal,
             payTime = LocalDateTime.now(),
             createTime = LocalDateTime.now()
           )
@@ -389,10 +757,12 @@ object PaySchema extends JsonParse {
   )
   val query = fields[SecureContext, RequestInfo](
     rechargeInfo,
+    billInfo,
     queryPay,
     limitInfo
   )
   val mutation = fields[SecureContext, RequestInfo](
-    createPay
+    createPay,
+    refund
   )
 }

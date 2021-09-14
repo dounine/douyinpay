@@ -44,6 +44,7 @@ lazy val app = (project in file("."))
       "eu.timepit" %% "refined-cats" % "0.9.24",
       "eu.timepit" %% "refined-eval" % "0.9.24",
       "com.google.zxing" % "core" % "3.4.1",
+      "org.bouncycastle" % "bcprov-jdk15on" % "1.69",
       "com.lightbend.akka" %% "akka-stream-alpakka-file" % alpakka,
       "com.lightbend.akka" %% "akka-stream-alpakka-slick" % alpakka,
       "com.lightbend.akka" %% "akka-stream-alpakka-udp" % alpakka,

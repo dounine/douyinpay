@@ -15,6 +15,20 @@ object AccountModel {
       money: BigDecimal
   ) extends BaseSerializer
 
+  case class BillItem(
+      id: String,
+      money: String,
+      canRefund: Boolean,
+      refund: Option[String] = None,
+      status: String,
+      createTime: String
+  )
+
+  case class BillResponse(
+      list: List[BillItem],
+      sum: String
+  )
+
   case class NotifyResponse(
       appid: String,
       bank_type: String,
@@ -32,6 +46,28 @@ object AccountModel {
       total_fee: String,
       trade_type: String,
       transaction_id: String
+  )
+
+  case class RefundNotifyResponse(
+      return_code: String,
+      appid: String,
+      mch_id: String,
+      nonce_str: String,
+      req_info: String
+  )
+
+  case class RefundNotifySuccessDetail(
+      transaction_id: String,
+      out_trade_no: String,
+      refund_id: String,
+      out_refund_no: String,
+      refund_recv_accout: String,
+      total_fee: String,
+      refund_fee: String,
+      settlement_refund_fee: String,
+      refund_status: String,
+      success_time: String,
+      refund_request_source: String
   )
 
   case class QueryPayResponse(
@@ -67,5 +103,14 @@ object AccountModel {
       limitUse: String,
       freeUse: String,
       balance: String
+  )
+
+  case class RefundResponse(
+      msg: String
+  )
+
+  case class WechatRefundResponse(
+      return_code: String,
+      return_msg: String
   )
 }

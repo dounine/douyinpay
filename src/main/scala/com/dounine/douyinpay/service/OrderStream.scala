@@ -431,7 +431,7 @@ object OrderStream {
 
   def queryTodayPaySum()(implicit
       system: ActorSystem[_]
-  ): Source[(Int, Int), NotUsed] = {
+  ): Source[(OrderModel.OrderReport, OrderModel.OrderReport), NotUsed] = {
     val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
     implicit val ec: ExecutionContextExecutor = system.executionContext
     implicit val slickSession: SlickSession =
@@ -444,16 +444,25 @@ object OrderStream {
         db.run(
           OrderTable()
             .filter(i =>
-              i.pay === true && i.createTime >= LocalDate
+              i.createTime >= LocalDate
                 .now()
                 .minusDays(1)
                 .atStartOfDay()
                 && i.createTime < LocalDate.now().atStartOfDay()
             )
-            .map(_.money)
-            .sum
             .result
-            .map(_.getOrElse(0))
+            .map(result => {
+              val pays = result.filter(_.pay)
+              val noPays = result.filter(!_.pay)
+              OrderModel.OrderReport(
+                payCount = pays.size,
+                payMoney = pays.map(_.money).sum,
+                payPeople = pays.map(_.openid).distinct.size,
+                noPayCount = noPays.size,
+                noPayMoney = noPays.map(_.money).sum,
+                noPayPeople = noPays.map(_.openid).distinct.size
+              )
+            })
         )
       )
       .zip(
@@ -461,14 +470,23 @@ object OrderStream {
           db.run(
             OrderTable()
               .filter(i =>
-                i.pay === true && i.createTime >= LocalDate
+                i.createTime >= LocalDate
                   .now()
                   .atStartOfDay()
               )
-              .map(_.money)
-              .sum
               .result
-              .map(_.getOrElse(0))
+              .map(result => {
+                val pays = result.filter(_.pay)
+                val noPays = result.filter(!_.pay)
+                OrderModel.OrderReport(
+                  payCount = pays.size,
+                  payMoney = pays.map(_.money).sum,
+                  payPeople = pays.map(_.openid).distinct.size,
+                  noPayCount = noPays.size,
+                  noPayMoney = noPays.map(_.money).sum,
+                  noPayPeople = noPays.map(_.openid).distinct.size
+                )
+              })
           )
         )
       )

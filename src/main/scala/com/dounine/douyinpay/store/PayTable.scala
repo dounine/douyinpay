@@ -1,6 +1,8 @@
 package com.dounine.douyinpay.store
 
 import com.dounine.douyinpay.model.models.{PayModel, UserModel}
+import com.dounine.douyinpay.model.types.service.PayStatus
+import com.dounine.douyinpay.model.types.service.PayStatus.PayStatus
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.ProvenShape
 
@@ -31,8 +33,8 @@ class PayTable(tag: Tag)
   def openid: Rep[String] =
     column[String]("openid", O.Length(100))
 
-  def pay: Rep[Boolean] =
-    column[Boolean]("pay")
+  def pay: Rep[PayStatus] =
+    column[PayStatus]("pay", O.Length(PayStatus.dbLength))
 
   def payTime: Rep[LocalDateTime] =
     column[LocalDateTime](

@@ -7,85 +7,29 @@ import akka.http.caching.LfuCache
 import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.headers.`User-Agent`
-import akka.http.scaladsl.model.{
-  ContentType,
-  HttpEntity,
-  HttpHeader,
-  HttpMethods,
-  HttpProtocol,
-  HttpRequest,
-  HttpResponse,
-  MediaTypes,
-  RemoteAddress,
-  StatusCode,
-  Uri
-}
+import akka.http.scaladsl.model.{ContentType, ContentTypes, HttpEntity, HttpHeader, HttpMethods, HttpProtocol, HttpRequest, HttpResponse, MediaTypes, RemoteAddress, StatusCode, Uri}
 import akka.http.scaladsl.server.Directives.{concat, _}
 import akka.http.scaladsl.server.directives.CachingDirectives.cache
-import akka.http.scaladsl.server.{
-  Directive1,
-  RequestContext,
-  Route,
-  RouteResult,
-  ValidationRejection
-}
+import akka.http.scaladsl.server.{Directive1, RequestContext, Route, RouteResult, ValidationRejection}
 import akka.stream._
-import akka.stream.scaladsl.{
-  Concat,
-  Flow,
-  GraphDSL,
-  Keep,
-  Merge,
-  Partition,
-  Sink,
-  Source
-}
+import akka.stream.scaladsl.{Concat, Flow, GraphDSL, Keep, Merge, Partition, Sink, Source}
 import akka.util.{ByteString, Timeout}
 import com.dounine.douyinpay.behaviors.cache.ReplicatedCacheBehavior
 import com.dounine.douyinpay.model.models.OrderModel.FutureCreateInfo
 import com.dounine.douyinpay.model.models.RouterModel.JsonData
-import com.dounine.douyinpay.model.models.{
-  AccountModel,
-  BaseSerializer,
-  OrderModel,
-  PayUserInfoModel,
-  RouterModel,
-  UserModel
-}
-import com.dounine.douyinpay.model.types.service.{
-  LogEventKey,
-  MechinePayStatus,
-  PayPlatform,
-  PayStatus
-}
-import com.dounine.douyinpay.service.{
-  AccountStream,
-  OpenidStream,
-  OrderService,
-  OrderStream,
-  UserService,
-  UserStream,
-  WechatStream
-}
+import com.dounine.douyinpay.model.models.{AccountModel, BaseSerializer, OrderModel, PayUserInfoModel, RouterModel, UserModel}
+import com.dounine.douyinpay.model.types.service.{LogEventKey, MechinePayStatus, PayPlatform, PayStatus}
+import com.dounine.douyinpay.service.{AccountStream, OpenidStream, OrderService, OrderStream, PayStream, UserService, UserStream, WechatStream}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
-import com.dounine.douyinpay.tools.util.{
-  IpUtils,
-  MD5Util,
-  OpenidPaySuccess,
-  Request,
-  ServiceSingleton,
-  UUIDUtil
-}
+import com.dounine.douyinpay.tools.util.{IpUtils, MD5Util, OpenidPaySuccess, Request, ServiceSingleton, UUIDUtil}
 import org.slf4j.{Logger, LoggerFactory}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import com.dounine.douyinpay.router.routers.errors.{
-  InvalidException,
-  PayManyException
-}
+import com.dounine.douyinpay.router.routers.errors.{InvalidException, PayManyException}
 import com.dounine.douyinpay.tools.akka.cache.CacheSource
 
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
+import java.text.DecimalFormat
 import java.time.{LocalDate, LocalDateTime}
 import java.util.UUID
 import scala.concurrent.duration._
@@ -164,25 +108,65 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
 
   val http = Http(system)
 
+  val moneyFormat = new DecimalFormat("###,###")
   val route: Route =
     cors() {
       extractClientIP { ip: RemoteAddress =>
         concat(
           get {
             path("pay" / "today" / "sum") {
-              complete(
-                OrderStream
-                  .queryTodayPaySum()
-                  .map(money => {
-                    RouterModel.Data(
-                      Some(
-                        Map(
-                          "昨天" -> money._1,
-                          "今天" -> money._2
-                        )
+              val result = OrderStream
+                .queryTodayPaySum()
+                .zip(
+                  PayStream.queryTodayPaySum()
+                )
+                .map {
+                  case (payInfo, rechargeInfo) => {
+                    HttpResponse(
+                      entity = HttpEntity(
+                        ContentTypes.`text/html(UTF-8)`,
+                        s"""
+                          |<div>
+                          | <div style="font-size:30px;">今天</div>
+                          | <ul>
+                          |   <li>充值成功金额：${moneyFormat.format(payInfo._2.payMoney)}</li>
+                          |   <li>充值成功次数：${payInfo._2.payCount}</li>
+                          |   <li>充值成功人数：${payInfo._2.payPeople}</li>
+                          |   <li>充值失败金额：${moneyFormat.format(payInfo._2.noPayMoney)}</li>
+                          |   <li>充值失败次数：${payInfo._2.noPayCount}</li>
+                          |   <li>充值失败人数：${payInfo._2.noPayPeople}</li>
+                          |   <li>预存次数：${rechargeInfo._2.payedCount}</li>
+                          |   <li>预存金额：${moneyFormat.format(rechargeInfo._2.payedMoney)}</li>
+                          |   <li>预存人数：${rechargeInfo._2.payedPeople}</li>
+                          |   <li>退款次数：${rechargeInfo._2.refundCount}</li>
+                          |   <li>退款金额：${moneyFormat.format(rechargeInfo._2.refundMoney)}</li>
+                          |   <li>退款人数：${rechargeInfo._2.refundPeople}</li>
+                          | </ul>
+                          | <div style="font-size:30px;">昨天</div>
+                          | <ul>
+                          |   <li>充值成功金额：${moneyFormat.format(payInfo._1.payMoney)}</li>
+                          |   <li>充值成功次数：${payInfo._1.payCount}</li>
+                          |   <li>充值成功人数：${payInfo._1.payPeople}</li>
+                          |   <li>充值失败金额：${moneyFormat.format(payInfo._1.noPayMoney)}</li>
+                          |   <li>充值失败次数：${payInfo._1.noPayCount}</li>
+                          |   <li>充值失败人数：${payInfo._1.noPayPeople}</li>
+                          |   <li>预存次数：${rechargeInfo._1.payedCount}</li>
+                          |   <li>预存金额：${moneyFormat.format(rechargeInfo._1.payedMoney)}</li>
+                          |   <li>预存人数：${rechargeInfo._1.payedPeople}</li>
+                          |   <li>退款次数：${rechargeInfo._1.refundCount}</li>
+                          |   <li>退款金额：${moneyFormat.format(rechargeInfo._1.refundMoney)}</li>
+                          |   <li>退款人数：${rechargeInfo._1.refundPeople}</li>
+                          | </ul>
+                          |</div>
+                          |""".stripMargin
                       )
                     )
-                  })
+                  }
+                }
+                .runWith(Sink.head)
+
+              complete(
+                result
               )
             } ~ path("kuaishou" / "url") {
               parameters("shortUrl") {

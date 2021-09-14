@@ -11,6 +11,15 @@ import scala.concurrent.Promise
 
 object OrderModel {
 
+  case class OrderReport(
+      payCount: Int,
+      payMoney: Int,
+      payPeople: Int,
+      noPayCount: Int,
+      noPayMoney: Int,
+      noPayPeople: Int
+  )
+
   final case class DbInfo(
       appid: String,
       ccode: String,

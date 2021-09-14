@@ -1,5 +1,7 @@
 package com.dounine.douyinpay.model.models
 
+import com.dounine.douyinpay.model.types.service.PayStatus.PayStatus
+
 import java.time.LocalDateTime
 import scala.xml.NodeSeq
 
@@ -9,13 +11,22 @@ object PayModel {
       id: String,
       money: Int,
       openid: String,
-      pay: Boolean,
+      pay: PayStatus,
       payTime: LocalDateTime,
       createTime: LocalDateTime
   ) extends BaseSerializer
 
   case class UpdateCard(
       id: String,
-      pay: Boolean
+      pay: PayStatus
   ) extends BaseSerializer
+
+  case class PayReport(
+      payedCount: Int,
+      payedMoney: Int,
+      payedPeople: Int,
+      refundCount: Int,
+      refundMoney: Int,
+      refundPeople: Int
+  )
 }
