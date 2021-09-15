@@ -357,10 +357,15 @@ object PaySchema extends JsonParse {
             AccountModel.BillResponse(
               list = todayPay
                 .map(i => {
+
+                  //支付成功3分钟后、并且在1个小时之前
                   val canRefund =
                     i.pay == PayStatus.payed && money >= i.money && i.createTime
                       .plusHours(1)
-                      .isAfter(LocalDateTime.now())
+                      .isAfter(LocalDateTime.now()) && i.createTime
+                      .plusMinutes(3)
+                      .isBefore(LocalDateTime.now())
+
                   AccountModel.BillItem(
                     id = i.id,
                     money = i.money.toString,
@@ -438,11 +443,13 @@ object PaySchema extends JsonParse {
         .flatMapConcat {
           case (payInfo, accountInfo) => {
             val money = accountInfo.map(_.money).getOrElse(0)
-
+            //支付成功3分钟后、并且在1个小时之前
             if (
               !(payInfo.pay == PayStatus.payed && money >= payInfo.money && payInfo.createTime
                 .plusHours(1)
-                .isAfter(LocalDateTime.now()))
+                .isAfter(LocalDateTime.now()) && payInfo.createTime
+                .plusMinutes(3)
+                .isBefore(LocalDateTime.now()))
             ) {
               logger.error(
                 Map(
