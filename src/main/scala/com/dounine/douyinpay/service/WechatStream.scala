@@ -474,7 +474,7 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> System.currentTimeMillis() / 1000,
                   "MsgType" -> "text",
-                  "Content" -> "\uD83C\uDF89欢迎关注抖、直播充值请点击下面的菜单\uD83C\uDF89"
+                  "Content" -> "\uD83C\uDF89感谢您的关注、直播充值请点击下面的菜单\uD83C\uDF89"
                 )
               )
             case "unsubscribe" =>
