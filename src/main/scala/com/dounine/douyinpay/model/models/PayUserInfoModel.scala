@@ -34,6 +34,14 @@ object PayUserInfoModel {
       data: DouYinSearchData
   )
 
+  final case class KuaishouSearchResponse(
+      result: Int,
+      error_msg: Option[String],
+      headUrl: Option[String],
+      userName: Option[String],
+      userId: Option[String]
+  )
+
   final case class KuaiShouResponse(
       result: Int,
       error_msg: Option[String],

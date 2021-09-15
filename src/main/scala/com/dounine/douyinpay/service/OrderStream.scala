@@ -3,8 +3,11 @@ package com.dounine.douyinpay.service
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.headers.`User-Agent`
 import akka.http.scaladsl.model.{
+  HttpHeader,
   HttpMethods,
+  HttpProtocol,
   HttpRequest,
   HttpResponse,
   StatusCode
@@ -13,6 +16,7 @@ import akka.stream.SystemMaterializer
 import akka.stream.alpakka.slick.scaladsl.SlickSession
 import akka.stream.scaladsl.{FileIO, Flow, Source}
 import com.dounine.douyinpay.model.models.{AccountModel, OrderModel}
+import com.dounine.douyinpay.model.types.service.PayPlatform
 import com.dounine.douyinpay.store.{AccountTable, OrderTable}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.akka.db.DataSource
@@ -89,18 +93,64 @@ object OrderStream {
       .mapAsync(1) { tp2: (OrderModel.DbInfo, OrderModel.QrcodeResponse) =>
         tp2._2.codeUrl match {
           case Some(url) =>
-            Future.successful(
-              tp2._1,
-              QrcodeUtil
-                .create2(
-                  data = url,
-                  markFile = Some(
-                    OrderStream.getClass
-                      .getResourceAsStream("/icon_wechatpay.jpeg")
-                  )
+            tp2._1.platform match {
+              case PayPlatform.douyin =>
+                Future.successful(
+                  tp2._1,
+                  QrcodeUtil
+                    .create2(
+                      data = url,
+                      markFile = Some(
+                        OrderStream.getClass
+                          .getResourceAsStream("/icon_wechatpay.jpeg")
+                      )
+                    )
+                    .getAbsolutePath
                 )
-                .getAbsolutePath
-            )
+              case kuaishou =>
+                Http(system)
+                  .singleRequest(
+                    HttpRequest(
+                      uri = url,
+                      headers = Seq(
+                        `User-Agent`(
+                          "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1 wechatdevtools/1.05.2107221 MicroMessenger/8.0.5 Language/zh_CN webview/16314653301349493"
+                        )
+                      )
+                    )
+                  )
+                  .map {
+                    case HttpResponse(
+                          code: StatusCode,
+                          value: Seq[HttpHeader],
+                          entity,
+                          protocol: HttpProtocol
+                        ) =>
+                      value
+                        .find(_.name().equalsIgnoreCase("Location")) match {
+                        case Some(value) => Some(value.value())
+                        case None        => None
+                      }
+                  }(system.executionContext)
+                  .map {
+                    case Some(url) =>
+                      (
+                        tp2._1,
+                        QrcodeUtil
+                          .create2(
+                            data = url,
+                            markFile = Some(
+                              OrderStream.getClass
+                                .getResourceAsStream("/icon_wechatpay.jpeg")
+                            )
+                          )
+                          .getAbsolutePath
+                      )
+                    case None => throw new Exception("url获取失败、请联系客服")
+                  }
+              case huoshan =>
+                throw new Exception("暂时不支持火山充值") //TODO future suport
+            }
           case None =>
             Http(system)
               .singleRequest(

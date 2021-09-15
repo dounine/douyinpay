@@ -76,7 +76,7 @@ object OrderModel {
   final case class Recharge(
       id: String,
       money: String,
-      volumn: String,
+      platform: PayPlatform,
       domain: String,
       ccode: String,
       sign: String

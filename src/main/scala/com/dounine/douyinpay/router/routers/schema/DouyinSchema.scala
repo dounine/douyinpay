@@ -100,14 +100,20 @@ object DouyinSchema extends JsonParse {
     arguments = IdArg :: PlatformArg :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val s = c.ctx.system
-      val id = c.arg(IdArg).replaceAll("[^A-Za-z0-9_.]", "")
       val platform = c.arg(PlatformArg)
+      val originId = c.arg(IdArg)
+      val id = platform match {
+        case PayPlatform.douyin   => originId.replaceAll("[^A-Za-z0-9_.]", "")
+        case PayPlatform.kuaishou => originId.replaceAll("[^A-Za-z0-9_-]", "")
+        case PayPlatform.huoshan  => originId.replaceAll("[^A-Za-z0-9_.]", "")
+      }
 
       logger.info(
         Map(
           "time" -> System.currentTimeMillis(),
           "data" -> Map(
             "event" -> LogEventKey.userInfoQuery,
+            "platform" -> platform,
             "userAccount" -> id,
             "openid" -> c.ctx.openid.get,
             "ip" -> c.value.addressInfo.ip,
@@ -148,7 +154,26 @@ object DouyinSchema extends JsonParse {
                       )
                     } else None
                   })(c.ctx.system.executionContext)
-              case PayPlatform.huoshan => Future.successful(None)
+              case PayPlatform.kuaishou =>
+                val url = "https://pay.ssl.kuaishou.com/payAPI/k/pay/userInfo"
+                Request
+                  .post[PayUserInfoModel.KuaishouSearchResponse](
+                    url,
+                    Map(
+                      "id" -> id
+                    )
+                  )
+                  .map(item => {
+                    if (item.result == 1) {
+                      Some(
+                        PayUserInfoModel.Info(
+                          nickName = item.userName.get,
+                          id = item.userId.get,
+                          avatar = item.headUrl.get
+                        )
+                      )
+                    } else None
+                  })(c.ctx.system.executionContext)
             }
         )
     }

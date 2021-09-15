@@ -110,9 +110,6 @@ object OrderSchema extends JsonParse {
   val moneyFormat = new DecimalFormat("###,###.00")
   val volumnFormat = new DecimalFormat("###,###")
 
-//  val commonUserMoneys = List(
-//    6, 10, 30, 66, 88, 100
-//  )
   val vipUserMoneys = List(
     6, 30, 66, 88, 288, 688, 1888, 6666, 8888
   )
@@ -310,15 +307,11 @@ object OrderSchema extends JsonParse {
     fieldType = StringType,
     tags = Authorised :: Nil,
     description = Some("定单支付状态"),
-    arguments = Argument(
-      name = "orderId",
-      argumentType = StringType,
-      description = "定单ID"
-    ) :: Nil,
+    arguments = Arguments.orderId :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) =>
       ServiceSingleton
         .get(classOf[OrderService])
-        .queryOrderStatus(c.arg[String]("orderId"))
+        .queryOrderStatus(c.arg(Arguments.orderId))
   )
 
   val OrderCreateResponse =
@@ -328,12 +321,6 @@ object OrderSchema extends JsonParse {
       DocumentField("queryUrl", "定单状态查询地扯"),
       DocumentField("qrcodeUrl", "支付二维码地扯")
     )
-
-  val MoneyArg = Argument(
-    name = "money",
-    argumentType = StringType,
-    description = "充值金额"
-  )
 
   val orderCreate = Field[
     SecureContext,
@@ -345,41 +332,22 @@ object OrderSchema extends JsonParse {
     fieldType = OrderCreateResponse,
     tags = Authorised :: Nil,
     description = Some("创建支付定单"),
-    arguments = Argument(
-      name = "id",
-      argumentType = StringType,
-      description = "抖音帐号"
-    ) :: MoneyArg :: Argument(
-      name = "volumn",
-      argumentType = StringType,
-      description = "充值抖币"
-    ) :: Argument(
-      name = "ccode",
-      argumentType = StringType,
-      description = "渠道"
-    ) :: Argument(
-      name = "domain",
-      argumentType = StringType,
-      description = "domain"
-    ) :: Argument(
-      name = "sign",
-      argumentType = StringType,
-      description = "签名md5((id,money,volumn,domain,openid).sort.join(''))"
-    ) :: Nil,
+    arguments =
+      Arguments.id :: Arguments.money :: Arguments.platform :: Arguments.ccode :: Arguments.domain :: Arguments.sign :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val system = c.ctx.system
-      val money = moneyFormat.parse(c.arg(MoneyArg)).intValue()
+      val money = moneyFormat.parse(c.arg(Arguments.money)).intValue()
       val openid = c.ctx.openid.get
-      val domain = c.arg[String]("domain")
+      val domain = c.arg(Arguments.domain)
       Source
         .single(
           OrderModel.Recharge(
-            id = c.arg[String]("id"),
-            money = c.arg[String]("money"),
-            volumn = c.arg[String]("volumn"),
-            ccode = c.arg[String]("ccode"),
-            domain = c.arg[String]("domain"),
-            sign = c.arg[String]("sign")
+            id = c.arg(Arguments.id),
+            money = c.arg(Arguments.money),
+            platform = c.arg(Arguments.platform),
+            ccode = c.arg(Arguments.ccode),
+            domain = c.arg(Arguments.domain),
+            sign = c.arg(Arguments.sign)
           )
         )
         .map(_ -> c.ctx.openid.get)
@@ -387,7 +355,7 @@ object OrderSchema extends JsonParse {
           CacheSource(c.ctx.system)
             .cache()
             .get[String](
-              key = "qrcodeCreateFail_" + openid
+              key = "qrcodeCreateFail_" + tp2._1.platform + openid
             )
             .map {
               case Some(value) =>
@@ -400,7 +368,7 @@ object OrderSchema extends JsonParse {
           tp2 =>
             CacheSource(c.ctx.system)
               .cache()
-              .get[LocalDateTime]("createOrder_" + openid)
+              .get[LocalDateTime]("createOrder_" + tp2._1.platform + openid)
               .map {
                 case Some(time) => {
                   val nextSeconds = java.time.Duration
@@ -435,8 +403,8 @@ object OrderSchema extends JsonParse {
             MD5Util.md5(
               Array(
                 i._1.id,
+                i._1.platform.toString,
                 i._1.money,
-                i._1.volumn,
                 i._1.ccode,
                 i._1.domain,
                 openid
@@ -449,9 +417,9 @@ object OrderSchema extends JsonParse {
                 "data" -> Map(
                   "event" -> LogEventKey.orderCreateSignError,
                   "openid" -> openid,
+                  "payPlatform" -> i._1.platform,
                   "payAccount" -> i._1.id,
                   "payMoney" -> i._1.money,
-                  "payVolumn" -> i._1.volumn,
                   "payCcode" -> i._1.ccode,
                   "sign" -> i._1.sign,
                   "domain" -> i._1.domain,
@@ -482,7 +450,7 @@ object OrderSchema extends JsonParse {
             money = moneyFormat.parse(data.money).intValue(),
             volumn = volumnFormat.parse(data.money).intValue() * 10,
             fee = 0,
-            platform = PayPlatform.douyin,
+            platform = data.platform,
             createTime = LocalDateTime.now()
           )
           logger.info(
@@ -565,7 +533,7 @@ object OrderSchema extends JsonParse {
               CacheSource(c.ctx.system)
                 .cache()
                 .put[LocalDateTime](
-                  key = "createOrder_" + openid,
+                  key = "createOrder_" + info._1.platform + openid,
                   value = LocalDateTime.now(),
                   ttl = 60.seconds
                 )
@@ -573,7 +541,7 @@ object OrderSchema extends JsonParse {
             } else {
               CacheSource(c.ctx.system)
                 .cache()
-                .remove("createOrder_" + openid)
+                .remove("createOrder_" + info._1.platform + openid)
                 .map(_ => info)(c.ctx.system.executionContext)
             }
         }
@@ -596,7 +564,7 @@ object OrderSchema extends JsonParse {
             CacheSource(c.ctx.system)
               .cache()
               .put[String](
-                key = "qrcodeCreateFail_" + openid,
+                key = "qrcodeCreateFail_" + i._1.platform + openid,
                 value = i._2.message.getOrElse("empty error message"),
                 ttl = 1.hours
               )
