@@ -371,7 +371,7 @@ object PaySchema extends JsonParse {
                   val canRefund =
                     i.pay == PayStatus.payed && money >= i.money && i.createTime
                       .plusHours(1)
-                      .isAfter(LocalDateTime.now()))
+                      .isAfter(LocalDateTime.now())
 
                   AccountModel.BillItem(
                     id = i.id,
