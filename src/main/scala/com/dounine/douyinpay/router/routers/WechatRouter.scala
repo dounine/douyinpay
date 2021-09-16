@@ -226,11 +226,23 @@ class WechatRouter()(implicit system: ActorSystem[_])
                               .via(
                                 PayStream.queryOpenidPaySum()
                               )
+                              .zip(
+                                Source
+                                  .single(
+                                    (
+                                      notifyResponse.appid,
+                                      notifyResponse.openid
+                                    )
+                                  )
+                                  .via(
+                                    WechatStream.userInfoQuery3()
+                                  )
+                              )
                           )((sum, next) => {
-                            (sum._1, sum._2, next)
+                            (sum._1, sum._2, next._1, next._2)
                           })
                           .mapAsync(1) {
-                            case (userInfo, vipUser, wechatPays) =>
+                            case (userInfo, vipUser, wechatPays, wechatUser) =>
                               val payInfo =
                                 OpenidPaySuccess.query(notifyResponse.openid)
                               DingDing
@@ -245,6 +257,8 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                                 | - 公众号: ${wechat.getString(
                                         s"${notifyResponse.appid}.name"
                                       )}
+                                                | - 是否关注：${wechatUser.subscribe == 1}
+                                                | - 微信昵称：${wechatUser.nickname.getOrElse("未关注")}
                                                 | - 总充值金额: ${payInfo.money}
                                                 | - 总充值次数: ${payInfo.count}
                                                 | - 来源渠道：${userInfo.get.ccode}

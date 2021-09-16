@@ -274,7 +274,7 @@ object OrderStream {
                         | - 公众号: ${wechat.getString(s"${order.appid}.name")}
                         | - 是否关注：${wechatUser.subscribe == 1}
                         | - 当前渠道: ${order.ccode}
-                        | - 微信昵称: ${order.nickName.getOrElse("")}
+                        | - 微信昵称: ${order.nickName.getOrElse("未关注")}
                         | - 充值帐号: ${order.id}
                         | - 本次金额: ${order.money}
                         | - 今日充值次数: ${order.todayPayCount}
