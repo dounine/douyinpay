@@ -250,14 +250,14 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                                 | - 来源渠道：${userInfo.get.ccode}
                                                 | - 总支付金额：${wechatPays
                                         .filter(_.pay == PayStatus.payed)
-                                        .map(_.money / 100)
-                                        .sum + (notifyResponse.total_fee / 100)} 元
+                                        .map(_.money / 100D)
+                                        .sum + (notifyResponse.total_fee / 100D)} 元
                                                 | - 总支付次数：${wechatPays
                                         .filter(_.pay == PayStatus.payed)
                                         .size + 1}
                                                 | - 帐户余额：${vipUser
-                                        .map(_.money / 100d)
-                                        .getOrElse(0d) + (notifyResponse.total_fee / 100)}
+                                        .map(_.money / 100D)
+                                        .getOrElse(0D) + (notifyResponse.total_fee / 100D)}
                                                 | - 注册时间：${java.time.Duration
                                         .between(
                                           userInfo.get.createTime,
