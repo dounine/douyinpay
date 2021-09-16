@@ -277,6 +277,7 @@ object OrderStream {
                         | - 微信昵称: ${order.nickName.getOrElse("未关注")}
                         | - 充值帐号: ${order.id}
                         | - 本次金额: ${order.money}
+                        | - 手续费：${order.fee / 100d}
                         | - 今日充值次数: ${order.todayPayCount}
                         | - 今日充值金额: ${order.todayPayMoney}
                         | - 全部充值次数: ${order.payCount}
