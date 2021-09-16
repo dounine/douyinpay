@@ -172,6 +172,25 @@ object PayStream {
       }
   }
 
+  def queryOpenidPaySum()(implicit
+      system: ActorSystem[_]
+  ): Flow[String, Seq[PayModel.PayInfo], NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    val payTable = PayTable()
+    Flow[String]
+      .mapAsync(1) { openid =>
+        db.run(
+          payTable
+            .filter(i => i.openid === openid)
+            .result
+        )
+      }
+  }
+
   def updateStatus(status: PayStatus)(implicit
       system: ActorSystem[_]
   ): Flow[String, Int, NotUsed] = {

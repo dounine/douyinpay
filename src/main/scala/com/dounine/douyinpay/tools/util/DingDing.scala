@@ -35,6 +35,7 @@ object DingDing extends JsonParse {
     val phonePaySuccess = Value("phone_pay_success")
     val phonePayFail = Value("phone_pay_fail")
     val phonePayBind = Value("phone_pay_bind")
+    val wechatPay = Value("wechat_pay_notify")
   }
   case class Markdown(
       title: String,

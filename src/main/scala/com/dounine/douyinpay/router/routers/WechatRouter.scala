@@ -25,13 +25,16 @@ import com.dounine.douyinpay.model.types.service.{LogEventKey, PayStatus}
 import com.dounine.douyinpay.service.{
   AccountStream,
   OpenidStream,
+  OrderStream,
   PayStream,
   WechatStream
 }
 import com.dounine.douyinpay.tools.util.{
   DecodeUtil,
+  DingDing,
   IpUtils,
   MD5Util,
+  OpenidPaySuccess,
   WeixinPay
 }
 import org.apache.commons.codec.binary.Base64
@@ -40,6 +43,8 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.net.{Inet4Address, InetAddress, URLEncoder}
 import java.security.SecureRandom
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Cipher, KeyGenerator}
@@ -83,6 +88,7 @@ class WechatRouter()(implicit system: ActorSystem[_])
 
   val domain = config.getString("file.domain")
   val http = Http(system)
+  val timeFormatter = DateTimeFormatter.ofPattern("yy-MM-dd HH:mm:ss")
 
   val route: Route =
     cors() {
@@ -196,18 +202,83 @@ class WechatRouter()(implicit system: ActorSystem[_])
                   logger
                     .info("notify pay success -> {}", notifyResponse.toJson)
 
+                  val wechat = system.settings.config.getConfig("app.wechat")
                   val result = Source
                     .single(notifyResponse.out_trade_no)
                     .via(PayStream.paySuccess())
                     .flatMapConcat((result: Boolean) =>
                       if (result) {
                         Source
-                          .single(
-                            AccountModel.AccountInfo(
-                              openid = notifyResponse.openid,
-                              money = notifyResponse.total_fee.toInt
-                            )
+                          .single(notifyResponse.openid)
+                          .via(
+                            OpenidStream.query()
                           )
+                          .zip(
+                            Source
+                              .single(notifyResponse.openid)
+                              .via(
+                                AccountStream.query()
+                              )
+                          )
+                          .zipWith(
+                            Source
+                              .single(notifyResponse.openid)
+                              .via(
+                                PayStream.queryOpenidPaySum()
+                              )
+                          )((sum, next) => {
+                            (sum._1, sum._2, next)
+                          })
+                          .mapAsync(1) {
+                            case (userInfo, vipUser, wechatPays) =>
+                              val payInfo =
+                                OpenidPaySuccess.query(notifyResponse.openid)
+                              DingDing
+                                .sendMessageFuture(
+                                  DingDing.MessageType.wechatPay,
+                                  data = DingDing.MessageData(
+                                    markdown = DingDing.Markdown(
+                                      title = "支付通知",
+                                      text = s"""
+                                                |## ${if (vipUser.isEmpty) "首充"
+                                      else "复购"}
+                                                | - 公众号: ${wechat.getString(
+                                        s"${notifyResponse.appid}.name"
+                                      )}
+                                                | - 总充值金额: ${payInfo.money}
+                                                | - 总充值次数: ${payInfo.count}
+                                                | - 来源渠道：${userInfo.get.ccode}
+                                                | - 总支付金额：${wechatPays
+                                        .filter(_.pay == PayStatus.payed)
+                                        .map(_.money / 100)
+                                        .sum + (notifyResponse.total_fee / 100)} 元
+                                                | - 总支付次数：${wechatPays
+                                        .filter(_.pay == PayStatus.payed)
+                                        .size + 1}
+                                                | - 帐户余额：${vipUser
+                                        .map(_.money / 100d)
+                                        .getOrElse(0d) + (notifyResponse.total_fee / 100)}
+                                                | - 注册时间：${java.time.Duration
+                                        .between(
+                                          userInfo.get.createTime,
+                                          LocalDateTime.now()
+                                        )
+                                        .toDays} 天前
+                                                | - openid: ${notifyResponse.openid}
+                                                | - 通知时间: ${LocalDateTime
+                                        .now()
+                                        .format(timeFormatter)}
+                                                |""".stripMargin
+                                    )
+                                  )
+                                )
+                                .map(_ =>
+                                  AccountModel.AccountInfo(
+                                    openid = notifyResponse.openid,
+                                    money = notifyResponse.total_fee.toInt
+                                  )
+                                )
+                          }
                           .via(AccountStream.incrmentMoneyToAccount())
                           .map((i: Boolean) => {
                             logger
