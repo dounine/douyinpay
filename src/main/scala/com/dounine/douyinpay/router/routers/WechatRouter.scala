@@ -252,10 +252,10 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                                 | - 总支付金额：${wechatPays
                                         .filter(_.pay == PayStatus.payed)
                                         .map(_.money / 100d)
-                                        .sum + (notifyResponse.total_fee.toInt / 100d)} 元
+                                        .sum} 元
                                                 | - 总支付次数：${wechatPays
                                         .filter(_.pay == PayStatus.payed)
-                                        .size + 1}
+                                        .size}
                                                 | - 帐户余额：${vipUser
                                         .map(_.money / 100d)
                                         .getOrElse(0d) + (notifyResponse.total_fee.toInt / 100d)}
