@@ -248,16 +248,17 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                                 | - 总充值金额: ${payInfo.money}
                                                 | - 总充值次数: ${payInfo.count}
                                                 | - 来源渠道：${userInfo.get.ccode}
+                                                | - 当前支付金额：${notifyResponse.total_fee.toInt / 100}
                                                 | - 总支付金额：${wechatPays
                                         .filter(_.pay == PayStatus.payed)
-                                        .map(_.money / 100D)
-                                        .sum + (notifyResponse.total_fee.toInt / 100D)} 元
+                                        .map(_.money / 100d)
+                                        .sum + (notifyResponse.total_fee.toInt / 100d)} 元
                                                 | - 总支付次数：${wechatPays
                                         .filter(_.pay == PayStatus.payed)
                                         .size + 1}
                                                 | - 帐户余额：${vipUser
-                                        .map(_.money / 100D)
-                                        .getOrElse(0D) + (notifyResponse.total_fee.toInt / 100D)}
+                                        .map(_.money / 100d)
+                                        .getOrElse(0d) + (notifyResponse.total_fee.toInt / 100d)}
                                                 | - 注册时间：${java.time.Duration
                                         .between(
                                           userInfo.get.createTime,

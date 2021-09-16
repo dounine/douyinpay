@@ -15,7 +15,11 @@ import akka.http.scaladsl.model.{
 import akka.stream.SystemMaterializer
 import akka.stream.alpakka.slick.scaladsl.SlickSession
 import akka.stream.scaladsl.{FileIO, Flow, Source}
-import com.dounine.douyinpay.model.models.{AccountModel, OrderModel}
+import com.dounine.douyinpay.model.models.{
+  AccountModel,
+  OrderModel,
+  WechatModel
+}
 import com.dounine.douyinpay.model.types.service.PayPlatform
 import com.dounine.douyinpay.store.{AccountTable, OrderTable}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
@@ -255,6 +259,7 @@ object OrderStream {
     val wechat = system.settings.config.getConfig("app.wechat")
     val notify = (
         typ: DingDing.MessageType.MessageType,
+        wechatUser: WechatModel.WechatUserInfo,
         order: OrderModel.DbInfo,
         title: String
     ) => {
@@ -267,7 +272,7 @@ object OrderStream {
               text = s"""
                         |## ${title}
                         | - 公众号: ${wechat.getString(s"${order.appid}.name")}
-                        | - 公众号ID: ${order.appid}
+                        | - 是否关注：${wechatUser.subscribe == 1}
                         | - 当前渠道: ${order.ccode}
                         | - 微信昵称: ${order.nickName.getOrElse("")}
                         | - 充值帐号: ${order.id}
@@ -294,18 +299,25 @@ object OrderStream {
     }
     Flow[OrderModel.DbInfo]
       .via(aggregation())
-      .mapAsync(1) { order =>
-        if (order.pay) {
-          notify(DingDing.MessageType.payed, order, "充值成功")
-            .recover {
-              case e => order
-            }
-        } else {
-          notify(DingDing.MessageType.payerr, order, "充值失败")
-            .recover {
-              case e => order
-            }
-        }
+      .flatMapConcat(order => {
+        Source
+          .single((order.appid, order.openid))
+          .via(WechatStream.userInfoQuery3())
+          .map(_ -> order)
+      })
+      .mapAsync(1) {
+        case (wechatUser: WechatModel.WechatUserInfo, order) =>
+          if (order.pay) {
+            notify(DingDing.MessageType.payed, wechatUser, order, "充值成功")
+              .recover {
+                case e => order
+              }
+          } else {
+            notify(DingDing.MessageType.payerr, wechatUser, order, "充值失败")
+              .recover {
+                case e => order
+              }
+          }
       }
   }
 
