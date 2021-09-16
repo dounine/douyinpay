@@ -371,9 +371,7 @@ object PaySchema extends JsonParse {
                   val canRefund =
                     i.pay == PayStatus.payed && money >= i.money && i.createTime
                       .plusHours(1)
-                      .isAfter(LocalDateTime.now()) && i.createTime
-                      .plusMinutes(3)
-                      .isBefore(LocalDateTime.now())
+                      .isAfter(LocalDateTime.now()))
 
                   AccountModel.BillItem(
                     id = i.id,
@@ -456,9 +454,7 @@ object PaySchema extends JsonParse {
             if (
               !(payInfo.pay == PayStatus.payed && money >= payInfo.money && payInfo.createTime
                 .plusHours(1)
-                .isAfter(LocalDateTime.now()) && payInfo.createTime
-                .plusMinutes(3)
-                .isBefore(LocalDateTime.now()))
+                .isAfter(LocalDateTime.now()))
             ) {
               logger.error(
                 Map(
