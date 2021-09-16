@@ -296,10 +296,19 @@ object PaySchema extends JsonParse {
               list =
                 (if (
                    openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || openid == "oHUbp6rLcRUSsn9kX5T8WTwyO5XI"
-                 )
-                   List(0.01, 5, 10, 50, 100, 200, 500)
-                 else
-                   List(5.0, 10, 50, 100, 200, 500))
+                 ) {
+                   if (accountUser.isDefined) {
+                     List(0.01, 5, 10, 50, 100, 200, 500)
+                   } else {
+                     List(0.01, 5, 10, 20)
+                   }
+                 } else {
+                   if (accountUser.isDefined) {
+                     List(5.0, 10, 50, 100, 200, 500)
+                   } else {
+                     List(5.0, 10, 20)
+                   }
+                 })
                   .map(i =>
                     AccountModel
                       .RechargeItem(
