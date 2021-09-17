@@ -87,6 +87,12 @@ object WechatModel {
       expires_in: Option[Int]
   ) extends BaseSerializer
 
+  case class SubscribeMsgPopup(
+      templateId: String,
+      subscribeStatusString: String,
+      popupScene: String
+  )
+
   object WechatMessage {
     def fromXml(appid: String, data: NodeSeq): WechatMessage = {
       val nodes = data \ "_"
@@ -96,6 +102,15 @@ object WechatModel {
         fromUserName = (data \ "FromUserName").text,
         createTime = (data \ "CreateTime").text.toLong,
         msgType = (data \ "MsgType").text,
+        subscribeMsgPopupEvent = nodes.find(_.label == "SubscribeMsgPopupEvent").map(popupEvent =>{
+          (popupEvent \\ "List").map(node =>{
+            SubscribeMsgPopup(
+              templateId = (node \ "TemplateId").text,
+              subscribeStatusString = (node \ "TemplateId").text,
+              popupScene = (node \ "TemplateId").text
+            )
+          })
+        }),
         msgId = nodes.find(_.label == "MsgId").map(_.text.toLong),
         event = nodes.find(_.label == "Event").map(_.text),
         eventKey = nodes.find(_.label == "EventKey").map(_.text),
@@ -127,6 +142,7 @@ object WechatModel {
       fromUserName: String,
       createTime: Long,
       msgType: String,
+      subscribeMsgPopupEvent: Option[Seq[SubscribeMsgPopup]],
       msgId: Option[Long],
       event: Option[String],
       eventKey: Option[String],
