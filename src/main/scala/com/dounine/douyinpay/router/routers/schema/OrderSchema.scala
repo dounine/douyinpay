@@ -561,6 +561,12 @@ object OrderSchema extends JsonParse {
                 )
               ).toJson
             )
+            if (i._2.code.getOrElse(0) == 4005179) {
+              //当前充值账号已发生变化，请重新填写
+              throw DouyinAccountFailException(
+                i._2.message.getOrElse("empty error message")
+              )
+            }
             CacheSource(c.ctx.system)
               .cache()
               .put[String](
