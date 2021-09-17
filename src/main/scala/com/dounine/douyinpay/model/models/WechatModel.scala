@@ -106,8 +106,8 @@ object WechatModel {
           (popupEvent \\ "List").map(node =>{
             SubscribeMsgPopup(
               templateId = (node \ "TemplateId").text,
-              subscribeStatusString = (node \ "TemplateId").text,
-              popupScene = (node \ "TemplateId").text
+              subscribeStatusString = (node \ "SubscribeStatusString").text,
+              popupScene = (node \ "PopupScene").text
             )
           })
         }),
