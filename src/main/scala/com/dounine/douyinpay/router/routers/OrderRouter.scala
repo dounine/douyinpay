@@ -126,83 +126,22 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                       entity = HttpEntity(
                         ContentTypes.`text/html(UTF-8)`,
                         s"""
-                          |<table >
-                          |<tr>
-                          |  <td align="middle">---</td>
-                          |  <td align="middle">今日</td>
-                          |  <td align="middle">昨日</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>充值金额</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._2.payMoney)}</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._1.payMoney)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>预存金额</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._2.payedMoney)}</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._1.payedMoney)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>退款金额</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._2.refundMoney)}</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._1.refundMoney)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>失败金额</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._2.noPayMoney)}</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._1.noPayMoney)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td align="middle">---</td>
-                          |  <td align="middle">---</td>
-                          |  <td align="middle">---</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>充值人数</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._2.payPeople)}</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._1.payPeople)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>预存人数</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._2.payedPeople)}</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._1.payedPeople)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>退款人数</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._2.refundPeople)}</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._1.refundPeople)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>失败人数</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._2.noPayPeople)}</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._1.noPayPeople)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td align="middle">---</td>
-                          |  <td align="middle">---</td>
-                          |  <td align="middle">---</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>充值次数</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._2.payCount)}</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._1.payCount)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>预存次数</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._2.payedCount)}</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._1.payedCount)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>退款次数</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._2.refundCount)}</td>
-                          |  <td align="right">${moneyFormat.format(rechargeInfo._1.refundCount)}</td>
-                          |</tr>
-                          |<tr>
-                          |  <td>失败次数</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._2.noPayCount)}</td>
-                          |  <td align="right">${moneyFormat.format(payInfo._1.noPayCount)}</td>
-                          |</tr>
-                          |</table>
+                          |<div>
+                          |<li>充值金额:	${moneyFormat.format(payInfo._2.payMoney)}   <-->   ${moneyFormat.format(payInfo._1.payMoney)}</li>
+                          |<li>预存金额:	${moneyFormat.format(rechargeInfo._2.payedMoney)}   <-->   ${moneyFormat.format(rechargeInfo._1.payedMoney)}</li>
+                          |<li>退款金额:	${moneyFormat.format(rechargeInfo._2.refundMoney)}   <-->   ${moneyFormat.format(rechargeInfo._1.refundMoney)}</li>
+                          |<li>失败金额:	${moneyFormat.format(payInfo._2.noPayMoney)}   <-->   ${moneyFormat.format(payInfo._1.noPayMoney)}</li>
+                          |<li>---------</li>
+                          |<li>充值人数:	${moneyFormat.format(payInfo._2.payPeople)}   <-->   ${moneyFormat.format(payInfo._1.payPeople)}</li>
+                          |<li>预存人数:	${moneyFormat.format(rechargeInfo._2.payedPeople)}   <-->   ${moneyFormat.format(rechargeInfo._1.payedPeople)}</li>
+                          |<li>退款人数:	${moneyFormat.format(rechargeInfo._2.refundPeople)}   <-->   ${moneyFormat.format(rechargeInfo._1.refundPeople)}</li>
+                          |<li>失败人数:	${moneyFormat.format(payInfo._2.noPayPeople)}   <-->   ${moneyFormat.format(payInfo._1.noPayPeople)}</li>
+                          |<li>---------</li>
+                          |<li>充值次数:	${moneyFormat.format(payInfo._2.payCount)}   <-->    ${moneyFormat.format(payInfo._1.payCount)}</li>
+                          |<li>预存次数:	${moneyFormat.format(rechargeInfo._2.payedCount)}   <-->   ${moneyFormat.format(rechargeInfo._1.payedCount)}</li>
+                          |<li>退款次数:	${moneyFormat.format(rechargeInfo._2.refundCount)}   <-->   ${moneyFormat.format(rechargeInfo._1.refundCount)}</li>
+                          |<li>失败次数:	${moneyFormat.format(payInfo._2.noPayCount)}   <-->   ${moneyFormat.format(payInfo._1.noPayCount)}</li>
+                          |</div>
                           |""".stripMargin
                       )
                     )
