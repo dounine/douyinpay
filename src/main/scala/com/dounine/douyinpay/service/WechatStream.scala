@@ -213,6 +213,7 @@ object WechatStream extends JsonParse with SuportRouter {
         if (message.msgType != "event") {
           message.msgType match {
             case "text" =>
+              val payInfo = OpenidPaySuccess.query(message.fromUserName)
               DingDing.sendMessage(
                 DingDing.MessageType.message,
                 data = DingDing.MessageData(
@@ -224,6 +225,8 @@ object WechatStream extends JsonParse with SuportRouter {
                               | - appname: ${wechat.getString(
                       s"${message.appid}.name"
                     )}
+                              | - 总支付金额：${payInfo.money}
+                              | - 总支付次数：${payInfo.count}
                               | - 消息：${message.content.getOrElse("")}
                               | - id：${message.msgId.getOrElse(0)}
                               | - time: ${LocalDateTime
@@ -438,6 +441,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 )
                 .runWith(Sink.head)
                 .foreach((openidUser: Option[OpenidModel.OpenidInfo]) => {
+                  val payInfo = OpenidPaySuccess.query(message.fromUserName)
                   DingDing.sendMessage(
                     DingDing.MessageType.fans,
                     data = DingDing.MessageData(
@@ -450,6 +454,8 @@ object WechatStream extends JsonParse with SuportRouter {
                                   | - appname: ${wechat.getString(
                           s"${message.appid}.name"
                         )}
+                                  | - 总支付金额：${payInfo.money}
+                                  | - 总支付次数：${payInfo.count}
                                   | - 场景值：${message.eventKey.getOrElse("")}
                                   | - 来源渠道：${openidUser
                           .map(_.ccode)
@@ -478,6 +484,7 @@ object WechatStream extends JsonParse with SuportRouter {
                 )
               )
             case "unsubscribe" =>
+              val payInfo = OpenidPaySuccess.query(message.fromUserName)
               DingDing.sendMessage(
                 DingDing.MessageType.fans,
                 data = DingDing.MessageData(
@@ -490,6 +497,8 @@ object WechatStream extends JsonParse with SuportRouter {
                               | - appname: ${wechat.getString(
                       s"${message.appid}.name"
                     )}
+                              | - 总支付金额：${payInfo.money}
+                              | - 总支付次数：${payInfo.count}
                               | - time: ${LocalDateTime
                       .now()
                       .format(
