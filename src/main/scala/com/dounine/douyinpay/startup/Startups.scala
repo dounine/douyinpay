@@ -14,12 +14,7 @@ import com.dounine.douyinpay.service.{DictionaryService, OpenidStream, OrderServ
 import com.dounine.douyinpay.store.{AccountTable, AkkaPersistenerJournalTable, AkkaPersistenerSnapshotTable, BreakDownTable, DictionaryTable, OpenidTable, OrderTable, PayTable, UserTable}
 import com.dounine.douyinpay.tools.akka.chrome.ChromePools
 import com.dounine.douyinpay.tools.akka.db.DataSource
-import com.dounine.douyinpay.tools.util.{
-  DingDing,
-  LockedUsers,
-  OpenidPaySuccess,
-  ServiceSingleton
-}
+import com.dounine.douyinpay.tools.util.{DingDing, LockedUsers, OpenidPaySuccess, ServiceSingleton}
 import org.slf4j.{Logger, LoggerFactory}
 import slick.lifted
 

@@ -177,17 +177,20 @@ object OrderSchema extends JsonParse {
               if (commonRemain < 0) 0d else commonRemain * 0.02
 
             val coinBiLI = platform match {
-              case PayPlatform.douyin => 10
+              case PayPlatform.douyin   => 10
               case PayPlatform.kuaishou => 10
-              case PayPlatform.huoshan => 10
-              case PayPlatform.douyu => 1
-              case PayPlatform.huya => 1
+              case PayPlatform.huoshan  => 10
+              case PayPlatform.douyu    => 1
+              case PayPlatform.huya     => 1
             }
             vipUser match {
               case Some(vip) =>
                 val list = vipUserMoneys
                   .map(money =>
-                    (moneyFormat.format(money), volumnFormat.format(money * coinBiLI))
+                    (
+                      moneyFormat.format(money),
+                      volumnFormat.format(money * coinBiLI)
+                    )
                   )
                   .map(tp2 => {
                     val money = moneyFormat.parse(tp2._1).intValue()
@@ -482,23 +485,41 @@ object OrderSchema extends JsonParse {
             .query(openid)
           if (payInfo.count > 2 && payInfo.money > 100) {
             Source
-              .single(openid)
-              .via(
-                OrderStream.queryOpenidTodayPay()
+              .single(c.ctx.openid.get)
+              .via(AccountStream.query()(c.ctx.system))
+              .zip(
+                Source
+                  .single(c.ctx.openid.get)
+                  .via(OrderStream.queryOpenidTodayPay()(c.ctx.system))
               )
               .zip(
                 Source
-                  .single(openid)
-                  .via(AccountStream.query())
+                  .single(c.ctx.openid.get)
+                  .via(OrderStream.queryOpenidSharedPay())
               )
               .zipWith(
                 Source
-                  .single(openid)
-                  .via(OpenidStream.query())
-              )((pre, next) => (pre._1, pre._2, next))
+                  .single(c.ctx.openid.get)
+                  .via(
+                    OpenidStream.query()
+                  )
+              ) { (pre, next) =>
+                (
+                  pre._1._1,
+                  pre._1._2,
+                  pre._2,
+                  next
+                )
+              }
               .map {
-                case (todayOrders, maybeInfo, wechatUser) =>
-                  val commonRemain: Int = 100 - todayOrders.map(_.money).sum
+                case (
+                      vipUser: Option[AccountModel.AccountInfo],
+                      todayOrders: Seq[OrderModel.DbInfo],
+                      sharePayed: Option[SharePayedMoney],
+                      wechatUser: Option[OpenidModel.OpenidInfo]
+                    ) =>
+                  val commonRemain: Int =
+                    (100 + sharePayed.getOrElse(0) / 2) - todayOrders.map(_.money).sum
                   val todayRemain: Double =
                     if (commonRemain < 0) 0d else commonRemain * 0.02
                   if (
@@ -513,7 +534,7 @@ object OrderSchema extends JsonParse {
                     if (todayOrders.map(_.money).sum + money <= 100) {
                       i
                     } else if (
-                      ((maybeInfo
+                      ((vipUser
                         .map(_.money)
                         .getOrElse(
                           0

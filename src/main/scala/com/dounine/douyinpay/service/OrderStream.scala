@@ -512,7 +512,7 @@ object OrderStream {
         db.run(
           OrderTable()
             .filter(i =>
-              i.ccode === openid && i.pay === true && i.createTime >= LocalDate
+              i.ccode === openid && !(i.openid === openid) && i.pay === true && i.createTime >= LocalDate
                 .now()
                 .atStartOfDay()
             )
