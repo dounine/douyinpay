@@ -50,4 +50,18 @@ object PayUserInfoModel {
       userName: Option[String]
   )
 
+  final case class DouYuData(
+      uid: String,
+      nickname: String,
+      user_icon: String,
+      level: Int,
+      level_icon: String
+  )
+
+  final case class DouYuResponse(
+      error: Int,
+      msg: String,
+      data: DouYuData
+  )
+
 }

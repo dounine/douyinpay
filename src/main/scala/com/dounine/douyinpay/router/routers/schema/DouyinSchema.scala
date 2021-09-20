@@ -37,7 +37,7 @@ import sangria.schema._
 
 import java.text.DecimalFormat
 import java.time.LocalDateTime
-import scala.concurrent.Future
+import scala.concurrent.{Future, duration}
 import scala.concurrent.duration._
 
 object DouyinSchema extends JsonParse {
@@ -53,39 +53,12 @@ object DouyinSchema extends JsonParse {
       DocumentField("avatar", "头像地扯")
     )
 
-  val PayPlatformType = EnumType[PayPlatform.PayPlatform](
-    "Platform",
-    Some("充值平台"),
-    values = List(
-      EnumValue(
-        "douyin",
-        value = PayPlatform.douyin,
-        description = Some("抖音")
-      ),
-      EnumValue(
-        "kuaishou",
-        value = PayPlatform.kuaishou,
-        description = Some("快手")
-      ),
-      EnumValue(
-        "huoshan",
-        value = PayPlatform.huoshan,
-        description = Some("抖音火山视频")
-      )
-    )
-  )
-
   val IdArg = Argument(
     name = "id",
     argumentType = StringType,
     description = "用户id"
   )
 
-  val PlatformArg = Argument(
-    name = "platform",
-    argumentType = PayPlatformType,
-    description = "充值平台"
-  )
 
   val userInfo = Field[
     SecureContext,
@@ -97,15 +70,17 @@ object DouyinSchema extends JsonParse {
     fieldType = OptionType(UserInfoResponse),
     tags = Authorised :: Nil,
     description = Some("查询用户信息"),
-    arguments = IdArg :: PlatformArg :: Nil,
+    arguments = IdArg :: Arguments.platform :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val s = c.ctx.system
-      val platform = c.arg(PlatformArg)
+      val platform = c.arg(Arguments.platform)
       val originId = c.arg(IdArg)
       val id = platform match {
         case PayPlatform.douyin   => originId.replaceAll("[^A-Za-z0-9_.]", "")
         case PayPlatform.kuaishou => originId.replaceAll("[^A-Za-z0-9_-]", "")
         case PayPlatform.huoshan  => originId.replaceAll("[^A-Za-z0-9_.]", "")
+        case PayPlatform.huya => originId
+        case PayPlatform.douyu => originId
       }
 
       logger.info(
@@ -122,6 +97,7 @@ object DouyinSchema extends JsonParse {
           )
         ).toJson
       )
+      println(platform)
       CacheSource(c.ctx.system)
         .cache()
         .orElse[Option[PayUserInfoModel.Info]](
@@ -170,6 +146,29 @@ object DouyinSchema extends JsonParse {
                           nickName = item.userName.get,
                           id = item.userId.get,
                           avatar = item.headUrl.get
+                        )
+                      )
+                    } else None
+                  })(c.ctx.system.executionContext)
+              case PayPlatform.douyu =>
+                val url = "https://cz.douyu.com/friend/search"
+                Request
+                  .postFormData[String](
+                    url,
+                    Map(
+                      "keyword" -> id
+                    )
+                  )
+                  .map(result => {
+                    println(result)
+                    if (result.contains(""""error":0,""")) {
+                      val searchInfo =
+                        result.jsonTo[PayUserInfoModel.DouYuResponse]
+                      Some(
+                        PayUserInfoModel.Info(
+                          nickName = searchInfo.data.nickname,
+                          id = searchInfo.data.nickname,
+                          avatar = searchInfo.data.user_icon
                         )
                       )
                     } else None

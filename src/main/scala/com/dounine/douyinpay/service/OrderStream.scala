@@ -60,6 +60,37 @@ object OrderStream {
       )
     )
   }
+
+  def queryLatestOrder()(implicit
+      system: ActorSystem[_]
+  ): Flow[
+    String,
+    OrderModel.DbInfo,
+    NotUsed
+  ] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+
+    Flow[String]
+      .mapAsync(1) { openid =>
+        db.run(
+          OrderTable()
+            .filter(i =>
+              i.pay === false && i.openid === openid && i.createTime >= LocalDateTime
+                .now()
+                .minusDays(3)
+            )
+            .sortBy(_.createTime.desc)
+            .take(1)
+            .result
+            .head
+        )
+      }
+  }
+
   def qrcodeCreate()(implicit
       system: ActorSystem[_]
   ): Flow[

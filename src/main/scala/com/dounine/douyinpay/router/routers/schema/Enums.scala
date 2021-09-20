@@ -23,6 +23,16 @@ object Enums {
         "huoshan",
         value = PayPlatform.huoshan,
         description = Some("抖音火山视频")
+      ),
+      EnumValue(
+        "douyu",
+        value = PayPlatform.douyu,
+        description = Some("斗鱼")
+      ),
+      EnumValue(
+        "huya",
+        value = PayPlatform.huya,
+        description = Some("虎牙")
       )
     )
   )
