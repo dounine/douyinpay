@@ -378,7 +378,7 @@ object PaySchema extends JsonParse {
                     money = i.money.toString,
                     canRefund = canRefund,
                     status = i.pay match {
-                      case PayStatus.normal    => ""
+                      case PayStatus.normal    => "未支付"
                       case PayStatus.payed     => ""
                       case PayStatus.payerr    => "错误"
                       case PayStatus.refund    => "已退款"
