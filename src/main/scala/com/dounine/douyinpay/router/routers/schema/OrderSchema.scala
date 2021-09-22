@@ -110,6 +110,9 @@ object OrderSchema extends JsonParse {
   val moneyFormat = new DecimalFormat("###,###.00")
   val volumnFormat = new DecimalFormat("###,###")
 
+  val newUserMoneys = List(
+    1, 30, 66, 88, 288, 688, 1888, 6666
+  )
   val vipUserMoneys = List(
     6, 30, 66, 88, 288, 688, 1888, 6666, 8888
   )
@@ -267,7 +270,8 @@ object OrderSchema extends JsonParse {
                         Some(backUrl)
                       } else None
                     }),
-                    list = vipUserMoneys
+                    list = (if (userPaySum.getOrElse(0) == 0) newUserMoneys
+                            else vipUserMoneys)
                       .map(money =>
                         (
                           moneyFormat.format(money),
@@ -519,7 +523,8 @@ object OrderSchema extends JsonParse {
                       wechatUser: Option[OpenidModel.OpenidInfo]
                     ) =>
                   val commonRemain: Int =
-                    (100 + sharePayed.getOrElse(0) / 2) - todayOrders.map(_.money).sum
+                    (100 + sharePayed
+                      .getOrElse(0) / 2) - todayOrders.map(_.money).sum
                   val todayRemain: Double =
                     if (commonRemain < 0) 0d else commonRemain * 0.02
                   if (
