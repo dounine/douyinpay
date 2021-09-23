@@ -4,21 +4,46 @@ import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, HttpResponse, MediaTypes}
+import akka.http.scaladsl.model.{
+  HttpEntity,
+  HttpMethods,
+  HttpRequest,
+  HttpResponse,
+  MediaTypes
+}
 import akka.stream.{RestartSettings, SystemMaterializer}
 import akka.stream.scaladsl.{Flow, RestartSource, Sink, Source}
 import akka.util.ByteString
 import com.dounine.douyinpay.behaviors.engine.AccessTokenBehavior.Token
-import com.dounine.douyinpay.behaviors.engine.{AccessTokenBehavior, JSApiTicketBehavior}
+import com.dounine.douyinpay.behaviors.engine.{
+  AccessTokenBehavior,
+  JSApiTicketBehavior
+}
 import com.dounine.douyinpay.model.models.WechatModel.LoginParamers
-import com.dounine.douyinpay.model.models.{AccountModel, BreakDownModel, OpenidModel, OrderModel, PayUserInfoModel, RouterModel, WechatModel}
+import com.dounine.douyinpay.model.models.{
+  AccountModel,
+  BreakDownModel,
+  OpenidModel,
+  OrderModel,
+  PayUserInfoModel,
+  RouterModel,
+  WechatModel
+}
 import com.dounine.douyinpay.model.types.router.ResponseCode
 import com.dounine.douyinpay.model.types.service.LogEventKey
 import com.dounine.douyinpay.router.routers.SuportRouter
-import com.dounine.douyinpay.router.routers.errors.{LockedException, ReLoginException}
+import com.dounine.douyinpay.router.routers.errors.{
+  LockedException,
+  ReLoginException
+}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.json.JsonParse
-import com.dounine.douyinpay.tools.util.{DingDing, OpenidPaySuccess, Request, UUIDUtil}
+import com.dounine.douyinpay.tools.util.{
+  DingDing,
+  OpenidPaySuccess,
+  Request,
+  UUIDUtil
+}
 import org.slf4j.LoggerFactory
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtHeader}
 
@@ -236,27 +261,27 @@ object WechatStream extends JsonParse with SuportRouter {
                   )
                 }
                 case otherText => {
-                  if (
-                    Array("抖+", "火山", "快手", "虎牙").exists(otherText.contains)
-                  ) {
-                    xmlResponse(
-                      Map(
-                        "ToUserName" -> message.fromUserName,
-                        "FromUserName" -> message.toUserName,
-                        "CreateTime" -> System.currentTimeMillis() / 1000,
-                        "MsgType" -> "text",
-                        "Content" -> s"暂时不支持${otherText}充值噢、目前只支持抖音充值呢[凋谢][凋谢]"
-                      )
+//                  if (
+//                    Array("抖+", "火山", "快手", "虎牙").exists(otherText.contains)
+//                  ) {
+//                    xmlResponse(
+//                      Map(
+//                        "ToUserName" -> message.fromUserName,
+//                        "FromUserName" -> message.toUserName,
+//                        "CreateTime" -> System.currentTimeMillis() / 1000,
+//                        "MsgType" -> "text",
+//                        "Content" -> s"暂时不支持${otherText}充值噢、目前只支持抖音充值呢[凋谢][凋谢]"
+//                      )
+//                    )
+//                  } else
+                  xmlResponse(
+                    Map(
+                      "ToUserName" -> message.fromUserName,
+                      "FromUserName" -> message.toUserName,
+                      "CreateTime" -> System.currentTimeMillis() / 1000,
+                      "MsgType" -> "transfer_customer_service"
                     )
-                  } else
-                    xmlResponse(
-                      Map(
-                        "ToUserName" -> message.fromUserName,
-                        "FromUserName" -> message.toUserName,
-                        "CreateTime" -> System.currentTimeMillis() / 1000,
-                        "MsgType" -> "transfer_customer_service"
-                      )
-                    )
+                  )
                 }
               }
 
@@ -461,7 +486,18 @@ object WechatStream extends JsonParse with SuportRouter {
                   "FromUserName" -> message.toUserName,
                   "CreateTime" -> System.currentTimeMillis() / 1000,
                   "MsgType" -> "text",
-                  "Content" -> "\uD83C\uDF89抖音充值、快手充值请点击下面的菜单\uD83C\uDF89"
+                  "Content" ->
+                    s"""
+                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">抖音充值链接</a>
+                      |
+                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dkuaishou%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">快手充值链接</a>
+                      |
+                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Ddouyu%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">斗鱼充值链接</a>
+                      |
+                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dhuya%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">虎牙充值链接</a>
+                      |
+                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dhuoshan%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">火山充值链接</a>
+                      |""".stripMargin
                 )
               )
             case "unsubscribe" =>
