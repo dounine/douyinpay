@@ -97,7 +97,6 @@ object DouyinSchema extends JsonParse {
           )
         ).toJson
       )
-      println(platform)
       CacheSource(c.ctx.system)
         .cache()
         .orElse[Option[PayUserInfoModel.Info]](
