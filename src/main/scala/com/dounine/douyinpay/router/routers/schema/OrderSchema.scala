@@ -111,10 +111,10 @@ object OrderSchema extends JsonParse {
   val volumnFormat = new DecimalFormat("###,###")
 
   val newUserMoneys = List(
-    1, 6, 30, 88, 288, 688, 1888, 3888, 6666
+    1, 6, 30, 88, 288, 688, 1888, 3888
   )
   val vipUserMoneys = List(
-    6, 30, 88, 288, 688, 1888, 3888, 6666, 8888
+    6, 30, 88, 288, 688, 1888, 3888, 6666
   )
 
   val moneyMenu = Field[
