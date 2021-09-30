@@ -120,28 +120,47 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 .zip(
                   PayStream.queryTodayPaySum()
                 )
+                .zipWith(
+                  PayStream.queryTodayNewUserPay()
+                )((sum,next)=> (sum._1,sum._2,next))
+                .zipWith(
+                  OrderStream.queryTodayNewUserPay()
+                )((sum,next) => (sum._1,sum._2,sum._3,next))
                 .map {
-                  case (payInfo, rechargeInfo) => {
+                  case (payInfo, rechargeInfo,rechargeNewUsers,registerPayOrders) => {
                     HttpResponse(
                       entity = HttpEntity(
                         ContentTypes.`text/html(UTF-8)`,
                         s"""
+                          |<html lang="zh-CN">
+                          |<head>
+                          |    <meta charset="UTF-8">
+                          |</head>
+                          |<body>
                           |<div>
                           |<li>充值金额:	${moneyFormat.format(payInfo._2.payMoney)}   <-->   ${moneyFormat.format(payInfo._1.payMoney)}</li>
+                          |<li>新充金额:  ${moneyFormat.format(registerPayOrders._2.map(_.payMoney).sum)}   <-->   ${moneyFormat.format(registerPayOrders._1.map(_.payMoney).sum)}
+                          |<li>新存金额:  ${moneyFormat.format(rechargeNewUsers._2.map(_.payMoney).sum/100)}   <-->   ${moneyFormat.format(rechargeNewUsers._1.map(_.payMoney).sum/100)}
                           |<li>预存金额:	${moneyFormat.format(rechargeInfo._2.payedMoney)}   <-->   ${moneyFormat.format(rechargeInfo._1.payedMoney)}</li>
                           |<li>退款金额:	${moneyFormat.format(rechargeInfo._2.refundMoney)}   <-->   ${moneyFormat.format(rechargeInfo._1.refundMoney)}</li>
                           |<li>失败金额:	${moneyFormat.format(payInfo._2.noPayMoney)}   <-->   ${moneyFormat.format(payInfo._1.noPayMoney)}</li>
                           |<li>---------</li>
                           |<li>充值人数:	${moneyFormat.format(payInfo._2.payPeople)}   <-->   ${moneyFormat.format(payInfo._1.payPeople)}</li>
+                          |<li>新充人数:	${moneyFormat.format(registerPayOrders._2.map(_.openid).size)}   <-->   ${moneyFormat.format(registerPayOrders._1.map(_.openid).size)}</li>
+                          |<li>新存人数:	${moneyFormat.format(rechargeNewUsers._2.map(_.openid).size)}   <-->   ${moneyFormat.format(rechargeNewUsers._1.map(_.openid).size)}</li>
                           |<li>预存人数:	${moneyFormat.format(rechargeInfo._2.payedPeople)}   <-->   ${moneyFormat.format(rechargeInfo._1.payedPeople)}</li>
                           |<li>退款人数:	${moneyFormat.format(rechargeInfo._2.refundPeople)}   <-->   ${moneyFormat.format(rechargeInfo._1.refundPeople)}</li>
                           |<li>失败人数:	${moneyFormat.format(payInfo._2.noPayPeople)}   <-->   ${moneyFormat.format(payInfo._1.noPayPeople)}</li>
                           |<li>---------</li>
                           |<li>充值次数:	${moneyFormat.format(payInfo._2.payCount)}   <-->    ${moneyFormat.format(payInfo._1.payCount)}</li>
+                          |<li>新充次数:	${moneyFormat.format(registerPayOrders._2.map(_.payCount).sum)}   <-->    ${moneyFormat.format(registerPayOrders._1.map(_.payCount).sum)}</li>
+                          |<li>新存次数:	${moneyFormat.format(rechargeNewUsers._2.map(_.payCount).sum)}   <-->    ${moneyFormat.format(rechargeNewUsers._1.map(_.payCount).sum)}</li>
                           |<li>预存次数:	${moneyFormat.format(rechargeInfo._2.payedCount)}   <-->   ${moneyFormat.format(rechargeInfo._1.payedCount)}</li>
                           |<li>退款次数:	${moneyFormat.format(rechargeInfo._2.refundCount)}   <-->   ${moneyFormat.format(rechargeInfo._1.refundCount)}</li>
                           |<li>失败次数:	${moneyFormat.format(payInfo._2.noPayCount)}   <-->   ${moneyFormat.format(payInfo._1.noPayCount)}</li>
                           |</div>
+                          |</body>
+                          |</html>
                           |""".stripMargin
                       )
                     )

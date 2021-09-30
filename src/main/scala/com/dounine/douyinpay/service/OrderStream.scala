@@ -610,4 +610,76 @@ object OrderStream {
       }
   }
 
+  def queryTodayNewUserPay()(implicit
+      system: ActorSystem[_]
+  ): Source[
+    (List[OrderModel.NewUserPay], List[OrderModel.NewUserPay]),
+    NotUsed
+  ] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+    val today = LocalDate.now().toString
+    val yestoday = LocalDate.now().minusDays(1).toString
+
+    Source
+      .future(
+        db.run(
+            sql"""
+                select 
+                       openid, 
+                       sum(money) as payMoney, 
+                       count(1) as payCount 
+                from douyinpay_order
+                where openid in 
+                      (
+                          select openid from douyinpay_openid where date_format(createTime, '%Y-%m-%d') = ${yestoday}
+                        )
+                    and pay = 1 
+                    group by openid
+               """.stripMargin.as[(String, Int, Int)]
+          )
+          .map(result => {
+            result.toList.map(i => {
+              OrderModel.NewUserPay(
+                i._1,
+                i._2,
+                i._3
+              )
+            })
+          })
+      )
+      .zip(
+        Source.future(
+          db.run(
+              sql"""
+                select 
+                       openid, 
+                       sum(money) as payMoney, 
+                       count(1) as payCount 
+                from douyinpay_order
+                where openid in 
+                      (
+                          select openid from douyinpay_openid where date_format(createTime, '%Y-%m-%d') = ${today}
+                        )
+                    and pay = 1 
+                    group by openid
+               """.stripMargin.as[(String, Int, Int)]
+            )
+            .map(result => {
+              result.toList.map(i => {
+                OrderModel.NewUserPay(
+                  i._1,
+                  i._2,
+                  i._3
+                )
+              })
+            })
+        )
+      )
+  }
+
 }

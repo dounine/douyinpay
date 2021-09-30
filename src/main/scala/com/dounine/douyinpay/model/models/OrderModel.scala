@@ -20,6 +20,12 @@ object OrderModel {
       noPayPeople: Int
   )
 
+  final case class NewUserPay(
+      openid: String,
+      payMoney: Int,
+      payCount: Int
+  )
+
   final case class DbInfo(
       appid: String,
       ccode: String,

@@ -29,4 +29,10 @@ object PayModel {
       refundMoney: Int,
       refundPeople: Int
   )
+
+  case class NewUserPay(
+      openid: String,
+      payMoney: Int,
+      payCount: Int
+  )
 }

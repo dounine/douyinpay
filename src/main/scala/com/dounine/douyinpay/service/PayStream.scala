@@ -232,4 +232,76 @@ object PayStream {
       }
   }
 
+  def queryTodayNewUserPay()(implicit
+      system: ActorSystem[_]
+  ): Source[(List[PayModel.NewUserPay], List[PayModel.NewUserPay]), NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+    val today = LocalDate.now().toString
+    val yestoday = LocalDate.now().minusDays(1).toString
+
+    Source
+      .future(
+        db.run(
+            sql"""select
+                        openid,
+                        sum(money) as payMoney,
+                        count(1) as payCount
+                from douyinpay_pay
+                where createTime >= ${yestoday}
+                and createTime < ${today}
+                and pay = 'payed'
+                and openid not in
+                (
+                    select distinct(openid)
+                    from douyinpay_pay
+                    where date_format(createTime, '%Y-%m-%d') < ${yestoday} and pay = 'payed'
+                )
+                group by openid""".stripMargin.as[(String, Int, Int)]
+          )
+          .map(result => {
+            result.toList.map(i => {
+              PayModel.NewUserPay(
+                i._1,
+                i._2,
+                i._3
+              )
+            })
+          })
+      )
+      .zip(
+        Source.future(
+          db.run(
+              sql"""select
+                        openid,
+                        sum(money) as payMoney,
+                        count(1) as payCount
+                from douyinpay_pay
+                where createTime >= ${today}
+                and pay = 'payed'
+                and openid not in
+                (
+                    select distinct(openid)
+                    from douyinpay_pay
+                    where date_format(createTime, '%Y-%m-%d') < ${today} and pay = 'payed'
+                )
+                group by openid""".stripMargin.as[(String, Int, Int)]
+            )
+            .map(result => {
+              result.toList.map(i => {
+                PayModel.NewUserPay(
+                  i._1,
+                  i._2,
+                  i._3
+                )
+              })
+            })
+        )
+      )
+  }
+
 }
