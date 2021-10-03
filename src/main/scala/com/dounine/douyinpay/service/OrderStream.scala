@@ -638,7 +638,7 @@ object OrderStream {
                       (
                           select openid from douyinpay_openid where date_format(createTime, '%Y-%m-%d') = ${yestoday}
                         )
-                    and pay = 1 
+                    and pay = 1 and date_format(createTime, '%Y-%m-%d') = ${yestoday}
                     group by openid
                """.stripMargin.as[(String, Int, Int)]
           )
@@ -665,7 +665,7 @@ object OrderStream {
                       (
                           select openid from douyinpay_openid where date_format(createTime, '%Y-%m-%d') = ${today}
                         )
-                    and pay = 1 
+                    and pay = 1 and date_format(createTime, '%Y-%m-%d') = ${today}
                     group by openid
                """.stripMargin.as[(String, Int, Int)]
             )
