@@ -73,6 +73,10 @@ object WechatSchema extends JsonParse {
       argumentType = StringType,
       description = "appid"
     ) :: Argument(
+      name = "uuid",
+      argumentType = StringType,
+      description = "uuid"
+    ) :: Argument(
       name = "platform",
       argumentType = StringType,
       description = "platform"
@@ -95,6 +99,7 @@ object WechatSchema extends JsonParse {
         .single(
           WechatModel.LoginParamers(
             code = c.arg[String]("code"),
+            uuid = c.arg[String]("uuid"),
             appid = c.arg[String]("appid"),
             ccode = c.arg[String]("ccode"),
             token = c.value.headers.get("token"),
@@ -137,6 +142,7 @@ object WechatSchema extends JsonParse {
                 "time" -> System.currentTimeMillis(),
                 "data" -> Map(
                   "event" -> LogEventKey.wechatLoginSignError,
+                  "uuid" -> i.uuid,
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
@@ -155,6 +161,7 @@ object WechatSchema extends JsonParse {
                 "time" -> System.currentTimeMillis(),
                 "data" -> Map(
                   "event" -> LogEventKey.wechatLogin,
+                  "uuid" -> i.uuid,
                   "appid" -> i.appid,
                   "ccode" -> i.ccode,
                   "code" -> i.code,
@@ -194,6 +201,7 @@ object WechatSchema extends JsonParse {
                               "time" -> System.currentTimeMillis(),
                               "data" -> Map(
                                 "event" -> LogEventKey.userLockedAccess,
+                                "uuid" -> i.uuid,
                                 "appid" -> i.appid,
                                 "ccode" -> i.ccode,
                                 "code" -> i.code,
@@ -236,6 +244,7 @@ object WechatSchema extends JsonParse {
                               "time" -> System.currentTimeMillis(),
                               "data" -> Map(
                                 "event" -> LogEventKey.wechatLogin,
+                                "uuid" -> i.uuid,
                                 "appid" -> i.appid,
                                 "openid" -> session.openid,
                                 "ccode" -> i.ccode,
@@ -287,6 +296,7 @@ object WechatSchema extends JsonParse {
                             "time" -> System.currentTimeMillis(),
                             "data" -> Map(
                               "event" -> LogEventKey.wechatLogin,
+                              "uuid" -> i.uuid,
                               "appid" -> i.appid,
                               "ccode" -> i.ccode,
                               "code" -> i.code,
@@ -338,6 +348,7 @@ object WechatSchema extends JsonParse {
                         "time" -> System.currentTimeMillis(),
                         "data" -> Map(
                           "event" -> LogEventKey.wechatLogin,
+                          "uuid" -> i.uuid,
                           "appid" -> i.appid,
                           "ccode" -> i.ccode,
                           "code" -> i.code,

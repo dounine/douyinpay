@@ -21,6 +21,7 @@ object WechatModel {
 
   case class LoginParamers(
       scheme: String,
+      uuid: String,
       appid: String,
       code: String,
       ccode: String,
@@ -102,15 +103,17 @@ object WechatModel {
         fromUserName = (data \ "FromUserName").text,
         createTime = (data \ "CreateTime").text.toLong,
         msgType = (data \ "MsgType").text,
-        subscribeMsgPopupEvent = nodes.find(_.label == "SubscribeMsgPopupEvent").map(popupEvent =>{
-          (popupEvent \\ "List").map(node =>{
-            SubscribeMsgPopup(
-              templateId = (node \ "TemplateId").text,
-              subscribeStatusString = (node \ "SubscribeStatusString").text,
-              popupScene = (node \ "PopupScene").text
-            )
-          })
-        }),
+        subscribeMsgPopupEvent = nodes
+          .find(_.label == "SubscribeMsgPopupEvent")
+          .map(popupEvent => {
+            (popupEvent \\ "List").map(node => {
+              SubscribeMsgPopup(
+                templateId = (node \ "TemplateId").text,
+                subscribeStatusString = (node \ "SubscribeStatusString").text,
+                popupScene = (node \ "PopupScene").text
+              )
+            })
+          }),
         msgId = nodes.find(_.label == "MsgId").map(_.text.toLong),
         event = nodes.find(_.label == "Event").map(_.text),
         eventKey = nodes.find(_.label == "EventKey").map(_.text),
