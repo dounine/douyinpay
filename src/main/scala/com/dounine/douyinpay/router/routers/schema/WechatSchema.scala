@@ -113,7 +113,7 @@ object WechatSchema extends JsonParse {
             throw ReLoginException(
               s"appid is null set default , windowUrl -> ${c.value.headers
                 .getOrElse("windowUrl", "")}",
-              Some("wxc1a77335b1dd223a")
+              Some("wxa1e0369c9ff65e3a")
             )
           } else if (
             !c.ctx.system.settings.config
@@ -123,7 +123,7 @@ object WechatSchema extends JsonParse {
             throw ReLoginException(
               s"appid not exit set default , windowUrl -> ${c.value.headers
                 .getOrElse("windowUrl", "")}",
-              Some("wxc1a77335b1dd223a")
+              Some("wxa1e0369c9ff65e3a")
             )
           }
           if (

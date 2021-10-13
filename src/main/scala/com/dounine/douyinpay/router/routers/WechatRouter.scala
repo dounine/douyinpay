@@ -121,14 +121,14 @@ class WechatRouter()(implicit system: ActorSystem[_])
                           ).toJson
                         )
                         val params: String = Map(
-                          "appid" -> "wxc1a77335b1dd223a",
+                          "appid" -> "wxa1e0369c9ff65e3a",
                           "redirect_uri" -> URLEncoder.encode(
-                            (scheme + "://" + domain) + s"/?ccode=${ccode}&platform=douyin&appid=wxc1a77335b1dd223a",
+                            (scheme + "://" + domain) + s"/?ccode=${ccode}&platform=douyin&appid=wxa1e0369c9ff65e3a",
                             "utf-8"
                           ),
                           "response_type" -> "code",
                           "scope" -> "snsapi_base",
-                          "state" -> "wxc1a77335b1dd223a"
+                          "state" -> "wxa1e0369c9ff65e3a"
                         ).map(i => s"${i._1}=${i._2}")
                           .mkString("&")
                         redirect(

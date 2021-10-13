@@ -610,6 +610,59 @@ object OrderStream {
       }
   }
 
+  def queryIdAndIncrmentMoney()(implicit
+      system: ActorSystem[_]
+  ): Flow[(String, String), Int, NotUsed] = {
+    val db: JdbcBackend.DatabaseDef = DataSource(system).source().db
+    implicit val ec: ExecutionContextExecutor = system.executionContext
+    implicit val slickSession: SlickSession =
+      SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
+    import slickSession.profile.api._
+    implicit val materializer = SystemMaterializer(system).materializer
+
+    Flow[(String, String)]
+      .mapAsync(1) { result =>
+        {
+          db.run(
+            AccountTable()
+              .filter(_.openid === result._2)
+              .result
+              .headOption
+              .map(result -> _)
+          )
+        }
+      }
+      .mapAsync(1) { tp2 =>
+        val ((openid, id), result) = tp2
+        result match {
+          case Some(value) =>
+            Future.successful(0)
+          case None =>
+            db.run(
+              sql"""select openid,money
+            from douyinpay_account
+            where openid in (select distinct(openid) from douyinpay_order where id = ${id}) order by money desc limit 1
+            """.stripMargin
+                .as[(String, String)]
+                .headOption
+            )
+              .flatMap(r => {
+                if (r.isDefined) {
+                  db.run(
+                    AccountTable() += AccountModel.AccountInfo(
+                      openid = openid,
+                      money = r.get._2.toInt
+                    )
+                  )
+                } else {
+                  Future.successful(0)
+                }
+              })
+        }
+      }
+
+  }
+
   def queryTodayNewUserPay()(implicit
       system: ActorSystem[_]
   ): Source[

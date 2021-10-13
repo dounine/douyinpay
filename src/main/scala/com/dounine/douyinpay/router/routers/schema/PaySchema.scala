@@ -524,7 +524,7 @@ object PaySchema extends JsonParse {
 
             val ks: KeyStore = KeyStore.getInstance("PKCS12")
             val keystore: InputStream =
-              WeixinPay.getClass.getResourceAsStream("/api/apiclient_cert.p12")
+              WeixinPay.getClass.getResourceAsStream(s"/api/${mch_id}/apiclient_cert.p12")
 
             require(keystore != null, "Keystore required!")
             ks.load(keystore, password)

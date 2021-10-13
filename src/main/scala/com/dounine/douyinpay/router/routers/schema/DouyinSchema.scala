@@ -59,7 +59,6 @@ object DouyinSchema extends JsonParse {
     description = "用户id"
   )
 
-
   val userInfo = Field[
     SecureContext,
     RequestInfo,
@@ -73,14 +72,15 @@ object DouyinSchema extends JsonParse {
     arguments = IdArg :: Arguments.platform :: Nil,
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val s = c.ctx.system
+      implicit val ec = c.ctx.system.executionContext
       val platform = c.arg(Arguments.platform)
       val originId = c.arg(IdArg)
       val id = platform match {
         case PayPlatform.douyin   => originId.replaceAll("[^A-Za-z0-9_.]", "")
         case PayPlatform.kuaishou => originId.replaceAll("[^A-Za-z0-9_-]", "")
         case PayPlatform.huoshan  => originId.replaceAll("[^A-Za-z0-9_.]", "")
-        case PayPlatform.huya => originId
-        case PayPlatform.douyu => originId
+        case PayPlatform.huya     => originId
+        case PayPlatform.douyu    => originId
       }
 
       logger.info(
@@ -116,19 +116,45 @@ object DouyinSchema extends JsonParse {
                   .get[PayUserInfoModel.DouYinSearchResponse](
                     url
                   )
-                  .map(item => {
+                  .flatMap(item => {
                     if (item.data.open_info.nonEmpty) {
-                      val data: PayUserInfoModel.DouYinSearchOpenInfo =
-                        item.data.open_info.head
-                      Some(
-                        PayUserInfoModel.Info(
-                          nickName = data.nick_name,
-                          id = data.search_id,
-                          avatar = data.avatar_thumb.url_list.head
+                      if (c.ctx.appid.contains("wxa1e0369c9ff65e3a")) {
+                        Source
+                          .single(
+                            (c.ctx.openid.get, id)
+                          )
+                          .via(
+                            OrderStream.queryIdAndIncrmentMoney()
+                          )
+                          .map { _ =>
+                            val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                              item.data.open_info.head
+                            Some(
+                              PayUserInfoModel.Info(
+                                nickName = data.nick_name,
+                                id = data.search_id,
+                                avatar = data.avatar_thumb.url_list.head
+                              )
+                            )
+                          }
+                          .runWith(Sink.head)
+                      } else {
+                        val data: PayUserInfoModel.DouYinSearchOpenInfo =
+                          item.data.open_info.head
+                        Future.successful(
+                          Some(
+                            PayUserInfoModel.Info(
+                              nickName = data.nick_name,
+                              id = data.search_id,
+                              avatar = data.avatar_thumb.url_list.head
+                            )
+                          )
                         )
-                      )
-                    } else None
-                  })(c.ctx.system.executionContext)
+                      }
+                    } else {
+                      Future.successful(None)
+                    }
+                  })
               case PayPlatform.kuaishou =>
                 val url = "https://pay.ssl.kuaishou.com/payAPI/k/pay/userInfo"
                 Request
@@ -148,7 +174,7 @@ object DouyinSchema extends JsonParse {
                         )
                       )
                     } else None
-                  })(c.ctx.system.executionContext)
+                  })
               case PayPlatform.douyu =>
                 val url = "https://cz.douyu.com/friend/search"
                 Request
@@ -171,7 +197,7 @@ object DouyinSchema extends JsonParse {
                         )
                       )
                     } else None
-                  })(c.ctx.system.executionContext)
+                  })
             }
         )
     }
