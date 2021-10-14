@@ -258,7 +258,8 @@ class WechatRouter()(implicit system: ActorSystem[_])
                                         s"${notifyResponse.appid}.name"
                                       )}
                                                 | - 是否关注：${wechatUser.subscribe == 1}
-                                                | - 微信昵称：${wechatUser.nickname.getOrElse("未关注")}
+                                                | - 微信昵称：${wechatUser.nickname
+                                        .getOrElse("未关注")}
                                                 | - 总充值金额: ${payInfo.money}
                                                 | - 总充值次数: ${payInfo.count}
                                                 | - 来源渠道：${userInfo.get.ccode}
@@ -330,73 +331,85 @@ class WechatRouter()(implicit system: ActorSystem[_])
                   logger
                     .info("refund success -> {}", notifyResponse.toJson)
 
-                  val key = system.settings.config
-                    .getString(s"app.wechat.${notifyResponse.appid}.pay.key")
-
-                  DecodeUtil
-                    .decryptData(
-                      notifyResponse.req_info,
-                      MD5Util.md5(key)
-                    )
-                    .map(_.childXmlTo[AccountModel.RefundNotifySuccessDetail])
-                    .fold(
-                      fa => {
-                        fa.printStackTrace()
-                        throw fa
-                      },
-                      (fu: AccountModel.RefundNotifySuccessDetail) => {
-                        logger.info("refund notify info -> {}", fu.toJson)
-                        fu
-                      }
-                    )
-
-                  val wechatResponse = Source
-                    .single(
-                      DecodeUtil
-                        .decryptData(
-                          notifyResponse.req_info,
-                          MD5Util.md5(key)
-                        )
-                        .map(
-                          _.childXmlTo[AccountModel.RefundNotifySuccessDetail]
-                        )
-                        .fold(
-                          fa => {
-                            throw fa
-                          },
-                          (fu: AccountModel.RefundNotifySuccessDetail) => fu
-                        )
-                    )
-                    .flatMapConcat(result => {
-                      Source
-                        .single(result.out_refund_no)
-                        .via(
-                          PayStream.query()
-                        )
-                        .flatMapConcat(r => {
-                          if (r.pay == PayStatus.refunding) {
-                            Source
-                              .single(result.out_refund_no)
-                              .via(PayStream.updateStatus(PayStatus.refund))
-                          } else {
-                            logger.error("重复退款回调")
-                            Source.single(false, 0)
-                          }
-                        })
-                    })
-                    .map(r => {
+                  if (notifyResponse.appid == "wxc1a77335b1dd223a") {
+                    logger.info("不修改数据库")
+                    complete(
                       xmlResponse(
                         Map(
                           "return_code" -> "SUCCESS",
                           "return_msg" -> "OK"
                         )
                       )
-                    })
-                    .runWith(Sink.head)
+                    )
+                  } else {
+                    val key = system.settings.config
+                      .getString(s"app.wechat.${notifyResponse.appid}.pay.key")
 
-                  complete(
-                    wechatResponse
-                  )
+                    DecodeUtil
+                      .decryptData(
+                        notifyResponse.req_info,
+                        MD5Util.md5(key)
+                      )
+                      .map(_.childXmlTo[AccountModel.RefundNotifySuccessDetail])
+                      .fold(
+                        fa => {
+                          fa.printStackTrace()
+                          throw fa
+                        },
+                        (fu: AccountModel.RefundNotifySuccessDetail) => {
+                          logger.info("refund notify info -> {}", fu.toJson)
+                          fu
+                        }
+                      )
+
+                    val wechatResponse = Source
+                      .single(
+                        DecodeUtil
+                          .decryptData(
+                            notifyResponse.req_info,
+                            MD5Util.md5(key)
+                          )
+                          .map(
+                            _.childXmlTo[AccountModel.RefundNotifySuccessDetail]
+                          )
+                          .fold(
+                            fa => {
+                              throw fa
+                            },
+                            (fu: AccountModel.RefundNotifySuccessDetail) => fu
+                          )
+                      )
+                      .flatMapConcat(result => {
+                        Source
+                          .single(result.out_refund_no)
+                          .via(
+                            PayStream.query()
+                          )
+                          .flatMapConcat(r => {
+                            if (r.pay == PayStatus.refunding) {
+                              Source
+                                .single(result.out_refund_no)
+                                .via(PayStream.updateStatus(PayStatus.refund))
+                            } else {
+                              logger.error("重复退款回调")
+                              Source.single(false, 0)
+                            }
+                          })
+                      })
+                      .map(r => {
+                        xmlResponse(
+                          Map(
+                            "return_code" -> "SUCCESS",
+                            "return_msg" -> "OK"
+                          )
+                        )
+                      })
+                      .runWith(Sink.head)
+
+                    complete(
+                      wechatResponse
+                    )
+                  }
               }
             }
           },
