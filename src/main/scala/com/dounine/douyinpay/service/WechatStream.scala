@@ -480,27 +480,28 @@ object WechatStream extends JsonParse with SuportRouter {
                     system
                   )
                 })
-              xmlResponse(
-                Map(
-                  "ToUserName" -> message.fromUserName,
-                  "FromUserName" -> message.toUserName,
-                  "CreateTime" -> System.currentTimeMillis() / 1000,
-                  "MsgType" -> "text",
-                  "Content" ->
-                    s"""
-                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">抖音充值链接</a>
-                      |
-                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dkuaishou%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">快手充值链接</a>
-                      |
-                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Ddouyu%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">斗鱼充值链接</a>
-                      |
-                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dhuya%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">虎牙充值链接</a>
-                      |
-                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dhuoshan%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">火山充值链接</a>
-                      |
-                      |""".stripMargin
-                )
-              )
+              textResponse("success")
+//              xmlResponse(
+//                Map(
+//                  "ToUserName" -> message.fromUserName,
+//                  "FromUserName" -> message.toUserName,
+//                  "CreateTime" -> System.currentTimeMillis() / 1000,
+//                  "MsgType" -> "text",
+//                  "Content" ->
+//                    s"""
+//                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Ddouyin%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">抖音充值链接</a>
+//                      |
+//                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dkuaishou%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">快手充值链接</a>
+//                      |
+//                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Ddouyu%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">斗鱼充值链接</a>
+//                      |
+//                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dhuya%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">虎牙充值链接</a>
+//                      |
+//                      |<a href ="https://open.weixin.qq.com/connect/oauth2/authorize?appid=${message.appid}&redirect_uri=https%3A%2F%2Fdouyin.61week.com%2F%3Fccode%3Dfrom_menu%26platform%3Dhuoshan%26appid%3D${message.appid}&response_type=code&scope=snsapi_base&state=${message.appid}&connect_redirect=1#wechat_redirect">火山充值链接</a>
+//                      |
+//                      |""".stripMargin
+//                )
+//              )
             case "unsubscribe" =>
               val payInfo = OpenidPaySuccess.query(message.fromUserName)
               DingDing.sendMessage(
