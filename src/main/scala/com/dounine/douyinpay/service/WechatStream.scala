@@ -405,32 +405,32 @@ object WechatStream extends JsonParse with SuportRouter {
             textResponse("success")
           }
         } else if (message.event.contains("VIEW")) {
-          DingDing.sendMessage(
-            DingDing.MessageType.event,
-            data = DingDing.MessageData(
-              markdown = DingDing.Markdown(
-                title = s"点击链接事件",
-                text = s"""
-                          |## ${message.fromUserName}
-                          | - appid: ${message.appid}
-                          | - appname: ${wechat.getString(
-                  s"${message.appid}.name"
-                )}
-                          | - url：${URLDecoder
-                  .decode(message.eventKey.getOrElse(""), "utf-8")}
-                          | - time: ${LocalDateTime
-                  .now()
-                  .format(
-                    timeFormatter
-                  )}
-                          | - ntime: ${LocalDateTime
-                  .now()
-                  .format(timeFormatter)}
-                          |""".stripMargin
-              )
-            ),
-            system
-          )
+//          DingDing.sendMessage(
+//            DingDing.MessageType.event,
+//            data = DingDing.MessageData(
+//              markdown = DingDing.Markdown(
+//                title = s"点击链接事件",
+//                text = s"""
+//                          |## ${message.fromUserName}
+//                          | - appid: ${message.appid}
+//                          | - appname: ${wechat.getString(
+//                  s"${message.appid}.name"
+//                )}
+//                          | - url：${URLDecoder
+//                  .decode(message.eventKey.getOrElse(""), "utf-8")}
+//                          | - time: ${LocalDateTime
+//                  .now()
+//                  .format(
+//                    timeFormatter
+//                  )}
+//                          | - ntime: ${LocalDateTime
+//                  .now()
+//                  .format(timeFormatter)}
+//                          |""".stripMargin
+//              )
+//            ),
+//            system
+//          )
           textResponse("success")
         } else if (
           message.event.contains("subscribe") || message.event
