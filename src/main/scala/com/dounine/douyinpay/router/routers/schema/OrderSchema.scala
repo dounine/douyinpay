@@ -186,7 +186,7 @@ object OrderSchema extends JsonParse {
               case PayPlatform.douyu    => 1
               case PayPlatform.huya     => 1
             }
-            val admins = c.ctx.system.settings.config.getStringList("admins")
+            val admins = c.ctx.system.settings.config.getStringList("app.admins")
             vipUser match {
               case Some(vip) =>
                 if (admins.contains(openid)) {
@@ -518,7 +518,7 @@ object OrderSchema extends JsonParse {
         .flatMapConcat(i => {
           val payInfo = OpenidPaySuccess
             .query(openid)
-          val admins = c.ctx.system.settings.config.getStringList("admins")
+          val admins = c.ctx.system.settings.config.getStringList("app.admins")
           if (admins.contains(openid)) {
             Source.single(i)
           } else if (payInfo.count > 2 && payInfo.money > 100) {
