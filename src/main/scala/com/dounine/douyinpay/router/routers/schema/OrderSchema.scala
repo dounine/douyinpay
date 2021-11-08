@@ -111,10 +111,10 @@ object OrderSchema extends JsonParse {
   val volumnFormat = new DecimalFormat("###,###")
 
   val newUserMoneys = List(
-    1, 6, 30, 88, 288, 688, 1888, 3888
+    1, 6, 30, 98, 298, 518, 1598, 3000
   )
   val vipUserMoneys = List(
-    6, 30, 88, 288, 688, 1888, 3888, 6666
+    6, 30, 98, 298, 518, 1598, 3000, 5000
   )
 
   val moneyMenu = Field[
@@ -186,44 +186,73 @@ object OrderSchema extends JsonParse {
               case PayPlatform.douyu    => 1
               case PayPlatform.huya     => 1
             }
+            val admins = c.ctx.system.settings.config.getStringList("admins")
             vipUser match {
               case Some(vip) =>
-                val list = (if (openid == "oHUbp6rLcRUSsn9kX5T8WTwyO5XI")
-                              List(1) ++ vipUserMoneys
-                            else vipUserMoneys)
-                  .map(money =>
-                    (
-                      moneyFormat.format(money),
-                      volumnFormat.format(money * coinBiLI)
-                    )
+                if (admins.contains(openid)) {
+                  OrderModel.MoneyMenuResponse(
+                    bu = userPaySum.flatMap(i => {
+                      if (i > 100) {
+                        Some(backUrl)
+                      } else None
+                    }),
+                    list = newUserMoneys
+                      .map(money =>
+                        (
+                          moneyFormat.format(money),
+                          volumnFormat.format(money * coinBiLI)
+                        )
+                      )
+                      .map(tp2 => {
+                        OrderModel.MoneyMenuItem(
+                          money = tp2._1,
+                          volumn = tp2._2,
+                          enought = Some(true),
+                          commonEnought = true
+                        )
+                      }),
+                    targetUser = false,
+                    commonRemain = 100
                   )
-                  .map(tp2 => {
-                    val money = moneyFormat.parse(tp2._1).intValue()
-                    OrderModel.MoneyMenuItem(
-                      money = tp2._1,
-                      volumn = tp2._2,
-                      enought = Some(
-                        ((todayRemain * 100 + vip.money) - (money * 100 * 0.02)) >= 0
-                      ),
-                      commonEnought = commonRemain - money >= 0,
-                      vipEnought = Some(
-                        vip.money - money * 100 * 0.02 >= 0
+                } else {
+                  val list = (if (admins.contains(openid))
+                                List(1) ++ vipUserMoneys
+                              else vipUserMoneys)
+                    .map(money =>
+                      (
+                        moneyFormat.format(money),
+                        volumnFormat.format(money * coinBiLI)
                       )
                     )
-                  })
-                OrderModel.MoneyMenuResponse(
-                  bu = userPaySum.flatMap(i => {
-                    if (i > 100) {
-                      Some(backUrl)
-                    } else None
-                  }),
-                  list = list,
-                  targetUser = true,
-                  commonRemain = commonRemain,
-                  vipRemain = Some((vip.money / 100.0).formatted("%.2f")),
-                  balance =
-                    Some((todayRemain + (vip.money / 100.0)).formatted("%.2f"))
-                )
+                    .map(tp2 => {
+                      val money = moneyFormat.parse(tp2._1).intValue()
+                      OrderModel.MoneyMenuItem(
+                        money = tp2._1,
+                        volumn = tp2._2,
+                        enought = Some(
+                          ((todayRemain * 100 + vip.money) - (money * 100 * 0.02)) >= 0
+                        ),
+                        commonEnought = commonRemain - money >= 0,
+                        vipEnought = Some(
+                          vip.money - money * 100 * 0.02 >= 0
+                        )
+                      )
+                    })
+                  OrderModel.MoneyMenuResponse(
+                    bu = userPaySum.flatMap(i => {
+                      if (i > 100) {
+                        Some(backUrl)
+                      } else None
+                    }),
+                    list = list,
+                    targetUser = !admins.contains(openid),
+                    commonRemain = commonRemain,
+                    vipRemain = Some((vip.money / 100.0).formatted("%.2f")),
+                    balance = Some(
+                      (todayRemain + (vip.money / 100.0)).formatted("%.2f")
+                    )
+                  )
+                }
               case None =>
                 val payInfo = OpenidPaySuccess
                   .query(openid)
@@ -489,7 +518,10 @@ object OrderSchema extends JsonParse {
         .flatMapConcat(i => {
           val payInfo = OpenidPaySuccess
             .query(openid)
-          if (payInfo.count > 2 && payInfo.money > 100) {
+          val admins = c.ctx.system.settings.config.getStringList("admins")
+          if (admins.contains(openid)) {
+            Source.single(i)
+          } else if (payInfo.count > 2 && payInfo.money > 100) {
             Source
               .single(c.ctx.openid.get)
               .via(AccountStream.query()(c.ctx.system))

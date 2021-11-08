@@ -293,7 +293,10 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                                 else commonRemain * 0.02
                               val payInfo = OpenidPaySuccess
                                 .query(i.order.openid)
-                              if (
+                              val admins = system.settings.config.getStringList("admins")
+                              if(admins.contains(i.order.openid)){
+                                Source.single(i)
+                              }else if (
                                 LocalDate
                                   .now()
                                   .atStartOfDay()
