@@ -301,8 +301,7 @@ object OrderSchema extends JsonParse {
                         Some(backUrl)
                       } else None
                     }),
-                    list = (if (userPaySum.getOrElse(0) == 0) newUserMoneys
-                            else vipUserMoneys)
+                    list = newUserMoneys
                       .map(money =>
                         (
                           moneyFormat.format(money),
