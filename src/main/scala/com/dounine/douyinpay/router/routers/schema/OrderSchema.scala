@@ -186,7 +186,8 @@ object OrderSchema extends JsonParse {
               case PayPlatform.douyu    => 1
               case PayPlatform.huya     => 1
             }
-            val admins = c.ctx.system.settings.config.getStringList("app.admins")
+            val admins =
+              c.ctx.system.settings.config.getStringList("app.admins")
             vipUser match {
               case Some(vip) =>
                 if (admins.contains(openid)) {
@@ -256,7 +257,32 @@ object OrderSchema extends JsonParse {
               case None =>
                 val payInfo = OpenidPaySuccess
                   .query(openid)
-                if (
+                if (admins.contains(openid)) {
+                  OrderModel.MoneyMenuResponse(
+                    bu = userPaySum.flatMap(i => {
+                      if (i > 100) {
+                        Some(backUrl)
+                      } else None
+                    }),
+                    list = newUserMoneys
+                      .map(money =>
+                        (
+                          moneyFormat.format(money),
+                          volumnFormat.format(money * coinBiLI)
+                        )
+                      )
+                      .map(tp2 => {
+                        OrderModel.MoneyMenuItem(
+                          money = tp2._1,
+                          volumn = tp2._2,
+                          enought = Some(true),
+                          commonEnought = true
+                        )
+                      }),
+                    targetUser = false,
+                    commonRemain = 100
+                  )
+                } else if (
                   LocalDate
                     .now()
                     .atStartOfDay()
