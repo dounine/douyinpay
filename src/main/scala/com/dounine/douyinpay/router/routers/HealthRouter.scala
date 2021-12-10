@@ -67,7 +67,24 @@ class HealthRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                   .map(r => Map("result" -> r))(system.executionContext)
                 ok(result)
             }
-          }
+          } ~
+            path("msg2") {
+              entity(as[MessageDing.Data]) {
+                data =>
+                  val result = Request
+                    .post[String](
+                      "https://oapi.dingtalk.com/robot/send?access_token=c5ccf5a653fae07ebe6a148e9cf973026d8a1d45b3d0cceb9f2556ce5842743d",
+                      MessageData(
+                        markdown = DingDing.Markdown(
+                          title = data.title,
+                          text = data.text
+                        )
+                      )
+                    )
+                    .map(r => Map("result" -> r))(system.executionContext)
+                  ok(result)
+              }
+            }
         }
       )
     }
