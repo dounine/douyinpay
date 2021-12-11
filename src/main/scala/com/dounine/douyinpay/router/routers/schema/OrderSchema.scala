@@ -658,22 +658,77 @@ object OrderSchema extends JsonParse {
             )
             if (i._2.code.getOrElse(0) == 4005179) {
               //当前充值账号已发生变化，请重新填写
-              throw DouyinAccountFailException(
-                i._2.message.getOrElse("empty error message")
-              )
-            }
-            CacheSource(c.ctx.system)
-              .cache()
-              .put[String](
-                key = "qrcodeCreateFail_" + i._1.platform + openid,
-                value = i._2.message.getOrElse("empty error message"),
-                ttl = 1.hours
-              )
-              .map(v => {
-                throw DouyinAccountFailException(
-                  v
+              CacheSource(c.ctx.system)
+                .cache()
+                .remove("createOrder_" + i._1.platform + openid)
+                .map(_ => {
+                  throw DouyinAccountFailException(
+                    i._2.message.getOrElse("empty error message")
+                  )
+                })(c.ctx.system.executionContext)
+            } else if (
+              i._2.message
+                .getOrElse("")
+                .contains("您涉及违规操作")
+            ) {
+              val msg = "非常抱歉，您充值的帐号过于频繁，请于第二天再尝试充值。"
+              CacheSource(c.ctx.system)
+                .cache()
+                .put[String](
+                  key = "qrcodeCreateFail_" + i._1.platform + openid,
+                  value = msg,
+                  ttl = 1.hours
                 )
-              })(c.ctx.system.executionContext)
+                .map(v => {
+                  throw DouyinAccountFailException(
+                    msg
+                  )
+                })(c.ctx.system.executionContext)
+            } else if (
+              i._2.message
+                .getOrElse("")
+                .contains("操作频繁")
+            ) {
+              val msg = "非常抱歉，当前系统充值频繁，请您稍微后再尝试充值。"
+              CacheSource(c.ctx.system)
+                .cache()
+                .put[String](
+                  key = "qrcodeCreateFail_" + i._1.platform + openid,
+                  value = msg,
+                  ttl = 1.minutes
+                )
+                .map(v => {
+                  throw DouyinAccountFailException(
+                    msg
+                  )
+                })(c.ctx.system.executionContext)
+            } else if (
+              i._2.message
+                .getOrElse("")
+                .contains("请前往App内充值并完成人脸验证")
+            ) {
+              CacheSource(c.ctx.system)
+                .cache()
+                .remove("createOrder_" + i._1.platform + openid)
+                .map(_ => {
+                  throw DouyinAccountFailException(
+                    "为保障账号和充值安全，请先前往抖音App内充值一笔小额并完成人脸验证，才能继续充值。"
+                  )
+                })(c.ctx.system.executionContext)
+            } else {
+              CacheSource(c.ctx.system)
+                .cache()
+                .put[String](
+                  key = "qrcodeCreateFail_" + i._1.platform + openid,
+                  value = i._2.message.getOrElse("empty error message"),
+                  ttl = 1.hours
+                )
+                .map(v => {
+                  throw DouyinAccountFailException(
+                    v
+                  )
+                })(c.ctx.system.executionContext)
+            }
           } else if (i._2.qrcode.isEmpty && i._2.codeUrl.isEmpty) {
             logger.error(
               Map(
@@ -720,9 +775,12 @@ object OrderSchema extends JsonParse {
           )
         })
         .recover {
-          case e: PayManyException           => throw e
-          case e: InvalidException           => throw e
-          case e: DouyinAccountFailException => throw e
+          case e: PayManyException => throw e
+          case e: InvalidException => throw e
+          case e: DouyinAccountFailException => {
+
+            throw e
+          }
           case ee => {
             ee.printStackTrace()
             throw new Exception("当前充值人数太多、请稍候再试")
