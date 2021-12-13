@@ -719,6 +719,7 @@ object PaySchema extends JsonParse {
         sign_type = Some("MD5"),
         sign = None
       )
+      implicit val ec = c.ctx.system.executionContext
 
       Source
         .single(
@@ -735,6 +736,10 @@ object PaySchema extends JsonParse {
         .mapAsync(1) { _ =>
           WeixinPay
             .unifiedOrder(order)
+            .map(i=>{
+              println(i)
+              i
+            })
         }
         .map(map => {
           require(
