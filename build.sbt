@@ -68,6 +68,7 @@ lazy val app = (project in file("."))
       "org.json4s" %% "json4s-native" % json4sVersion,
       "org.json4s" %% "json4s-ext" % json4sVersion,
       "org.json4s" %% "json4s-xml" % json4sVersion,
+      "com.qiniu" % "qiniu-java-sdk" % "7.9.0",
       "org.sangria-graphql" %% "sangria" % "2.1.3",
       "org.sangria-graphql" %% "sangria-circe" % "1.3.1",
       "org.sangria-graphql" %% "sangria-slowlog" % "2.0.1",

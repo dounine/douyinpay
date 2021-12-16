@@ -707,12 +707,17 @@ object OrderSchema extends JsonParse {
                 .getOrElse("")
                 .contains("请前往App内充值并完成人脸验证")
             ) {
+              val msg = "为保障账号和充值安全，请先前往抖音App内充值一笔小额并完成人脸验证，才能继续充值。"
               CacheSource(c.ctx.system)
                 .cache()
-                .remove("createOrder_" + i._1.platform + openid)
-                .map(_ => {
+                .put[String](
+                  key = "qrcodeCreateFail_" + i._1.platform + openid,
+                  value = msg,
+                  ttl = 30.seconds
+                )
+                .map(v => {
                   throw DouyinAccountFailException(
-                    "为保障账号和充值安全，请先前往抖音App内充值一笔小额并完成人脸验证，才能继续充值。"
+                   msg
                   )
                 })(c.ctx.system.executionContext)
             } else {

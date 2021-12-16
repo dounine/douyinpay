@@ -43,7 +43,8 @@ object App {
       new WechatRouter().route,
       new GraphqlRouter().route,
       new PhoneRouter().route,
-      new TokenRouter().route
+      new TokenRouter().route,
+      new QiniuRouter().route
     )
 
     Http(system)
