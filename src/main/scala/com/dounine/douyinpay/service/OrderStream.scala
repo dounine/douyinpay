@@ -242,6 +242,7 @@ object OrderStream {
                         | - 公众号ID: ${order.appid}
                         | - 当前渠道: ${order.ccode}
                         | - 微信昵称: ${order.nickName.getOrElse("")}
+                        | - 充值平台：${order.platform}
                         | - 充值帐号: ${order.id}
                         | - 本次金额: ${order.money}
                         | - 今日充值次数: ${order.todayPayCount}
@@ -306,6 +307,7 @@ object OrderStream {
                         | - 是否关注：${wechatUser.subscribe == 1}
                         | - 当前渠道: ${order.ccode}
                         | - 微信昵称: ${order.nickName.getOrElse("未关注")}
+                        | - 充值平台：${order.platform}
                         | - 充值帐号: ${order.id}
                         | - 本次金额: ${order.money}
                         | - 手续费：${order.fee / 100d}
