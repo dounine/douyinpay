@@ -2,7 +2,13 @@ package com.dounine.douyinpay.router.routers
 
 import akka.actor.typed.ActorSystem
 import akka.cluster.{Cluster, MemberStatus}
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{
+  ContentType,
+  HttpEntity,
+  HttpResponse,
+  MediaTypes,
+  StatusCodes
+}
 import akka.http.scaladsl.server.Directives._
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives.cors
 import com.dounine.douyinpay.model.models.MessageDing
@@ -22,24 +28,32 @@ class HealthRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
           path("ip") {
             parameter("type".optional) {
               `type` =>
-                extractClientIP { ip =>
-                  {
-                    `type`.getOrElse("") match {
-                      case "ip"     => complete(ip.getIp())
-                      case "ipJson" => ok(ip.getIp())
-                      case _ =>
-                        val oip = ip.getIp()
-                        val (province, city) =
-                          IpUtils.convertIpToProvinceCity(oip)
-                        ok(
-                          Map(
-                            "ip" -> oip,
-                            "city" -> city,
-                            "province" -> province
+                extractClientIP {
+                  ip =>
+                    {
+                      `type`.getOrElse("") match {
+                        case "ip" =>
+                          complete(
+                            HttpResponse(entity =
+                              HttpEntity(
+                                ip.getIp()
+                              )
+                            )
                           )
-                        )
+                        case "ipJson" => ok(ip.getIp())
+                        case _ =>
+                          val oip = ip.getIp()
+                          val (province, city) =
+                            IpUtils.convertIpToProvinceCity(oip)
+                          ok(
+                            Map(
+                              "ip" -> oip,
+                              "city" -> city,
+                              "province" -> province
+                            )
+                          )
+                      }
                     }
-                  }
                 }
             }
           } ~ path("health") {
