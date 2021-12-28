@@ -20,19 +20,27 @@ class HealthRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
       concat(
         get {
           path("ip") {
-            extractClientIP { ip =>
-              {
-                val oip = ip.getIp()
-                val (province, city) =
-                  IpUtils.convertIpToProvinceCity(oip)
-                ok(
-                  Map(
-                    "ip" -> oip,
-                    "city" -> city,
-                    "province" -> province
-                  )
-                )
-              }
+            parameter("type".optional) {
+              `type` =>
+                extractClientIP { ip =>
+                  {
+                    `type`.getOrElse("") match {
+                      case "ip"     => complete(ip.getIp())
+                      case "ipJson" => ok(ip.getIp())
+                      case _ =>
+                        val oip = ip.getIp()
+                        val (province, city) =
+                          IpUtils.convertIpToProvinceCity(oip)
+                        ok(
+                          Map(
+                            "ip" -> oip,
+                            "city" -> city,
+                            "province" -> province
+                          )
+                        )
+                    }
+                  }
+                }
             }
           } ~ path("health") {
             ok
