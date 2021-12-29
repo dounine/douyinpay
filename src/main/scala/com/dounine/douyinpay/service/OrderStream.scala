@@ -2,6 +2,7 @@ package com.dounine.douyinpay.service
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.headers.`User-Agent`
 import akka.http.scaladsl.model.{
@@ -21,6 +22,7 @@ import com.dounine.douyinpay.model.models.{
   WechatModel
 }
 import com.dounine.douyinpay.model.types.service.PayPlatform
+import com.dounine.douyinpay.router.routers.errors.DouyinAccountFailException
 import com.dounine.douyinpay.store.{AccountTable, OrderTable}
 import com.dounine.douyinpay.tools.akka.ConnectSettings
 import com.dounine.douyinpay.tools.akka.db.DataSource
