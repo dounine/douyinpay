@@ -16,6 +16,7 @@ import akka.http.scaladsl.model.{
 import akka.stream.SystemMaterializer
 import akka.stream.alpakka.slick.scaladsl.SlickSession
 import akka.stream.scaladsl.{FileIO, Flow, Source}
+import com.dounine.douyinpay.behaviors.engine.DouyinAccountBehavior
 import com.dounine.douyinpay.model.models.{
   AccountModel,
   OrderModel,
