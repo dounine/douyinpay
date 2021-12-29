@@ -36,6 +36,7 @@ import java.io.File
 import java.nio.file.{Files, Paths}
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, LocalDateTime}
+import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContextExecutor, Future}
 
 object OrderStream {
@@ -101,18 +102,54 @@ object OrderStream {
     val config = system.settings.config
     val qrcodeUrl = QrcodeUrlRandom.random()
     val routerPrefix = config.getString("app.routerPrefix")
+    val sharding = ClusterSharding(system)
     Flow[OrderModel.DbInfo]
       .mapAsync(1) { order: OrderModel.DbInfo =>
-        Request
-          .post[OrderModel.QrcodeResponse](
-            qrcodeUrl + "/" + order.platform,
-            Map(
-              "order" -> order,
-              "timeout" -> 10 * 1000,
-              "callback" -> s"https://backup.61week.com/${routerPrefix}/order/update"
-            )
-          )
-          .map(order -> _)(system.executionContext)
+        order.platform match {
+          case PayPlatform.douyin =>
+            sharding
+              .entityRefFor(
+                DouyinAccountBehavior.typeKey,
+                DouyinAccountBehavior.typeKey.name
+              )
+              .ask(
+                DouyinAccountBehavior.Query(order.id)
+              )(3.seconds)
+              .flatMap {
+                case DouyinAccountBehavior.QueryOk(cookie) =>
+                  cookie match {
+                    case Some(value) =>
+                      Request
+                        .post[OrderModel.QrcodeResponse](
+                          qrcodeUrl + "/" + order.platform,
+                          Map(
+                            "order" -> order,
+                            "timeout" -> 10 * 1000,
+                            "cookie" -> cookie,
+                            "callback" -> s"https://backup.61week.com/${routerPrefix}/order/update"
+                          )
+                        )
+                        .map(order -> _)(system.executionContext)
+                    case None =>
+                      throw DouyinAccountFailException("当前充值系统用户已满，请联系公众号管理员处理")
+                  }
+                case DouyinAccountBehavior.QueryFail(q, msg) =>
+                  throw DouyinAccountFailException(msg)
+              }(system.executionContext)
+          case PayPlatform.kuaishou =>
+            Request
+              .post[OrderModel.QrcodeResponse](
+                qrcodeUrl + "/" + order.platform,
+                Map(
+                  "order" -> order,
+                  "timeout" -> 10 * 1000,
+                  "cookie" -> "",
+                  "callback" -> s"https://backup.61week.com/${routerPrefix}/order/update"
+                )
+              )
+              .map(order -> _)(system.executionContext)
+          case _ => throw new RuntimeException("暂时不支持其它平台充值")
+        }
       }
   }
 
