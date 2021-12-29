@@ -118,6 +118,12 @@ object DouyinAccountBehavior extends JsonParse {
                 }
                 Behaviors.same
               }
+              case e @ CheckFail(request, msg) => {
+                Behaviors.same
+              }
+              case e @ CheckOk(request) => {
+                Behaviors.same
+              }
               case e @ Query(id) => {
                 accounts.find(_._2.contains(id)) match {
                   case Some(value) =>
