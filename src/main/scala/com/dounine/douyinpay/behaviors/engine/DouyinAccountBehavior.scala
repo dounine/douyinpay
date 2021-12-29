@@ -61,7 +61,7 @@ object DouyinAccountBehavior extends JsonParse {
         implicit val ec = context.executionContext
         implicit val sys = context.system
         var accounts = Map[String, Set[String]]()
-        val accountSize = 2
+        val accountSize = 1
         var date = LocalDate.now()
         val accountName = "douyin_account"
         Behaviors.withTimers { timers: TimerScheduler[Event] =>
