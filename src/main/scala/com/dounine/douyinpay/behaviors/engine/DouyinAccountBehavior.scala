@@ -132,7 +132,7 @@ object DouyinAccountBehavior extends JsonParse {
                 accounts.find(_._2.contains(id)) match {
                   case Some(value) =>
                     val proxy =
-                      s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2)}:8080"
+                      s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2 % proxys.size)}:8080"
                     logger.info("id -> {} {}", value._1, proxy)
                     e.replyTo.tell(
                       QueryOk(
@@ -151,7 +151,7 @@ object DouyinAccountBehavior extends JsonParse {
                           }
                         })
                         val proxy =
-                          s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2)}:8080"
+                          s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2 % proxys.size)}:8080"
                         logger.info("id -> {} {}", value._1, proxy)
                         e.replyTo.tell(
                           QueryOk(
