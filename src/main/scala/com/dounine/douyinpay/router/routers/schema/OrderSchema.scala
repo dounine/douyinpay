@@ -671,7 +671,7 @@ object OrderSchema extends JsonParse {
                 .getOrElse("")
                 .contains("您涉及违规操作")
             ) {
-              val msg = "非常抱歉，您充值的帐号过于频繁，请于第二天再尝试充值。"
+              val msg = "非常抱歉，当前系统充值人数过多，请您稍微后再尝试充值。"
               CacheSource(c.ctx.system)
                 .cache()
                 .put[String](
