@@ -37,11 +37,12 @@ object DouyinAccountBehavior extends JsonParse {
 
   val typeKey: EntityTypeKey[Event] =
     EntityTypeKey[Event]("DouyinAccount")
+  private val logger = LoggerFactory.getLogger(DouyinAccountBehavior.getClass)
 
   case class Query(id: String)(val replyTo: ActorRef[BaseSerializer])
       extends Event
 
-  case class QueryOk(cookie: Option[String]) extends Event
+  case class QueryOk(cookie: Option[String], proxy: String) extends Event
 
   case class QueryFail(query: Query, msg: String) extends Event
 
@@ -64,6 +65,9 @@ object DouyinAccountBehavior extends JsonParse {
         val accountSize = 1
         var date = LocalDate.now()
         val accountName = "douyin_account"
+        val proxys = context.system.settings.config
+          .getString("app.qrcodeProxys")
+          .split(",")
         Behaviors.withTimers { timers: TimerScheduler[Event] =>
           {
             Behaviors.receiveMessage {
@@ -141,11 +145,14 @@ object DouyinAccountBehavior extends JsonParse {
                           }
                         })
                         e.replyTo.tell(
-                          QueryOk(Some(value._1))
+                          QueryOk(
+                            Some(value._1),
+                            s"http://${proxys(value._1.hashCode % proxys.size)}:8080"
+                          )
                         )
                       case None =>
                         e.replyTo.tell(
-                          QueryOk(None)
+                          QueryOk(None, "")
                         )
                     }
                 }
