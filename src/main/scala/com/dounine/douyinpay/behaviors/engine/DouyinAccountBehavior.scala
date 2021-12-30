@@ -62,7 +62,7 @@ object DouyinAccountBehavior extends JsonParse {
         implicit val ec = context.executionContext
         implicit val sys = context.system
         var accounts = Map[String, Set[String]]()
-        val accountSize = 1
+        val accountSize = 3
         var date = LocalDate.now()
         val accountName = "douyin_account"
         val proxys = context.system.settings.config
