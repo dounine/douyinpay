@@ -235,10 +235,14 @@ class OrderRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
                 source =>
                   val result = source
                     .mapAsync(1) { update =>
-                      CacheSource(system)
-                        .cache()
-                        .remove("createOrder_" + update.order.openid)
-                        .map(_ => update)
+                      if(update.pay){
+                        CacheSource(system)
+                          .cache()
+                          .remove("createOrder_"+ update.order.platform + update.order.openid)
+                          .map(_ => update)
+                      }else{
+                        Future.successful(update)
+                      }
                     }
                     .map(data => {
                       logger.info(
