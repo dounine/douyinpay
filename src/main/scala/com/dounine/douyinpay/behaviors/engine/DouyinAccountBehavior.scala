@@ -42,7 +42,7 @@ object DouyinAccountBehavior extends JsonParse {
   case class Query(id: String)(val replyTo: ActorRef[BaseSerializer])
       extends Event
 
-  case class QueryOk(cookie: Option[String], proxy: String) extends Event
+  case class QueryOk(cookie: Option[String]) extends Event
 
   case class QueryFail(query: Query, msg: String) extends Event
 
@@ -65,9 +65,9 @@ object DouyinAccountBehavior extends JsonParse {
         val accountSize = 3
         var date = LocalDate.now()
         val accountName = "douyin_account"
-        val proxys = context.system.settings.config
-          .getString("app.qrcodeProxys")
-          .split(",")
+//        val proxys = context.system.settings.config
+//          .getString("app.qrcodeProxys")
+//          .split(",")
         Behaviors.withTimers { timers: TimerScheduler[Event] =>
           {
             Behaviors.receiveMessage {
@@ -129,40 +129,47 @@ object DouyinAccountBehavior extends JsonParse {
                 Behaviors.same
               }
               case e @ Query(id) => {
-                accounts.find(_._2.contains(id)) match {
+                accounts.find(_._1.split("\\.").head == id) match {
                   case Some(value) =>
-                    val proxy =
-                      s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2 % proxys.size)}:8080"
-                    logger.info("id -> {} {}", value._1, proxy)
                     e.replyTo.tell(
                       QueryOk(
-                        Some(value._1),
-                        proxy
+                        Some(value._1)
                       )
                     )
                   case None =>
-                    accounts.find(_._2.size < accountSize) match {
+                    accounts.find(_._2.contains(id)) match {
                       case Some(value) =>
-                        accounts = accounts.map(k => {
-                          if (k._1 == value._1) {
-                            k._1 -> (value._2 + id)
-                          } else {
-                            k
-                          }
-                        })
-                        val proxy =
-                          s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2 % proxys.size)}:8080"
-                        logger.info("id -> {} {}", value._1, proxy)
+                        //                    val proxy =
+                        //                      s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2 % proxys.size)}:8080"
+                        logger.info("id -> {}", value._1)
                         e.replyTo.tell(
                           QueryOk(
-                            Some(value._1),
-                            proxy
+                            Some(value._1)
                           )
                         )
                       case None =>
-                        e.replyTo.tell(
-                          QueryOk(None, "")
-                        )
+                        accounts.find(_._2.size < accountSize) match {
+                          case Some(value) =>
+                            accounts = accounts.map(k => {
+                              if (k._1 == value._1) {
+                                k._1 -> (value._2 + id)
+                              } else {
+                                k
+                              }
+                            })
+                            //                        val proxy =
+                            //                          s"http://${proxys(accounts.map(_._1).toList.sorted.zipWithIndex.find(_._1 == value._1).get._2 % proxys.size)}:8080"
+                            logger.info("id -> {}", value._1)
+                            e.replyTo.tell(
+                              QueryOk(
+                                Some(value._1)
+                              )
+                            )
+                          case None =>
+                            e.replyTo.tell(
+                              QueryOk(None)
+                            )
+                        }
                     }
                 }
                 Behaviors.same

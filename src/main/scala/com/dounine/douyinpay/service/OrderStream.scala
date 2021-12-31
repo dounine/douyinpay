@@ -119,7 +119,7 @@ object OrderStream {
                 DouyinAccountBehavior.Query(order.id)
               )(3.seconds)
               .flatMap {
-                case DouyinAccountBehavior.QueryOk(cookie, proxy) =>
+                case DouyinAccountBehavior.QueryOk(cookie) =>
                   cookie match {
                     case Some(value) =>
                       Request
@@ -129,7 +129,7 @@ object OrderStream {
                             "order" -> order,
                             "timeout" -> 10 * 1000,
                             "cookie" -> value,
-                            "proxy" -> proxy,
+                            "proxy" -> "",
                             "callback" -> s"https://backup.61week.com/${routerPrefix}/order/update"
                           )
                         )

@@ -269,6 +269,8 @@ object PaySchema extends JsonParse {
     description = Some("充值信息"),
     resolve = (c: Context[SecureContext, RequestInfo]) => {
       implicit val system = c.ctx.system
+      val admins =
+        c.ctx.system.settings.config.getStringList("app.admins")
       val openid = c.ctx.openid.get
       Source
         .single(c.ctx.openid.get)
@@ -295,7 +297,7 @@ object PaySchema extends JsonParse {
             AccountModel.AccountRechargeResponse(
               list =
                 (if (
-                   openid == "oNsB15rtku56Zz_tv_W0NlgDIF1o" || openid == "oHUbp6rLcRUSsn9kX5T8WTwyO5XI"
+                  admins.contains(openid)
                  ) {
                    if (accountUser.isDefined) {
                      List(0.01, 5, 10, 50, 100, 200, 500)

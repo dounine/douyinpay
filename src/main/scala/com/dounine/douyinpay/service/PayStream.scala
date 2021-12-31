@@ -39,6 +39,7 @@ object PayStream {
       SlickSession.forDbAndProfile(db, slick.jdbc.MySQLProfile)
     import slickSession.profile.api._
     implicit val materializer = SystemMaterializer(system).materializer
+    val admins = system.settings.config.getStringList("app.admins")
 
     Source
       .future(
@@ -53,9 +54,10 @@ object PayStream {
             )
             .result
             .map(result => {
-              val payeds = result
+              val notAdmins = result.filterNot(i => admins.contains(i.openid))
+              val payeds = notAdmins
                 .filter(_.pay == PayStatus.payed)
-              val refunds = result
+              val refunds = notAdmins
                 .filter(_.pay == PayStatus.refund)
               PayModel.PayReport(
                 payedCount = payeds.size,
@@ -79,9 +81,10 @@ object PayStream {
               )
               .result
               .map(result => {
-                val payeds = result
+                val notAdmins = result.filterNot(i => admins.contains(i.openid))
+                val payeds = notAdmins
                   .filter(_.pay == PayStatus.payed)
-                val refunds = result
+                val refunds = notAdmins
                   .filter(_.pay == PayStatus.refund)
                 PayModel.PayReport(
                   payedCount = payeds.size,
