@@ -4,7 +4,8 @@ object MessageDing {
 
   case class Data(
       title: String,
-      text: String
+      text: String,
+      code: Option[String] = None
   )
 
 }

@@ -76,9 +76,15 @@ class HealthRouter()(implicit system: ActorSystem[_]) extends SuportRouter {
           path("msg") {
             entity(as[MessageDing.Data]) {
               data =>
+                val url = data.code match {
+                  case Some(value) =>
+                    s"https://oapi.dingtalk.com/robot/send?access_token=${value}"
+                  case None =>
+                    "https://oapi.dingtalk.com/robot/send?access_token=29fe753d3106786b4a8171f32d4fc228af709a3b54be1fd2dfa2e7962b56192b"
+                }
                 val result = Request
                   .post[String](
-                    "https://oapi.dingtalk.com/robot/send?access_token=29fe753d3106786b4a8171f32d4fc228af709a3b54be1fd2dfa2e7962b56192b",
+                    url,
                     MessageData(
                       markdown = DingDing.Markdown(
                         title = data.title,
